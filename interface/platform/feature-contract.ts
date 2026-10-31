@@ -50,9 +50,9 @@ const ENGINE: CapabilityId[][] = [['localEngine'], ['remoteEngine']];
 export const FEATURES: Feature[] = [
   {
     id: 'chat', title: 'Chat', description: 'Talk to the agent; replies come from the OneBrain mesh through the bit-level Zip Loop.',
-    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'models && skills/llm.js'],
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
     routes: ['POST /api/chat', 'POST /api/chat/messages', 'POST /api/chat/correct', 'GET /api/status'],
-    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs')],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
@@ -175,10 +175,16 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine', 'installWithoutTerminal']], tests: [n('test/platform/packaging.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
   },
   {
-    id: 'ai-os', title: 'AI OS mode (start with the computer)', description: 'Makes the engine part of the computer\'s sign-in, so the AI is running before any window is opened: a systemd user service or autostart entry on Linux, a LaunchAgent on macOS, a hidden per-user startup script on Windows. Per-user, undone with one switch, and it grants the agent no extra access.',
+    id: 'ai-os', title: 'AI OS mode (start with the computer)', description: 'Makes the engine part of the computer\'s sign-in, so the AI is running before any window is opened: a systemd user service or autostart entry on Linux, a LaunchAgent on macOS, a hidden per-user startup script on Windows. Per-user, undone with one switch, and it grants the agent no extra access. Also adds an assistant entry point where the OS has one to offer: a Start menu shortcut with a Ctrl+Alt+N hotkey on Windows, an application-menu entry and a GNOME Ctrl+Alt+N shortcut on Debian and other Linux. It cannot replace Copilot or Siri, which those systems do not allow.',
     implementation: ['interface/platform/ai-os.ts', 'interface/platform/routes.ts', 'interface/platform/settings-page.ts', 'scripts/ai-os.mjs'],
     routes: ['GET /api/ai-os', 'POST /api/ai-os'],
     needs: [['localEngine', 'backgroundService']], tests: [n('test/platform/ai-os.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+  },
+  {
+    id: 'system-assistant', title: 'Default digital assistant (Android)', description: 'NeuroClaw can be chosen under Settings > Default apps > Digital assistant app, the role Gemini holds, and then opens as a chat sheet from the power-button long press and the home gesture. Only the person can make the choice; there is no "Hey ..." wake word, which Android reserves for the phone\'s maker.',
+    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/AssistantService.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/AssistActivity.kt', 'mobile/android/app/src/main/res/xml/voice_interaction_service.xml', 'mobile/android/app/src/main/AndroidManifest.xml'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/mobile-native.test.mjs')], onlyOn: ['android'],
   },
   {
     id: 'source-updates', title: 'Source updates', description: 'For git checkouts: how far behind origin, and a safe fast-forward.',
@@ -199,7 +205,7 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [n('test/platform/mobile-ui.test.mjs')],
   },
   {
-    id: 'chrome-extension', title: 'Chrome extension launcher', description: 'Toolbar icon that checks the server and opens the interface; options page for the server address.',
+    id: 'chrome-extension', title: 'Chrome extension launcher', description: 'Toolbar icon (and the Alt+Shift+Y keyboard shortcut, rebindable at chrome://extensions/shortcuts) that checks the server and opens the interface; options page for the server address.',
     implementation: ['browser-extension/manifest.json', 'browser-extension/app.html', 'browser-extension/app.js'],
     routes: [],
     needs: [['remoteEngine']], tests: [n('test/platform/extension.test.mjs')], onlyOn: ['chromeos'],
@@ -269,6 +275,12 @@ export const FEATURES: Feature[] = [
     implementation: ['models && skills/core/tool-safety.ts', 'interface/commons-page.ts'],
     routes: ['POST /api/safety/judge'],
     needs: [['localEngine']], tests: [v('test/core/agent-judge.test.ts')],
+  },
+  {
+    id: 'mind-reader', title: 'Mind reader (reads the network’s firing)', description: 'A second, separate model that reads which of the main network’s neurons are firing and judges whether that looks like the network behaving well. Read-only: it can see neuron energies and nothing that writes. It learns from what the agent did (blocked, tamper, safe, approved), never from what it said, plus labels the owner gives by hand. It answers unknown until it has a baseline, calls an unfamiliar pattern only "drifting", and says "misaligned" only when a probe that separated held-out readings agrees. Advisory: it changes nothing by itself. Its file sits in the agent-record folder, outside the agent’s reach.',
+    implementation: ['models && skills/core/mind-reader.ts', 'models && skills/core/danger-protocol.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent/mind', 'POST /api/agent/mind/label', 'POST /api/agent/mind/reset'],
+    needs: [['localEngine']], tests: [v('test/core/mind-reader.test.ts')],
   },
   {
     id: 'alignment-protocol', title: 'Alignment protocol (kill switch)', description: 'A danger level that moves only on what the agent does on its own; reaching "malicious" deletes the agent’s file and sandbox if the protocol is armed. A manual "delete the agent now" button fires it immediately, armed or not.',
