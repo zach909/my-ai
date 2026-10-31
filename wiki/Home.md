@@ -10,6 +10,8 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 - [Skill Acquisition Loop](../docs/SKILL_ACQUISITION_LOOP.md) - How an agent learns something new: check the wiki, fall back to web research, run experiments, then push the wiki page, skill source + binary, and the improvement algorithm
 - [[Architecture Overview|Architecture]] - System architecture and design
 - [[Quick Start Guide|Quick-Start]] - Getting started with installation and usage
+- [[Visuals|Visuals]] - Live panels in chat: the AI as the back end, the panel as the front end
+- [[AI OS mode|AI-OS-Mode]] - Start NeuroClaw with the computer, so the AI is there before you open anything
 - [[NeuroLang Reference|NeuroLang]] - The custom neuron definition language
 
 ### Background Systems (Learning & Memory)
@@ -47,6 +49,9 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 
 ### Development & Repo Operations
 - [[Automated Bots|Bots]] - The Bolt/Sentinel/Palette/Jules PR bots that work on this repo, and the concurrent-corruption failure mode their overlapping PRs have caused more than once
+
+### Sharing
+- [[Sharing|Sharing]] - Apps that call Corona's API, lending and borrowing compute time, and the (off-by-default) data donor
 
 ### Self-Improvement & Legal
 - [[Self-Improvement|Self-Improvement]] - `npm run server`'s autonomous training loop, direct peer-to-peer sync, and startup diagnostics — read this before running it

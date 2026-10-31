@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, readFileSync } from "node:fs";
 import { writeFile, readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -14,10 +14,14 @@ import { AlignmentVeto } from "../models && skills/core/alignment-veto.js";
 import { ZipIOSystem, PromptMeshFeed } from "../models && skills/core/zip-io.js";
 import { ContinuousLearner } from "../models && skills/core/continuous-learning.js";
 import { SharedMeshSync, DEFAULT_SYNC_INTERVAL_MS } from "../models && skills/core/shared-mesh-sync.js";
+import { sharedToolGate } from "../models && skills/core/tool-safety.js";
+import { sharedBrainOpen } from "../models && skills/core/user-context.js";
+import { MeshAgentLearner, type AgentLearner } from "../models && skills/core/hive-learning.js";
+import { DoorwayLock } from "../models && skills/core/doorway-lock.js";
 
 /** Where something the mesh learns from came from. "web" is always refused -- see learnFrom(). */
 export type LearnSource = "user" | "response" | "correction" | "skill" | "file" | "tool" | "web";
-import { ZipLoopInterface, zipLoopIdsFor } from "../models && skills/core/onebrain.js";
+import { ZipLoopInterface, zipLoopIdsFor, type NetworkStateSnapshot } from "../models && skills/core/onebrain.js";
 import { packZip } from "../models && skills/core/zip-halt.js";
 import { EmpathyEngine } from "../models && skills/core/empathy.js";
 import { HiveMind, SharedBlackboard, type HiveAgent } from "../models && skills/core/hive-mind.js";
@@ -44,7 +48,17 @@ import { KnowledgeTransfer } from "../models && skills/core/knowledge-transfer.j
 import { SelfModel } from "../models && skills/core/self-model.js";
 import { SelfImprovement } from "../models && skills/core/self-improvement.js";
 import { AutonomousLearner } from "../models && skills/core/autonomous-learner.js";
+import { CuriosityDrive, factsAbout } from "../models && skills/core/curiosity.js";
+import { writeJsonAtomic } from "../models && skills/core/atomic-write.js";
+import { dataRoot } from "../interface/platform/app-paths.js";
+import { searxngSearch } from "../plugins/searxng.js";
 import { PredictionEngine } from "../models && skills/core/prediction-engine.js";
+import { DoorwayRegistry } from "../models && skills/core/doorways.js";
+import { LiveStreams, PreNeedCache } from "../models && skills/core/live-content.js";
+import { ReplayStore, compressContext, primeWithReplay, zipLoopProbe } from "../models && skills/core/context-replay.js";
+import { ThreadContext, activityOf, type FrozenActivity } from "../models && skills/core/thread-context.js";
+import { SkillAccuracyLedger, type SkillStatus, type SkillSwitch } from "../models && skills/core/net-skill-accuracy.js";
+import type { NetSkillRouter } from "../models && skills/core/net-skill-router.js";
 import { DiscoveryEngine } from "../models && skills/core/discovery-engine.js";
 import { ArchitectureMapper, Bottleneck, WasteReport, ComponentType } from "../models && skills/core/architecture-mapper.js";
 import { PerformanceMonitor, ComponentMetrics, SystemHealth } from "../models && skills/core/performance-monitor.js";
@@ -55,6 +69,8 @@ import { PerformanceMonitor, ComponentMetrics, SystemHealth } from "../models &&
 import { CallHistoryPlugin } from "../plugins/call-history.js";
 import { PhoneCallsPlugin } from "../plugins/phone-calls.js";
 import { createPluginInstance, pluginExtensions } from "../plugins/index.js";
+import { LinuxPermissionToolsPlugin } from "../plugins/linux-permission-plugin.js";
+import { rootAccessRequest, manageService, helperStatus, loadBrokerSettings } from "../models && skills/core/linux-privilege-broker.js";
 import type { SkillDefinition } from "../plugin_manager/types.js";
 import { embedText } from "../models && skills/core/neuro-lang.js";
 import { ToolPlugin } from "../plugin_manager/sdk.js";
@@ -114,8 +130,6 @@ export interface TurnDetails {
   toolCalls?: Array<{ plugin: string; tool: string; ok: boolean; error?: string }>;
 }
 
-/** Highest Zip Loop neuron id (the ramp out): the mesh needs more neurons than this. */
-const ZIP_BIT_NEURONS = 5;
 /** How one chat turn went through askOneBrain(). */
 export interface OneBrainTurn {
   /** False means "use the fallback" -- the brain had nothing usable to say. */
@@ -145,8 +159,8 @@ function formatToolReply(events: Array<{ plugin: string; tool: string; ok: boole
   }).join("\n\n");
 }
 
-/** Highest Zip Loop neuron id (the toggle out): the mesh needs more neurons than this. */
-const ZIP_BIT_NEURONS = 7;
+/** Highest Zip Loop neuron id (the ramp out, zipLoopIdsFor()): the mesh needs more neurons than this. */
+const ZIP_BIT_NEURONS = 5;
 
 const PROMPTING_SKILLS_PER_TURN = 3;
 const GROUNDED_ANSWER_MIN_SIMILARITY = 0.35;
@@ -207,6 +221,23 @@ export class NeuroclawSystem {
   zipIO: ZipIOSystem;
   /** Everything said, through the real Zip Loop, as a file. */
   promptFeed: PromptMeshFeed;
+  /** Doorways into the mesh besides the Zip Loop, declared by extensions (doorways.ts). */
+  doorways: DoorwayRegistry;
+  /** Short prompts that give the mesh an old conversation's context through the Zip Loop (context-replay.ts). */
+  contextReplay: ReplayStore;
+  /**
+   * Short-term context: each conversation's neuron activity as it was when
+   * its last turn stopped, kept in memory for a little while (thread-context.ts).
+   * The replay above is the long-term half.
+   */
+  threadContext = new ThreadContext({
+    ttlMs: Number(process.env.NEUROCLAW_THREAD_CONTEXT_TTL_MS) || undefined,
+  });
+  private compactingThreads = new Set<string>();
+  /** What the mesh is making right now that is already being used (live-content.ts). */
+  live = new LiveStreams();
+  /** Things made before they were asked for, held aside; dropped when what was said changes (live-content.ts). */
+  preNeed = new PreNeedCache<unknown>();
   /**
    * Continuous learning: predicts what the user will say next, and trains
    * the mesh on the gap once they actually do. Shares promptFeed's own
@@ -273,7 +304,12 @@ export class NeuroclawSystem {
   improvement: SelfImprovement;
   learner: AutonomousLearner;
   predictor: PredictionEngine;
+  /** How well each net skill has predicted before, and which are switched off for it. Shared by every router below. */
+  readonly skillLedger: SkillAccuracyLedger;
   discovery: DiscoveryEngine;
+  /** The standing drive to find out what it does not know (curiosity.ts): wonders, explores, checks it learned, wonders more. */
+  curiosity: CuriosityDrive;
+  private curiosityBusy = false;
   /** Self-improvement framework Phase 1 (Steps 1-7): real component/dependency map, kept in sync with measured performance below. */
   architecture: ArchitectureMapper;
   /** Self-improvement framework Phase 3 (Steps 35-49): real latency/CPU/memory/error measurement per public entry point. */
@@ -344,22 +380,39 @@ export class NeuroclawSystem {
     // neurons in the same all-to-all mesh as everything else, so a plugin
     // firing genuinely propagates into the rest of the network.
     this.pluginRegistry = new PluginRegistry(new NetSkillMesh(2, this.llm.mesh));
+    // Risky tools (terminal, email, files, camera, ...) ask first instead of just going.
+    this.pluginRegistry.setGate(sharedToolGate());
+    // One ledger for all three routers (the language brain's, the pipeline's
+    // and the plugin registry's), so a skill switched off for predicting badly
+    // is off everywhere, and what was learned survives a restart.
+    this.skillLedger = new SkillAccuracyLedger();
+    this.skillLedger.persistTo(
+      process.env.NEUROCLAW_SKILL_ACCURACY_FILE ?? join(process.cwd(), "extension-builder", "net-skill-accuracy.json"),
+    );
+    this.llm.skillRouter.setLedger(this.skillLedger);
+    this.pluginRegistry.getSkillMesh().getRouter().setLedger(this.skillLedger);
+    this.pipeline.setSkillLedger(this.skillLedger);
     this.veto = new AlignmentVeto();
     this.zipIO = new ZipIOSystem(this.contextCapacityGB, this.zipPersistDir ?? undefined);
     // A doorway is made per feed rather than held: the pipeline builds its
     // engine lazily, and addNeurons() can grow the mesh underneath us, so a
     // doorway cached at construction would point at an engine that no longer
     // exists.
-    this.promptFeed = new PromptMeshFeed(() => {
-      const engine = this.pipeline.getHyperEngine();
-      if (!engine || engine.getNeuronCount() <= ZIP_BIT_NEURONS) return null;
-      return new ZipLoopInterface(engine, zipLoopIdsFor(engine));
-    });
+    this.promptFeed = new PromptMeshFeed(() => this.zipDoorway());
     // Shares promptFeed's own DoorwayLock rather than a fresh one: this and
     // promptFeed are the two callers that drive the SAME engine's doorway,
     // and a lock only each one holds separately would not stop them from
     // running at the same time as each other.
     this.continuousLearner = new ContinuousLearner(this.promptFeed.lock());
+    // Every other doorway shares that same lock: they all drive the one engine.
+    this.doorways = new DoorwayRegistry(() => this.pipeline.getHyperEngine() ?? null, this.promptFeed.lock());
+    // The two the avatar uses (interface/avatar.ts). Sound goes in and comes out as the
+    // raw bytes it is; pictures the mesh makes come out as raw pixels. Nothing is transcribed.
+    this.doorways.declare({ name: "voice", kind: "audio", direction: "both", source: "avatar" });
+    this.doorways.declare({ name: "face", kind: "image", direction: "out", source: "avatar" });
+    this.contextReplay = new ReplayStore(
+      process.env.NEUROCLAW_CONTEXT_REPLAY_FILE ?? join(process.cwd(), "extension-builder", "context-replay.json"),
+    );
     // The mesh's learning, kept across restarts and (opt-in,
     // NEUROCLAW_SHARED_LEARNING=1) shared with other installs as weight
     // changes -- see shared-mesh-sync.ts. Booted here, before anything grafts
@@ -492,6 +545,31 @@ export class NeuroclawSystem {
     // Scientific & creative discovery (ASI §11): hypothesis generation/testing
     // and creative concept combination over the same knowledge graph.
     this.discovery = new DiscoveryEngine(this.knowledge);
+    // Curiosity: nothing above learns unless it is handed something. This is
+    // the part that goes and looks. It explores through the same learner as
+    // every other fact, only ever READS (memory, and the owner's own SearXNG if
+    // NEUROCLAW_CURIOSITY_WEB=1), and each topic first passes the veto.
+    this.curiosity = new CuriosityDrive(this.knowledge, this.learner, {
+      explore: (topic) => this.curiosityExplore(topic),
+      allow: (topic) => {
+        const verdict = this.veto.evaluate({
+          id: `curiosity:${Date.now()}`,
+          name: `look into ${topic}`,
+          capabilities: [process.env.NEUROCLAW_CURIOSITY_WEB === "1" ? "network-read" : "memory-read"],
+          reversible: true,
+          externalEffect: false,
+        });
+        // Nobody is there to confirm anything, so "needs confirmation" means no.
+        return verdict.allowed && !verdict.requiresConfirmation;
+      },
+    });
+    if (!process.env.VITEST) {
+      this.restoreCuriosity();
+      if (process.env.NEUROCLAW_CURIOSITY !== "0") {
+        const every = Number(process.env.NEUROCLAW_CURIOSITY_INTERVAL_MS) || 5 * 60_000;
+        setInterval(() => void this.curiosityTick(), every).unref();
+      }
+    }
 
     // Self-improvement framework Phase 1/3 (306-step plan): both classes were
     // fully built and unit-tested (`test/core/system-tests.test.ts`) but never
@@ -545,6 +623,7 @@ export class NeuroclawSystem {
     register("transfer", "Knowledge Transfer", "learning", ["knowledge"], ["problem"], ["cross-domain hint"]);
     register("discovery", "Discovery Engine", "learning", ["knowledge"], ["observation"], ["hypothesis/combination"]);
     register("learner", "Autonomous Learner", "learning", ["knowledge"], ["information"], ["learn decision"]);
+    register("curiosity", "Curiosity", "learning", ["knowledge", "learner", "veto"], ["open questions"], ["exploration / what it learned"]);
     register("reasoner", "Reasoning Engine", "reasoning", ["memory", "mistakes", "hive", "knowledge", "selfModel", "discovery", "predictor"], ["problem"], ["reasoning result"]);
     register("critic", "Critic", "safety", ["knowledge", "math", "mistakes"], ["claim/candidate answers"], ["verification report"]);
     // The nine public action-taking entry points (`trackCall()`'s component
@@ -662,6 +741,8 @@ export class NeuroclawSystem {
       const layer = new ToolNeuronLayer(this.pipeline.ensureBrain(), {
         lock: this.promptFeed.lock(),
         access: sharedAccessManager(),
+        // Terminal and desktop are risky tools: a neuron firing must not run them without the owner's approval.
+        gate: sharedToolGate(),
       });
       for (const id of NeuroclawSystem.TOOL_NEURON_PLUGINS) {
         const plugin = this.pluginRegistry.getPluginInstance(id);
@@ -715,6 +796,37 @@ export class NeuroclawSystem {
     const phoneCallsInstance = this.pluginRegistry.getPluginInstance("phone-calls") as PhoneCallsPlugin | undefined;
     if (callHistoryInstance && phoneCallsInstance) {
       callHistoryInstance.setSource(phoneCallsInstance);
+    }
+
+    // Give the Linux permission tools their real host: a grant store the user
+    // controls in Settings, and native adapters that only run through pkexec
+    // (the OS's own authentication prompt -- see models && skills/core/
+    // linux-privilege-broker.ts). Without this, every one of those tools fails
+    // closed with "host is not configured"; most still do, honestly, because
+    // only the systemd-service actions have a real adapter behind them.
+    const linuxPermissionTools = this.pluginRegistry.getPluginInstance("linux-permission-tools") as LinuxPermissionToolsPlugin | undefined;
+    if (linuxPermissionTools) {
+      linuxPermissionTools.configure({
+        isGranted: (_extensionId, permission) => {
+          if (!loadBrokerSettings().enabled) return false;
+          if (permission === "linux-root-access-request" || permission === "linux-polkit-elevation" || permission === "linux-sudo-admin" || permission === "linux-privileged-helper-manage") return true;
+          return false;
+        },
+        // pkexec shows its own authentication dialog for every call these
+        // adapters make; that dialog IS the approval. Nothing here collects
+        // a password or widens access beyond what the adapter itself does.
+        requestApproval: async () => true,
+        adapters: {
+          "linux-root-access-request": async (args) => rootAccessRequest(String(args.operation ?? ""), String(args.target ?? "")),
+          "linux-polkit-elevation": async (args) => manageService(String(args.action ?? "status"), String(args.target ?? "")),
+          "linux-sudo-admin": async (args) => manageService(String(args.action ?? "status"), String(args.target ?? "")),
+          "linux-privileged-helper-manage": async (args) => {
+            const action = String(args.action ?? "status");
+            if (action !== "status") return { ok: false, error: `"${action}" is not implemented. This app does not install, update, or remove a privileged helper automatically -- add the service you need to the allowlist in Settings > Access instead.` };
+            return helperStatus();
+          },
+        },
+      });
     }
 
     // Activate all plugins
@@ -906,11 +1018,15 @@ export class NeuroclawSystem {
    */
   learnFrom(text: string, source: LearnSource): boolean {
     if (source === "web") return false;
+    // The brain is shared. It does not learn from someone the admin has not let it learn from.
+    if (!sharedBrainOpen()) return false;
     const trimmed = typeof text === "string" ? text.trim() : "";
     if (!trimmed) return false;
     const key = `${source}\u0000${trimmed}`;
     if (key === this.lastLearned) return false;
     this.lastLearned = key;
+    // What was prepared ahead was made for the old context.
+    this.preNeed.invalidate();
     this.promptFeed.feed(trimmed, `${source}.txt`);
     return true;
   }
@@ -963,6 +1079,7 @@ export class NeuroclawSystem {
           error: `withheld by the alignment check: ${verdict.reasons.join("; ")}`, startedAt: Date.now(), endedAt: Date.now(),
         };
       const text = formatToolReply([event], routed.why);
+      this.judgeSkills(input, [{ plugin: event.plugin, ok: event.ok }]);
       return {
         answered: true, via: "router", text,
         toolCalls: [{ plugin: event.plugin, tool: event.tool, ok: event.ok, ...(event.error ? { error: event.error } : {}) }],
@@ -984,7 +1101,15 @@ export class NeuroclawSystem {
     }
     const toolCalls = events.map(c => ({ plugin: c.plugin, tool: c.tool, ok: c.ok, ...(c.error ? { error: c.error } : {}) }));
     if (events.length > 0) {
-      return { answered: true, via: "network", text: formatToolReply(events, "the network fired the tool's neuron"), toolCalls };
+      this.judgeSkills(input, toolCalls);
+      // A call that ran stands in for the reply: the network chose to act. A call that was refused or
+      // failed does not. An untrained mesh makes tool neurons spike at random during an ordinary turn
+      // (measured: desktop.type_text at 0.29 while answering a question about France, then back to
+      // 0.01), and with the reply replaced by "did not run: ... is not granted" the user got no answer
+      // at all. Those calls are still reported in toolCalls; the generated reply is kept.
+      if (events.some(c => c.ok)) {
+        return { answered: true, via: "network", text: formatToolReply(events, "the network fired the tool's neuron"), toolCalls };
+      }
     }
 
     const text = reply.replace(/\n\nConfidence: \d+%[\s\S]*$/, "").trim();
@@ -992,6 +1117,166 @@ export class NeuroclawSystem {
       return { answered: false, via: "none", text: "", toolCalls };
     }
     return { answered: true, via: "brain", text, toolCalls };
+  }
+
+  /**
+   * Continue an old conversation: give the mesh its context through the Zip
+   * Loop as a short replay prompt (context compression), not by streaming the
+   * whole history again. The new prompt is then added as usual by learnFrom().
+   * If the conversation has changed since its replay was made, a fresh one is
+   * worked out in the background.
+   *
+   * Only the most recent part of the conversation is measured: the mesh takes
+   * about 37 ms a bit, so the history looked at is bounded
+   * (NEUROCLAW_CONTEXT_REPLAY_HISTORY_BYTES, default 256).
+   */
+  async continueThread(threadId: string, messages: Array<{ content: string }>): Promise<{ primed: boolean; replayBytes: number; compacting: boolean; via: "frozen" | "replay" | "none"; frozenAgeMs?: number }> {
+    // Short term first: if this conversation's neurons were frozen when its
+    // last turn stopped and that was recent, put them back exactly. Instant,
+    // and nothing needs to go through the Zip Loop.
+    const thawed = await this.thawThread(threadId);
+
+    const text = this.replayHistory(messages);
+    if (Buffer.byteLength(text, "utf8") < 32) {
+      return thawed.thawed
+        ? { primed: true, replayBytes: 0, compacting: false, via: "frozen", frozenAgeMs: thawed.ageMs }
+        : { primed: false, replayBytes: 0, compacting: false, via: "none" };
+    }
+
+    // Long term: otherwise give the mesh its context as the short replay of
+    // the whole history. Skipped when the frozen state already did the job.
+    const replay = this.contextReplay.replayFor(threadId);
+    let primed = thawed.thawed;
+    if (!thawed.thawed && replay && replay.length > 0) {
+      try {
+        primed = await this.primeReplay(replay);
+      } catch (err) {
+        console.warn("[context] could not prime the mesh with the replay:", err instanceof Error ? err.message : err);
+      }
+    }
+    // Whichever was used, keep the long-term replay current for next time.
+    let compacting = this.compactingThreads.has(threadId);
+    if (!compacting && !this.contextReplay.isCurrent(threadId, text)) {
+      compacting = true;
+      void this.compactThread(threadId, text);
+    }
+    const via = thawed.thawed ? "frozen" : primed ? "replay" : "none";
+    return { primed, replayBytes: replay?.length ?? 0, compacting, via, ...(thawed.thawed ? { frozenAgeMs: thawed.ageMs } : {}) };
+  }
+
+  /**
+   * Freeze the mesh's activity for a conversation: called when a turn stops.
+   * Held behind the doorway lock so it is taken after anything still being
+   * fed in, not in the middle of it.
+   */
+  async freezeThread(threadId: string): Promise<boolean> {
+    const engine = this.pipeline.getHyperEngine();
+    if (!engine || engine.getNeuronCount() <= ZIP_BIT_NEURONS) return false;
+    return this.promptFeed.lock().run(async () => {
+      this.threadContext.freeze(threadId, engine);
+      return true;
+    });
+  }
+
+  /** Keep activity a stopped run already captured (zip-halt takes one at every ending). */
+  holdThreadActivity(threadId: string, activity: FrozenActivity | NetworkStateSnapshot): void {
+    this.threadContext.hold(threadId, activityOf(activity as NetworkStateSnapshot));
+  }
+
+  /** Put a conversation's frozen activity back, if it has some and it is still fresh. */
+  async thawThread(threadId: string): Promise<{ thawed: true; ageMs: number } | { thawed: false }> {
+    const engine = this.pipeline.getHyperEngine();
+    if (!engine || !this.threadContext.has(threadId)) return { thawed: false };
+    return this.promptFeed.lock().run(async () => {
+      const result = this.threadContext.thaw(threadId, engine);
+      return result.thawed ? { thawed: true as const, ageMs: result.ageMs } : { thawed: false as const };
+    });
+  }
+
+  private replayHistory(messages: Array<{ content: string }>): string {
+    const cap = Number(process.env.NEUROCLAW_CONTEXT_REPLAY_HISTORY_BYTES) || 256;
+    const bytes = Buffer.from(messages.map(m => m.content).join("\n"), "utf8");
+    return bytes.length <= cap ? bytes.toString("utf8") : bytes.subarray(bytes.length - cap).toString("utf8");
+  }
+
+  private async primeReplay(replay: Uint8Array): Promise<boolean> {
+    const engine = this.pipeline.getHyperEngine();
+    if (!engine || engine.getNeuronCount() <= ZIP_BIT_NEURONS) return false;
+    return this.promptFeed.lock().run(async () => {
+      await primeWithReplay(zipLoopProbe(engine, new ZipLoopInterface(engine, zipLoopIdsFor(engine))), replay);
+      return true;
+    });
+  }
+
+  /** Work out the replay for a conversation's recent text, holding the doorway so nothing else settles the mesh meanwhile. */
+  private async compactThread(threadId: string, text: string): Promise<void> {
+    this.compactingThreads.add(threadId);
+    try {
+      await this.promptFeed.lock().run(async () => {
+        const engine = this.pipeline.getHyperEngine();
+        if (!engine || engine.getNeuronCount() <= ZIP_BIT_NEURONS) return;
+        const probe = zipLoopProbe(engine, new ZipLoopInterface(engine, zipLoopIdsFor(engine)));
+        const diagnostics: { reason?: "blind" } = {};
+        const result = await compressContext(probe, new Uint8Array(Buffer.from(text, "utf8")), {
+          maxMs: Number(process.env.NEUROCLAW_CONTEXT_REPLAY_MS) || 120_000,
+          diagnostics,
+        });
+        if (diagnostics.reason === "blind") {
+          console.warn("[context] the mesh reacts the same to this history as to any other that ends the same way, so no replay can stand in for it; short-term context (freeze/thaw) still applies.");
+        }
+        this.contextReplay.set(threadId, text, result);
+      });
+    } catch (err) {
+      console.warn("[context] could not compress this conversation:", err instanceof Error ? err.message : err);
+    } finally {
+      this.compactingThreads.delete(threadId);
+    }
+  }
+
+  /** Every router in the system. They share one ledger, but each holds its own regions. */
+  private skillRouters(): NetSkillRouter[] {
+    return [this.llm.skillRouter, this.pluginRegistry.getSkillMesh().getRouter(), this.pipeline.getSkillRouter()]
+      .filter((r, i, all): r is NetSkillRouter => r != null && all.indexOf(r) === i);
+  }
+
+  /**
+   * Tell the routers how they did. The outcome is the plugins whose tools ran
+   * and succeeded for this input -- the one place a turn says what it really
+   * needed. Only plugins are judged: a net skill with no such signal is not
+   * scored, because nothing could ever mark it right.
+   */
+  private judgeSkills(input: string, calls: Array<{ plugin: string; ok: boolean }>): void {
+    try {
+      const actual = new Set(calls.filter(c => c.ok).map(c => c.plugin));
+      if (actual.size === 0) return;
+      const inScope = (id: string): boolean => this.pluginRegistry.getPlugin(id) !== undefined;
+      for (const router of this.skillRouters()) {
+        for (const r of router.judge(input, actual, inScope)) {
+          if (r.flipped) {
+            console.log(`[net-skills] "${r.id}" switched ${r.flipped} by its prediction record (${this.skillLedger.status(r.id).reason})`);
+          }
+        }
+      }
+    } catch (err) {
+      // Scoring is bookkeeping; it must never cost the user their answer.
+      console.warn("[net-skills] could not score this turn:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  /** Every net skill region with its prediction record, and whether it is running. */
+  netSkillAccuracy(): Array<SkillStatus & { name: string }> {
+    const byId = new Map<string, SkillStatus & { name: string }>();
+    for (const router of this.skillRouters()) {
+      for (const s of router.getAccuracy()) if (!byId.has(s.id)) byId.set(s.id, s);
+    }
+    return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  /** Turn one net skill on or off by hand, or hand it back to its prediction record ("auto"). False for an unknown skill. */
+  setNetSkillSwitch(id: string, mode: SkillSwitch): boolean {
+    if (!this.skillRouters().some(r => r.has(id))) return false;
+    this.skillLedger.setSwitch(id, mode);
+    return true;
   }
 
   async processQuery(input: string): Promise<string> {
@@ -1148,6 +1433,8 @@ export class NeuroclawSystem {
     //    gating the action, so a genuinely dangerous request (not a fixed
     //    "reversible: true" regardless of content) actually reaches the
     //    AlignmentVeto's irreversible/external-effect confirmation rule.
+    // Hearing something it cannot answer is the strongest reason to go and look.
+    try { this.curiosity.noticeText(input); } catch { /* wondering is never allowed to break answering */ }
     const prediction = this.predictor.predict(`respond to: ${input}`);
     const predictedDanger = prediction.outcomes.some(o => o.dangerous);
 
@@ -1308,6 +1595,50 @@ export class NeuroclawSystem {
    * invoked (the same "creation" path a user request would trigger) rather
    * than a parallel mechanism.
    */
+  /**
+   * Where curiosity goes to find out. Reads only. Its own memory first (which
+   * keeps its own privacy gate); the owner's SearXNG only when the owner turned
+   * that on. A web snippet comes back as plain statements and goes through the
+   * learner like any other fact, at the learner's ordinary reliability: it is
+   * NOT corroborated across sources the way ResearchPlugin.conductResearch()
+   * does, so a single page's claim is held as lightly as the learner holds it.
+   */
+  private async curiosityExplore(topic: string): Promise<string[]> {
+    const facts: string[] = [];
+    for (const hit of this.memory.retrieve(topic, { topK: 5, minScore: 0.1 })) facts.push(...factsAbout(topic, hit.item.content));
+    if (process.env.NEUROCLAW_CURIOSITY_WEB === "1") {
+      for (const hit of await searxngSearch(topic, 5)) facts.push(...factsAbout(topic, `${hit.title}. ${hit.snippet}`, 2));
+    }
+    return [...new Set(facts)];
+  }
+
+  private curiosityFile(): string {
+    return process.env.NEUROCLAW_CURIOSITY_FILE ?? join(dataRoot(), "curiosity.json");
+  }
+
+  private restoreCuriosity(): void {
+    try { this.curiosity.restore(JSON.parse(readFileSync(this.curiosityFile(), "utf8"))); } catch { /* first run, or unreadable: start with a clean slate */ }
+  }
+
+  saveCuriosity(): void {
+    try { writeJsonAtomic(this.curiosityFile(), this.curiosity.toJSON()); } catch { /* a failed save is retried on the next change; it must not stop the drive */ }
+  }
+
+  /** One beat of wanting to know. Never overlaps itself, never throws, and saves what it found. */
+  async curiosityTick(): Promise<import("../models && skills/core/curiosity.js").Exploration | null> {
+    if (this.curiosityBusy) return null;
+    this.curiosityBusy = true;
+    try {
+      const done = await this.curiosity.step();
+      if (done && !done.skipped) this.saveCuriosity();
+      return done;
+    } catch {
+      return null; // curiosity is never allowed to take the system down
+    } finally {
+      this.curiosityBusy = false;
+    }
+  }
+
   async learn(information: string, opts?: import("../models && skills/core/autonomous-learner.js").LearnOptions) {
     if (!this.initialized) await this.initialize();
     return this.trackCall("learn", async () => this.learnImpl(information, opts));
@@ -1315,6 +1646,8 @@ export class NeuroclawSystem {
 
   private async learnImpl(information: string, opts?: import("../models && skills/core/autonomous-learner.js").LearnOptions) {
     let result = this.learner.learn(information, opts);
+    // A disagreement, or a thing it has no picture of yet, is a question.
+    try { this.curiosity.noticeLearned(result); } catch { /* as above */ }
 
     // Ask the MESH whether it has anything that handles this.
     //
@@ -1666,6 +1999,40 @@ export class NeuroclawSystem {
    */
   collaborationHistory(): string[] {
     return this.chatGroup?.getHistory().map(m => `${m.from}: ${m.content}`) ?? [];
+  }
+
+  /** A doorway into the current mesh, or null while there is no engine (or it is too small to carry a Zip Loop). */
+  private zipDoorway(): ZipLoopInterface | null {
+    const engine = this.pipeline.getHyperEngine();
+    if (!engine || engine.getNeuronCount() <= ZIP_BIT_NEURONS) return null;
+    return new ZipLoopInterface(engine, zipLoopIdsFor(engine));
+  }
+
+  private hiveLearnerInstance: AgentLearner | null = null;
+
+  /**
+   * How a project's hive agents learn differently (hive-learning.ts): each is
+   * taught on its own copy of the shared base, on this same engine, under the
+   * same doorway lock chat uses, and the live brain is put back afterwards.
+   * Its own private feed (not promptFeed) so the lock is held once, by the
+   * learner, around the whole swap.
+   */
+  hiveLearner(): AgentLearner {
+    if (!this.hiveLearnerInstance) {
+      const feed = new PromptMeshFeed(() => this.zipDoorway(), undefined, new DoorwayLock());
+      const root = process.cwd();
+      this.hiveLearnerInstance = new MeshAgentLearner({
+        engine: () => this.pipeline.getHyperEngine(),
+        lock: this.promptFeed.lock(),
+        feed: async text => {
+          const report = await feed.feedNow(text, "hive-lesson.txt");
+          if (report.bytes === 0) throw new Error("the brain has no Zip Loop to learn through yet");
+        },
+        baseFile: join(root, "extension-builder", "shared-mesh", "base.json"),
+        dir: join(root, "extension-builder", "shared-mesh-local", "hive-agents"),
+      });
+    }
+    return this.hiveLearnerInstance;
   }
 
   /**

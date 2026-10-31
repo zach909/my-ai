@@ -1,5 +1,12 @@
-# NeuroClaw - Artificial Superintelligence System
-FOR EDU USES ONLY
+# NeuroClaw - Local-First AI Agent and Neural Mesh Engine
+
+> A local-first, open-source AI agent built on **OneBrain**, a neural mesh engine with mixture-of-experts routing, hyperdimensional computing and self-improvement. No tokenizer, no third-party code: text, audio and images enter the mesh as raw bits.
+
+**Topics:** local AI agent · neural mesh · mixture of experts · hyperdimensional computing · self-improving AI · privacy-first AI · Windows, Linux, macOS, Android and Chrome.
+
+this is educational project 
+
+please spread the word
 
 WARNING ⚠️ THIS PROJECT IS IN BETA. WE ARE NOT RESPONSIBLE FOR YOUR ACTIONS OR WHAT THE CODE DOES. BY CONTINUING YOU AGREE WITH THIS STATEMENT AND THE [PRIVACY POLICY](PRIVACY.md) AND [TERMS AND CONDITIONS](TERMS.md).
 
@@ -7,10 +14,28 @@ NeuroClaw is a comprehensive, local-first AI agent. It's powered by **OneBrain**
 
 A comprehensive AI/ASI system with modular architecture implementing neural mesh computing, mixture of experts, hyperdimensional thinking, and self-improvement capabilities.
 
+## Install it (no terminal)
+
+One app on every platform: the same engine and the same two pages (home chat and Settings) everywhere.
+Downloads are attached to each GitHub release, with `release-manifest.json` and `SHA256SUMS` to verify them.
+
+| Platform | What you get | How |
+| --- | --- | --- |
+| Windows | `neuroclaw-<version>-windows-x64.exe` (or the portable `.zip`) | Run it; it installs for your user only and adds a Start menu entry (and, if you say yes, a desktop shortcut). |
+| Linux | `.deb` (Debian, Ubuntu, Chromebook Linux) or `.tar.gz` | Install the `.deb`, then open NeuroClaw from the application menu. |
+| macOS | `NeuroClaw.app` in a `.dmg` (or `.zip`) | Drag it to Applications and open it. Until it is signed with a Developer ID, macOS asks you to confirm opening it the first time. |
+| Chromebook / Chrome | the Chrome extension | One click opens your NeuroClaw server. The engine cannot live inside an extension, so it needs a server: see `browser-extension/README.md`. |
+| Android | `.apk` (debug-signed; Play Store later) | Sideload it, enter your PC's address. |
+| iPhone / iPad | not yet distributable | CI proves the app compiles; a device build needs an Apple developer team. |
+
+Everything about the platforms, what is shared, what is limited and what is unfinished is in
+[`docs/PLATFORMS.md`](docs/PLATFORMS.md).
+
 ## Quick Start
 
 ```bash
 git clone https://github.com/zach909/.my-ai.git
+
 cd .my-ai
 
 # Installation
@@ -144,7 +169,7 @@ Every tracked file in the repository is listed below, grouped by folder. Paths a
 | `TERMS.md` | Short pointer to the full terms of use in `wiki/Terms.md`. |
 | `bun.lock` | Bun lockfile for Node dependencies. |
 | `components.json` | shadcn/ui config: style, Tailwind CSS path, and the `@/` import aliases. |
-| `docker-compose.dev.yml` | One-service Docker Compose dev setup (`node:22-slim`). It runs `npm install && npm run dev` on ports 3000 and 7861. |
+| `docker-compose.dev.yml` | One-service Docker Compose dev setup (`node:22-slim`). It runs `npm install && npm run dev` with the backend on 7861, published on the host as both 7861 and 3000. |
 | `eslint.config.js` | ESLint flat config, scoped to `src/` (React hooks and react-refresh rules). |
 | `package.json` | Node package manifest. It defines the scripts (`dev`, `server`, `build`, `lint`, `test`, `bench:*`) and the dependencies. |
 | `package-lock.json` | npm lockfile. |
@@ -580,9 +605,9 @@ Hand-written `.js` + `.d.ts` pairs are compiled or authored JavaScript with matc
 | `live-usb/config/includes.chroot/etc/systemd/system/multi-user.target.wants/neuroclaw-dev.service` | Symlink that enables that unit at boot. |
 | `live-usb/config/package-lists/neuroclaw.list.chroot` | Debian packages baked into the image (Xorg, openbox, Chromium, Node, installer, …). |
 
-#### `model && skills manager/` — Python NeuroLang stack
+#### `model && skills manager/` — Legacy files
 
-Several files here still describe or import the retired `tinygpt/` package, which is no longer in the repo.
+Historical directory containing legacy configuration and data files. Most of the Python implementation from this era has been removed; the current implementation uses `asi_core/` exclusively (stdlib only).
 
 | File | What it does |
 |---|---|
@@ -590,12 +615,8 @@ Several files here still describe or import the retired `tinygpt/` package, whic
 | `model && skills manager/CLAUDE.md` | One-line pointer to `AGENTS.md`. |
 | `model && skills manager/README.md` | README for the former TinyGPT/mesh Python model stack (mostly historical). |
 | `model && skills manager/main.py` | CLI entry point: `build` a NeuroLang program, `code2net`, or `netsearch`. |
-| `model && skills manager/neurolang.py` | The PyTorch-backed NeuroLang interpreter: elastic neurons, zero-sum value, skills, Code-to-Net, and Net Search. |
 | `model && skills manager/example_experts.nl` | Sample NeuroLang program that declares code-analysis, search, and skill experts. |
-| `model && skills manager/test_value_system.py` | Tests for the zero-sum value-system invariants in `neurolang.py`. |
 | `model && skills manager/unifid_brain.py` | A misspelled, ≈3,500-line concatenation of several `asi_core` modules. It uses relative imports, so it doesn't run on its own. `asi_core/unified_brain.py` is the maintained version. |
-| `model && skills manager/requirements.txt` | PyTorch and NumPy requirements for this Python track only. The main mesh doesn't need them. |
-| `model && skills manager/interface/server.py` | Browser chat server for a TinyGPT checkpoint. It imports `tinygpt`, which no longer exists. |
 | `model && skills manager/data/contracts.json` | Fixed "when X, reply Y" response contracts from the TinyGPT era. |
 | `model && skills manager/data/pretrain/sample.md` | Tiny sample pretraining corpus. |
 | `model && skills manager/data/sft/chat.jsonl` | Tiny sample fine-tuning chat dataset. |
@@ -872,7 +893,7 @@ TypeScript plugins (`*.ts`) run in the Node backend. Python plugins (`plugin_*.p
 
 | File | What it does |
 |---|---|
-| `scripts/dev.mjs` | `npm run dev`: builds the backend, starts it on 7861, and starts Vite on 3000. |
+| `scripts/dev.mjs` | `npm run dev`: builds the backend and runs it in the foreground on 7861 (`NEUROCLAW_WEB_PORT` / `NEUROCLAW_WEB_HOST` override). |
 | `scripts/server.mjs` | `npm run server`: production backend plus diagnostics, an update check, and the five autonomous agents. |
 | `scripts/launcher.mjs` | `npm run launch`: starts the server automatically when you open the web app, or shows a page with the command to run. |
 | `scripts/build-backend.mjs` | Compiles the TypeScript backend into `dist/` and copies the hand-written `.js` files. |

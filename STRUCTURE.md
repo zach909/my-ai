@@ -30,6 +30,9 @@ This document describes the organized structure of the project.
 #### `/asi_core/`
 Core ASI (Artificial Super Intelligence) components including neural core, mesh, and states.
 
+#### `/native/`
+Rust kernels, standard library only, built with plain `rustc` (`npm run build:native`; no Cargo, because the no-third-party check rejects Cargo manifests). `hdmath.rs` mirrors the vector ops in `asi_core/hyperdim_thinking.py`; `ring.rs` mirrors the overwrite-oldest buffer in `InfiniteZipLoop`. Not yet called from the TypeScript runtime.
+
 #### `/benchmarks/`
 Performance benchmarking tools for hyperdimensional, mesh, MoE, and RLM components.
 
@@ -43,7 +46,7 @@ Desktop application with cross-platform support.
 Distribution builds and compiled outputs.
 
 #### `/docs/`
-Comprehensive documentation:
+Comprehensive documentation (`PLATFORMS.md` is the cross-platform map and parity matrix):
 - `architecture/` - System architecture documents
 - `deployment/` - Deployment guides
 - `api/` - API documentation
@@ -64,7 +67,8 @@ Auto-generated output: `skills/` and `plugins/` produced by the Extension
 Builder, plus their generated `skills-wiki/` and `plugins-wiki/` pages.
 
 #### `/interface/`
-User interface components and CLI tools.
+User interface components and CLI tools. `interface/platform/` is the platform layer shared by every build: adapters (what each OS
+can do), the feature contract, shared settings, version and update status, the Settings page, and the installable-app files.
 
 #### `/live-usb/`
 Bootable/installable live USB build (`build.sh`) for trying or installing
@@ -89,7 +93,8 @@ System plugins for various functionalities (browser, camera, email, etc.).
 Public assets and static files.
 
 #### `/scripts/`
-Build and utility scripts:
+`scripts/release/` holds versioning, the release manifest, change-driven build planning and the platform packagers;
+`scripts/desktop-launcher.mjs` is what the installed desktop app runs. Build and utility scripts:
 - `build-backend.mjs` - Backend build script
 - `check-css-*.js` - CSS validation scripts
 - `finalize-static-build.mjs` - Static build finalization
@@ -106,7 +111,8 @@ Main source code (React/TypeScript):
 - `server/` - Server-side code
 
 #### `/test/`
-Test files including core tests and integration tests.
+Test files including core tests and integration tests. `test/platform/` holds the cross-platform tests (Node's built-in runner:
+`node --test "test/platform/*.test.mjs"`).
 
 #### `/tests/`
 Additional test suites:
