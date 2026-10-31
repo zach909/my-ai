@@ -1,0 +1,3 @@
+Logic gate
+
+A logic gate is a device that performs a Boolean function, a logical operation performed on one or more binary inputs that produces a single binary output. Depending on the context, the term may refer to an ideal logic gate, one that has, for instance, zero rise time and unlimited fan-out, or it may refer to a non-ideal physical device.

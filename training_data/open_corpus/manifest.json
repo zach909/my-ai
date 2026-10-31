@@ -1,0 +1,232 @@
+{
+  "generated": "2026-10-31",
+  "gutenberg": [
+    {
+      "id": 1342,
+      "title": "Pride and Prejudice",
+      "author": "Jane Austen",
+      "url": "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",
+      "page": "https://www.gutenberg.org/ebooks/1342",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 728713
+    },
+    {
+      "id": 84,
+      "title": "Frankenstein; or, The modern Prometheus",
+      "author": "Mary Wollstonecraft Shelley",
+      "url": "https://www.gutenberg.org/cache/epub/84/pg84.txt",
+      "page": "https://www.gutenberg.org/ebooks/84",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 419336
+    },
+    {
+      "id": 11,
+      "title": "Alice's Adventures in Wonderland",
+      "author": "Lewis Carroll",
+      "url": "https://www.gutenberg.org/cache/epub/11/pg11.txt",
+      "page": "https://www.gutenberg.org/ebooks/11",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 144599
+    },
+    {
+      "id": 2009,
+      "title": "The Origin of Species by Means of Natural Selection",
+      "author": "Charles Darwin",
+      "url": "https://www.gutenberg.org/cache/epub/2009/pg2009.txt",
+      "page": "https://www.gutenberg.org/ebooks/2009",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 1257090
+    },
+    {
+      "id": 30155,
+      "title": "Relativity: The Special and General Theory",
+      "author": "Albert Einstein",
+      "url": "https://www.gutenberg.org/cache/epub/30155/pg30155.txt",
+      "page": "https://www.gutenberg.org/ebooks/30155",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 185570
+    },
+    {
+      "id": 1497,
+      "title": "The Republic",
+      "author": "Plato",
+      "url": "https://www.gutenberg.org/cache/epub/1497/pg1497.txt",
+      "page": "https://www.gutenberg.org/ebooks/1497",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 1194443
+    },
+    {
+      "id": 2680,
+      "title": "Meditations",
+      "author": "Emperor of Rome Marcus Aurelius",
+      "url": "https://www.gutenberg.org/cache/epub/2680/pg2680.txt",
+      "page": "https://www.gutenberg.org/ebooks/2680",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 398201
+    },
+    {
+      "id": 34901,
+      "title": "On Liberty",
+      "author": "John Stuart Mill",
+      "url": "https://www.gutenberg.org/cache/epub/34901/pg34901.txt",
+      "page": "https://www.gutenberg.org/ebooks/34901",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 306458
+    },
+    {
+      "id": 11224,
+      "title": "Utilitarianism",
+      "author": "John Stuart Mill",
+      "url": "https://www.gutenberg.org/cache/epub/11224/pg11224.txt",
+      "page": "https://www.gutenberg.org/ebooks/11224",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-10-31",
+      "chars": 161129
+    }
+  ],
+  "wikipedia": [
+    {
+      "title": "Photosynthesis",
+      "url": "https://en.wikipedia.org/wiki/Photosynthesis",
+      "revision": "1379238357",
+      "timestamp": "2026-10-08T19:44:08Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 901
+    },
+    {
+      "title": "Black hole",
+      "url": "https://en.wikipedia.org/wiki/Black_hole",
+      "revision": "1382111817",
+      "timestamp": "2026-10-26T17:46:21Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 608
+    },
+    {
+      "title": "Quantum computing",
+      "url": "https://en.wikipedia.org/wiki/Quantum_computing",
+      "revision": "1382157097",
+      "timestamp": "2026-10-26T23:54:42Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 585
+    },
+    {
+      "title": "Logic gate",
+      "url": "https://en.wikipedia.org/wiki/Logic_gate",
+      "revision": "1380379458",
+      "timestamp": "2026-10-15T11:42:30Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 338
+    },
+    {
+      "title": "Periodic table",
+      "url": "https://en.wikipedia.org/wiki/Periodic_table",
+      "revision": "1381469771",
+      "timestamp": "2026-10-22T18:50:36Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 603
+    },
+    {
+      "title": "Thermodynamics",
+      "url": "https://en.wikipedia.org/wiki/Thermodynamics",
+      "revision": "1382597008",
+      "timestamp": "2026-10-29T11:54:55Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 645
+    },
+    {
+      "title": "Machine learning",
+      "url": "https://en.wikipedia.org/wiki/Machine_learning",
+      "revision": "1382314933",
+      "timestamp": "2026-10-28T00:12:37Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 251
+    },
+    {
+      "title": "Neuron",
+      "url": "https://en.wikipedia.org/wiki/Neuron",
+      "revision": "1378644558",
+      "timestamp": "2026-10-05T12:10:45Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 486
+    },
+    {
+      "title": "DNA",
+      "url": "https://en.wikipedia.org/wiki/DNA",
+      "revision": "1379332306",
+      "timestamp": "2026-10-09T08:37:08Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 498
+    },
+    {
+      "title": "Plate tectonics",
+      "url": "https://en.wikipedia.org/wiki/Plate_tectonics",
+      "revision": "1381934246",
+      "timestamp": "2026-10-25T18:21:16Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 488
+    },
+    {
+      "title": "Prime number",
+      "url": "https://en.wikipedia.org/wiki/Prime_number",
+      "revision": "1381705799",
+      "timestamp": "2026-10-24T07:13:30Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 614
+    },
+    {
+      "title": "Ethics",
+      "url": "https://en.wikipedia.org/wiki/Ethics",
+      "revision": "1382513816",
+      "timestamp": "2026-10-29T01:50:50Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 261
+    },
+    {
+      "title": "Scientific method",
+      "url": "https://en.wikipedia.org/wiki/Scientific_method",
+      "revision": "1381348974",
+      "timestamp": "2026-10-21T20:27:02Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 599
+    },
+    {
+      "title": "Electromagnetism",
+      "url": "https://en.wikipedia.org/wiki/Electromagnetism",
+      "revision": "1382852918",
+      "timestamp": "2026-10-30T17:27:22Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 542
+    },
+    {
+      "title": "Evolution",
+      "url": "https://en.wikipedia.org/wiki/Evolution",
+      "revision": "1381515403",
+      "timestamp": "2026-10-23T01:23:41Z",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-10-31",
+      "chars": 511
+    }
+  ]
+}
