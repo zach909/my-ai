@@ -32,7 +32,8 @@ import { pullStoreCatalog } from '../models && skills/core/store-fetch.js';
 import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
-import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualEventMessage, visualSkillsFor } from './visuals.js';
+import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
+import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
 import { handlePlatformRoutes, isPlatformRoute } from './platform/routes.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
@@ -1439,6 +1440,8 @@ export class WebServer {
   private decoyTimer: ReturnType<typeof setInterval> | null = null;
   private healTimer: ReturnType<typeof setInterval> | null = null;
   private port = 0;
+  /** Apps made from visuals (models && skills/core/visual-apps.ts). Saved on this device; a launcher is written only after a preview is approved. */
+  private visualApps = new VisualAppStore();
   // Set only when start() is given a non-localhost host and a password --
   // see start()'s doc comment for why binding remotely without one is refused.
   private readonly remoteAccessLock = new PasswordLock();
@@ -2712,6 +2715,98 @@ export class WebServer {
       this.sendHtml(res, SETTINGS_PAGE);
       return;
     }
+    // ── Visual apps: a visual kept as an app, and put on this computer only after the owner has seen what
+    // would be written and approved it (see models && skills/core/visual-apps.ts). The AI proposes (an app is a
+    // visual in a reply); nothing here is reachable from a chat turn.
+    const visualAppPageMatch = pathname.match(/^\/visual-apps\/([a-z0-9-]{1,48})$/);
+    if (visualAppPageMatch && (method === 'GET' || method === 'HEAD')) {
+      const app = this.visualApps.get(visualAppPageMatch[1]);
+      if (!app) { this.sendJson(res, { error: 'No such app.' }, 404); return; }
+      this.sendHtml(res, visualAppPage(app));
+      return;
+    }
+    if (pathname === '/api/visual-apps' && method === 'GET') {
+      this.sendJson(res, { apps: this.visualApps.list().map(a => ({ id: a.id, name: a.name, createdAt: a.createdAt, launcher: a.launcher ?? null })) });
+      return;
+    }
+    if (pathname === '/api/visual-apps/os-tools' && method === 'GET') {
+      this.sendJson(res, { tools: OS_TOOLS });
+      return;
+    }
+    const visualAppMatch = pathname.match(/^\/api\/visual-apps(?:\/([a-z0-9-]{1,48})(?:\/(preview|install|os-preview|os-grant|os-revoke|os))?)?$/);
+    if (visualAppMatch && (method === 'POST' || method === 'DELETE')) {
+      if (!isOwnerOrAdmin()) {
+        this.sendJson(res, { error: 'Only the owner or an admin may make or install apps.' }, 403);
+        return;
+      }
+      const [, id, action] = visualAppMatch;
+      // A launcher is a file on the computer this server runs on, so it is only written, or removed, when the
+      // request comes from that computer. From anywhere else the app is still saved and opens at its page.
+      const needsThisMachine = !!action || (method === 'DELETE' && !!id && !!this.visualApps.get(id)?.launcher);
+      if (needsThisMachine && !this.isFromThisMachine(req)) {
+        this.sendJson(res, { error: 'Putting an app on a computer has to be done from that computer. Open this page there.' }, 403);
+        return;
+      }
+      const host = String(req.headers.host ?? '');
+      const baseUrl = `http://${/^[A-Za-z0-9.:\[\]-]{1,100}$/.test(host) ? host : `127.0.0.1:${this.port}`}`;
+      try {
+        if (!id && method === 'POST') {
+          const body = await this.parseBody(req, 256 * 1024) as { name?: unknown; code?: unknown } | null;
+          const app = this.visualApps.save(body?.name, body?.code);
+          this.sendJson(res, { app: { id: app.id, name: app.name, createdAt: app.createdAt } }, 201);
+        } else if (id && action === 'preview' && method === 'POST') {
+          await this.parseBody(req).catch(() => null);
+          const shown = this.visualApps.preview(id, baseUrl);
+          this.sendJson(res, isUnavailable(shown) ? { unavailable: shown.unavailable } : shown);
+        } else if (id && action === 'install' && method === 'POST') {
+          const body = await this.parseBody(req) as { approval?: unknown } | null;
+          const app = this.visualApps.install(id, body?.approval, baseUrl);
+          this.sendJson(res, { app: { id: app.id, name: app.name, launcher: app.launcher ?? null } });
+        } else if (id && action === 'os-preview' && method === 'POST') {
+          const body = await this.parseBody(req) as { tools?: unknown } | null;
+          this.sendJson(res, this.visualApps.previewOs(id, body?.tools));
+        } else if (id && action === 'os-grant' && method === 'POST') {
+          const body = await this.parseBody(req) as { tools?: unknown; approval?: unknown } | null;
+          const app = this.visualApps.grantOs(id, body?.tools, body?.approval);
+          this.sendJson(res, { app: { id: app.id, name: app.name, os: app.os ?? null } });
+        } else if (id && action === 'os-revoke' && method === 'POST') {
+          await this.parseBody(req).catch(() => null);
+          const app = this.visualApps.revokeOs(id);
+          this.sendJson(res, { app: { id: app.id, name: app.name, os: null } });
+        } else if (id && action === 'os' && method === 'POST') {
+          // An installed app asks this computer to do something. Three things must all hold: the owner let THIS
+          // app ask for THIS tool (above), the request goes through the same tool gate chat uses (risky tools
+          // wait for the owner, call by call), and the access settings and danger protocol still apply to it.
+          const body = await this.parseBody(req, 16 * 1024) as { tool?: unknown; request?: unknown } | null;
+          const tool = typeof body?.tool === 'string' ? body.tool : '';
+          const request = typeof body?.request === 'string' ? body.request.trim() : '';
+          if (!request || request.length > OS_REQUEST_MAX) {
+            this.sendJson(res, { error: `The request must be 1 to ${OS_REQUEST_MAX} characters.` }, 400);
+          } else if (!this.visualApps.osAllows(id, tool)) {
+            this.sendJson(res, { error: `This app has not been allowed to use ${tool.slice(0, 40) || 'that'}.` }, 403);
+          } else {
+            const { getNeuroclawSystem } = await import('../src/index.js');
+            const activity = activityStart(`App ${id}: ${tool}`, clip(request));
+            try {
+              const out = await (await getNeuroclawSystem()).pluginRegistry.runTool(tool, request);
+              activityEnd(activity, out.status === 'ran', clip(out.text));
+              this.sendJson(res, out);
+            } catch (err) {
+              activityEnd(activity, false, err instanceof Error ? err.message : String(err));
+              throw err;
+            }
+          }
+        } else if (id && !action && method === 'DELETE') {
+          this.sendJson(res, this.visualApps.remove(id));
+        } else {
+          this.sendJson(res, { error: 'Not found' }, 404);
+        }
+      } catch (err) {
+        if (err instanceof VisualAppError) this.sendJson(res, { error: err.message }, 400);
+        else this.sendError(res, err);
+      }
+      return;
+    }
     // Store, Builder, and Self-improvement pages (replaced React versions)
     if ((pathname === '/store' || pathname === '/app/store') && (method === 'GET' || method === 'HEAD')) {
       this.sendHtml(res, storePage());
@@ -2731,6 +2826,7 @@ export class WebServer {
         parseBody: (r, max) => this.parseBody(r, max),
         sendJson: (r, data, status) => this.sendJson(r, data, status),
         isAdmin: () => isOwnerOrAdmin(),
+        fromThisMachine: () => this.isFromThisMachine(req),
       });
       if (handled) return;
     }
@@ -5574,6 +5670,42 @@ export class WebServer {
         const record = { id, file: `${id}.${ext}`, mime, bytes: bytes.length, note: String(body?.note ?? '').slice(0, 2000), capturedAt, receivedAt: Date.now() };
         await fs.writeFile(path.join(dir, `${id}.json`), JSON.stringify(record, null, 2));
         this.sendJson(res, { ok: true, ...record }, 201);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // Curiosity (models && skills/core/curiosity.ts): the drive to find out what
+    // it does not know.
+    //   GET  /api/curiosity  -- mood, what it is wondering about, what it just explored
+    //   POST /api/curiosity  -- { action: 'pause' | 'resume' | 'step' | 'wonder', topic? }
+    // 'wonder' hands it a question; 'step' explores the most interesting one now
+    // instead of waiting for the next beat (still bounded by the hourly budget).
+    if (pathname === '/api/curiosity') {
+      try {
+        const { getNeuroclawSystem } = await import('../src/index.js');
+        const system = await getNeuroclawSystem();
+        if (method === 'GET') { this.sendJson(res, system.curiosity.status()); return; }
+        if (method !== 'POST') { this.sendJson(res, { error: 'GET or POST required' }, 405); return; }
+        const body = await this.parseBody(req) as { action?: string; topic?: string } | null;
+        const action = String(body?.action ?? '');
+        if (action === 'pause' || action === 'resume') {
+          system.curiosity.setPaused(action === 'pause');
+          system.saveCuriosity();
+        } else if (action === 'wonder') {
+          const interest = system.curiosity.wonder(String(body?.topic ?? ''), 'asked', 0.9);
+          if (!interest) { this.sendJson(res, { error: 'not something it can look into (empty, too long, already known, or it looks private)' }, 400); return; }
+          system.saveCuriosity();
+        } else if (action === 'step') {
+          const exploration = await system.curiosityTick();
+          this.sendJson(res, { exploration, status: system.curiosity.status() });
+          return;
+        } else {
+          this.sendJson(res, { error: "action must be 'pause', 'resume', 'step' or 'wonder'" }, 400);
+          return;
+        }
+        this.sendJson(res, system.curiosity.status());
       } catch (err) {
         this.sendError(res, err);
       }
