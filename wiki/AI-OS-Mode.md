@@ -55,7 +55,7 @@ AI OS is the AI's three access layers plus the skill maker, and nothing else of 
 | `kernel` | kernel commands (Linux only) | `linux-permission-tools` |
 | `skill` | auto skill maker | `skill-maker` |
 
-On Linux, **KOS** (the kernal-os repo) is the gate in front of them: `kos aios gui|app|kernel|skill WORDS...` asks for your KOS password for that request, logs it, then calls `POST /api/ai-os/layer` on this computer. The route accepts only those four layers, only from the admin on this computer, and runs them through the same tool gate as chat, so approvals and Computer Access switches still apply. `node scripts/ai-os.mjs layers` shows them, and the installer prints that list at the end.
+On Linux, **KOS** (the kernal-os repo) is the gate in front of them: `kos aios gui|app|kernel|skill WORDS...` asks for your KOS password for that request, logs it, then calls `POST /api/ai-os/layer` on this computer. The route accepts only those four layers, only from the admin on this computer, and runs them through the same tool gate as chat, so approvals and Computer Access switches still apply. `node scripts/ai-os.mjs layers` shows them. On Linux the installer also installs KOS for you: it clones the owner's `zach909/kernal-os` into `~/.local/share/kernal-os` and links `kos` into `~/.local/bin` (no sudo). It does not run `kos setup`, so you still choose your own password, and it starts nothing. Skip it with `NEUROCLAW_SKIP_KOS=1`; a failed download never stops the install.
 
 Limits: KOS does not autostart anything, so the engine must be running (see the switch above). KOS needs Linux; on macOS and Windows the layers route exists but only the `gui`, `app` and `skill` layers are offered and nothing calls it for you.
 
