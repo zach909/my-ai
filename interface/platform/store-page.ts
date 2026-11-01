@@ -137,95 +137,127 @@ export function storePage(): string {
 </main>
 
 <script>
-  document.querySelectorAll('.tab-button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      e.target.classList.add('active');
-      const tabName = e.target.dataset.tab;
-      document.getElementById(tabName).classList.add('active');
-      loadTabContent(tabName);
+  function h(tag, text, cls) {
+    var e = document.createElement(tag);
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    if (cls) e.className = cls;
+    return e;
+  }
+  function btn(label, fn) {
+    var b = h('button', label);
+    b.addEventListener('click', fn);
+    return b;
+  }
+  function show(id, nodes) {
+    var box = document.getElementById(id);
+    box.replaceChildren.apply(box, nodes);
+  }
+  function note(text, cls) { return h('div', text, 'card ' + (cls || '')); }
+  async function api(path, opts) {
+    var res = await fetch(path, opts);
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return data;
+  }
+  function post(path, body) {
+    return api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }
+
+  document.querySelectorAll('.tab-button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tab-button').forEach(function (x) { x.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+      b.classList.add('active');
+      document.getElementById(b.dataset.tab).classList.add('active');
+      loadTabContent(b.dataset.tab);
     });
   });
 
   loadTabContent('store');
 
   async function loadTabContent(tab) {
+    var target = tab + '-content';
+    show(target, [note('Loading...', 'loading')]);
     try {
-      if (tab === 'store') {
-        const res = await fetch('/api/store');
-        if (!res.ok) throw new Error('Failed to load store');
-        const data = await res.json();
-        displayStore(data);
-      } else if (tab === 'wiki') {
-        const res = await fetch('/api/wiki');
-        if (!res.ok) throw new Error('Failed to load wiki pages');
-        const pages = await res.json();
-        displayWiki(pages);
-      } else if (tab === 'uploads') {
-        const res = await fetch('/api/store/installed');
-        if (!res.ok) throw new Error('Failed to load uploads');
-        const items = await res.json();
-        displayUploads(items);
-      } else if (tab === 'chat') {
-        const res = await fetch('/api/shared-chat');
-        if (!res.ok) throw new Error('Failed to load chat');
-        const messages = await res.json();
-        displayChat(messages);
-      }
+      if (tab === 'store') displayStore(await api('/api/store'));
+      else if (tab === 'wiki') displayWiki(await api('/api/wiki'));
+      else if (tab === 'uploads') displayInstalled(await api('/api/store/installed'));
+      else if (tab === 'chat') show(target, [note('The shared community chat is not built yet.')]);
     } catch (e) {
-      document.getElementById(tab + '-content').innerHTML = \`<div class="error">\${e.message}</div>\`;
+      show(target, [note('Could not load: ' + e.message, 'error')]);
     }
   }
 
   function displayStore(data) {
-    const html = data.items?.map(item => \`
-      <div class="card">
-        <h3>\${item.name}</h3>
-        <p>\${item.description || 'No description'}</p>
-        <button onclick="installItem('\${item.name}')">Install</button>
-      </div>
-    \`).join('') || '<div class="error">No items found</div>';
-    document.getElementById('store-content').innerHTML = html;
+    var nodes = [];
+    (data.kinds || []).forEach(function (kind) {
+      var items = (data.catalog && data.catalog[kind]) || [];
+      if (!items.length) return;
+      nodes.push(h('h2', (data.labels && data.labels[kind]) || kind));
+      items.forEach(function (item) {
+        var card = h('div', null, 'card');
+        card.appendChild(h('h3', item.title || item.name));
+        card.appendChild(h('p', item.description || 'No description'));
+        var meta = h('p', 'By ' + (item.author || 'unknown') + (item.updatedAt ? ' - updated ' + item.updatedAt.slice(0, 10) : ''));
+        meta.style.opacity = '0.65';
+        card.appendChild(meta);
+        var status = h('p', '');
+        card.appendChild(btn('Install', function () {
+          status.textContent = 'Installing...';
+          post('/api/store/install', { kind: kind, name: item.name })
+            .then(function () { status.textContent = 'Installed. See the Uploads tab.'; })
+            .catch(function (e) { status.textContent = 'Could not install: ' + e.message; });
+        }));
+        card.appendChild(status);
+        nodes.push(card);
+      });
+    });
+    show('store-content', nodes.length ? nodes : [note('The store has no published items yet.')]);
   }
 
-  function displayWiki(pages) {
-    const html = pages?.map(page => \`
-      <div class="card">
-        <h3>\${page.title}</h3>
-        <p>\${(page.content || '').substring(0, 100)}...</p>
-        <button onclick="openWikiPage('\${page.name}')">Read</button>
-      </div>
-    \`).join('') || '<div class="error">No wiki pages found</div>';
-    document.getElementById('wiki-content').innerHTML = html;
+  function displayWiki(data) {
+    var pages = (data && data.pages) || [];
+    var nodes = pages.map(function (page) {
+      var card = h('div', null, 'card');
+      card.appendChild(h('h3', page.title || page.name));
+      card.appendChild(h('p', page.description || ''));
+      var body = h('pre', '');
+      body.style.whiteSpace = 'pre-wrap';
+      body.hidden = true;
+      var open = btn('Read', function () {
+        if (!body.hidden) { body.hidden = true; open.textContent = 'Read'; return; }
+        body.textContent = 'Loading...';
+        body.hidden = false;
+        api('/api/wiki/' + page.name.split('/').map(encodeURIComponent).join('/'))
+          .then(function (p) { body.textContent = p.content || '(empty page)'; open.textContent = 'Hide'; })
+          .catch(function (e) { body.textContent = 'Could not load: ' + e.message; });
+      });
+      card.appendChild(open);
+      card.appendChild(body);
+      return card;
+    });
+    show('wiki-content', nodes.length ? nodes : [note('No wiki pages yet.')]);
   }
 
-  function displayUploads(items) {
-    const html = items?.map(item => \`
-      <div class="card">
-        <h3>\${item.name}</h3>
-        <p>Type: \${item.kind}</p>
-        <button onclick="manageUpload('\${item.name}')">Manage</button>
-      </div>
-    \`).join('') || '<div>No uploads yet</div>';
-    document.getElementById('uploads-content').innerHTML = html;
-  }
-
-  function displayChat(messages) {
-    const html = '<div style="color: rgba(248, 237, 233, 0.75);"><p>Shared community discussion room. Coming soon.</p></div>';
-    document.getElementById('chat-content').innerHTML = html;
-  }
-
-  function installItem(name) {
-    console.log('Install:', name);
-  }
-
-  function openWikiPage(name) {
-    window.location.href = '/wiki/' + encodeURIComponent(name);
-  }
-
-  function manageUpload(name) {
-    console.log('Manage:', name);
+  function displayInstalled(data) {
+    var installed = (data && data.installed) || [];
+    var outdated = (data && data.outdated) || [];
+    var nodes = installed.map(function (item) {
+      var card = h('div', null, 'card');
+      card.appendChild(h('h3', item.title || item.name));
+      card.appendChild(h('p', 'Type: ' + item.kind));
+      var isOld = outdated.some(function (o) { return o.kind === item.kind && o.name === item.name; });
+      if (isOld) card.appendChild(h('p', 'A newer version is published.'));
+      var status = h('p', '');
+      card.appendChild(btn('Uninstall', function () {
+        post('/api/store/uninstall', { kind: item.kind, name: item.name })
+          .then(function () { loadTabContent('uploads'); })
+          .catch(function (e) { status.textContent = 'Could not uninstall: ' + e.message; });
+      }));
+      card.appendChild(status);
+      return card;
+    });
+    show('uploads-content', nodes.length ? nodes : [note('Nothing installed yet.')]);
   }
 </script>`;
 }

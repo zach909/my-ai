@@ -4440,7 +4440,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
