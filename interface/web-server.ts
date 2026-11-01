@@ -32,7 +32,8 @@ import { pullStoreCatalog } from '../models && skills/core/store-fetch.js';
 import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
-import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, promptButtonSkillsFor } from './prompt-buttons.js';
+import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
+import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
@@ -1452,6 +1453,8 @@ export class WebServer {
   private port = 0;
   /** Apps made from visuals (models && skills/core/visual-apps.ts). Saved on this device; a launcher is written only after a preview is approved. */
   private visualApps = new VisualAppStore();
+  /** Prompt buttons kept on this computer (app menu, desktop). Saved here; a launcher is written only after the owner approves the exact file. */
+  private osButtons = new OsButtonStore();
   // Set only when start() is given a non-localhost host and a password --
   // see start()'s doc comment for why binding remotely without one is refused.
   private readonly remoteAccessLock = new PasswordLock();
@@ -2813,6 +2816,60 @@ export class WebServer {
         }
       } catch (err) {
         if (err instanceof VisualAppError) this.sendJson(res, { error: err.message }, 400);
+        else this.sendError(res, err);
+      }
+      return;
+    }
+    // ── OS buttons: a prompt button the AI proposed with [[put: Label | prompt | desktop]], put on this computer's
+    // app menu or desktop only after the owner has seen the exact file and approved it (see
+    // models && skills/core/os-buttons.ts). Nothing here is reachable from a chat turn. The page a launcher opens
+    // sends the stored prompt itself, and sends it on arrival only when the browser says the person navigated here.
+    const askPageMatch = pathname.match(/^\/ask\/([a-z0-9-]{1,48})$/);
+    if (askPageMatch && (method === 'GET' || method === 'HEAD')) {
+      const button = this.osButtons.get(askPageMatch[1]);
+      if (!button) { this.sendJson(res, { error: 'No such button.' }, 404); return; }
+      this.sendHtml(res, askPage(button, String(req.headers['sec-fetch-site'] ?? '') === 'none'));
+      return;
+    }
+    if (pathname === '/api/os-buttons' && method === 'GET') {
+      this.sendJson(res, { buttons: this.osButtons.list().map(b => ({ id: b.id, label: b.label, prompt: b.prompt, createdAt: b.createdAt, launcher: b.launcher ?? null })) });
+      return;
+    }
+    const osButtonMatch = pathname.match(/^\/api\/os-buttons(?:\/([a-z0-9-]{1,48})(?:\/(preview|place))?)?$/);
+    if (osButtonMatch && (method === 'POST' || method === 'DELETE')) {
+      if (!isOwnerOrAdmin()) {
+        this.sendJson(res, { error: 'Only the owner or an admin may add buttons to this computer.' }, 403);
+        return;
+      }
+      const [, id, action] = osButtonMatch;
+      // A launcher is a file on the computer this server runs on: only written or removed when the request comes from it.
+      const needsThisMachine = !!action || (method === 'DELETE' && !!id && !!this.osButtons.get(id)?.launcher);
+      if (needsThisMachine && !this.isFromThisMachine(req)) {
+        this.sendJson(res, { error: 'Putting a button on a computer has to be done from that computer. Open this page there.' }, 403);
+        return;
+      }
+      const host = String(req.headers.host ?? '');
+      const baseUrl = `http://${/^[A-Za-z0-9.:\[\]-]{1,100}$/.test(host) ? host : `127.0.0.1:${this.port}`}`;
+      try {
+        if (!id && method === 'POST') {
+          const body = await this.parseBody(req, 16 * 1024) as { label?: unknown; prompt?: unknown } | null;
+          const b = this.osButtons.save(body?.label, body?.prompt);
+          this.sendJson(res, { button: { id: b.id, label: b.label, prompt: b.prompt, createdAt: b.createdAt } }, 201);
+        } else if (id && action === 'preview' && method === 'POST') {
+          const body = await this.parseBody(req) as { where?: unknown } | null;
+          const shown = this.osButtons.preview(id, body?.where, baseUrl);
+          this.sendJson(res, osButtonUnavailable(shown) ? { unavailable: shown.unavailable } : shown);
+        } else if (id && action === 'place' && method === 'POST') {
+          const body = await this.parseBody(req) as { where?: unknown; approval?: unknown } | null;
+          const b = this.osButtons.place(id, body?.where, body?.approval, baseUrl);
+          this.sendJson(res, { button: { id: b.id, label: b.label, launcher: b.launcher ?? null } });
+        } else if (id && !action && method === 'DELETE') {
+          this.sendJson(res, this.osButtons.remove(id));
+        } else {
+          this.sendJson(res, { error: 'Not found' }, 404);
+        }
+      } catch (err) {
+        if (err instanceof OsButtonError) this.sendJson(res, { error: err.message }, 400);
         else this.sendError(res, err);
       }
       return;
