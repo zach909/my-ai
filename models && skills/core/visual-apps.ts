@@ -159,7 +159,11 @@ export function planLauncher(
   return { unavailable: `This system (${system.platform}) has no launcher folder this can write to. Open ${url} in the browser and use "Add to home screen" or "Install app".` };
 }
 
-export const isUnavailable = (p: LauncherPlan | Unavailable): p is Unavailable => "unavailable" in p;
+/**
+ * True when `p` is the "can't do that on this system" answer. Generic over the other member of the union so it
+ * narrows a bare LauncherPlan and also a preview's `{ plan, approval }`, leaving the success shape intact.
+ */
+export const isUnavailable = <T extends object>(p: T | Unavailable): p is Unavailable => "unavailable" in p;
 
 export class VisualAppStore {
   /** Approvals handed out by a preview, by app id and what they approve. In memory only: a restart cancels them. */
