@@ -263,6 +263,27 @@ esac
 rm -rf "$_shortcut_tmp"
 trap - EXIT
 
+# --- install_kos(): links the owner's KOS for this user only, never fatal, starts nothing, asks for no password ---
+_kos_tmp="$(mktemp -d)"
+trap 'rm -rf "$_kos_tmp"' EXIT
+(
+    cd "$_kos_tmp" && mkdir -p src/bin && printf '#!/usr/bin/env python3\nprint("kos")\n' > src/bin/kos &&
+    git -C src init -q && git -C src add -A && git -C src -c user.name=t -c user.email=t@t commit -qm kos
+) >/dev/null 2>&1
+_kos_out="$(source scripts/install.sh; KOS_REPO_URL="$_kos_tmp/src" KOS_DIR="$_kos_tmp/share/kernal-os" KOS_BIN_DIR="$_kos_tmp/bin" install_kos 2>&1)"
+if [ "$(uname -s)" = "Linux" ]; then
+    [ -L "$_kos_tmp/bin/kos" ] && [ "$(readlink "$_kos_tmp/bin/kos")" = "$_kos_tmp/share/kernal-os/bin/kos" ]
+    check $? "install_kos() links bin/kos into the user's bin dir, no sudo (got: $_kos_out)"
+fi
+_skip_out="$(source scripts/install.sh; NEUROCLAW_SKIP_KOS=1 KOS_DIR="$_kos_tmp/none" install_kos 2>&1)"
+[ ! -e "$_kos_tmp/none" ] && ! echo "$_skip_out" | grep -qi "kos"
+check $? "NEUROCLAW_SKIP_KOS=1 installs nothing"
+_bad_out="$(source scripts/install.sh; KOS_REPO_URL="$_kos_tmp/missing" KOS_DIR="$_kos_tmp/bad" install_kos 2>&1; echo "rc=$?")"
+case "$_bad_out" in *"rc=0") check 0 "a failed KOS download is not fatal" ;; *) check 1 "a failed KOS download is not fatal" ;; esac
+! sed -n '/^install_kos()/,/^}/p' scripts/install.sh | grep -q 'kos setup'
+check $? "install_kos() never runs kos setup and never mentions a password step"
+rm -rf "$_kos_tmp"
+
 echo ""
 echo "$_passed passed, $_failed failed"
 [ "$_failed" -eq 0 ]

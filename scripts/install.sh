@@ -517,6 +517,52 @@ fetch_source() {
     cd "$REPO_DIR"
 }
 
+# AI OS engine: KOS (zach909/kernal-os), the owner's own security-first layer. It is the gate in front of the
+# four AI OS layers (button clicker, app commands, kernel commands, auto skill maker): `kos aios ...`.
+# Linux only (KOS needs the Linux kernel's Landlock and namespaces). Never fatal: NeuroClaw works without it.
+# Installs for this user only (no sudo): the source goes in ~/.local/share/kernal-os and `kos` is linked
+# into ~/.local/bin. It starts nothing, and AI OS asks for no password.
+# NEUROCLAW_SKIP_KOS=1 skips it; KOS_REPO_URL overrides where it comes from (the owner's repo by default).
+KOS_REPO_URL="${KOS_REPO_URL:-https://github.com/zach909/kernal-os.git}"
+KOS_DIR="${KOS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/kernal-os}"
+KOS_BIN_DIR="${KOS_BIN_DIR:-$HOME/.local/bin}"
+
+install_kos() {
+    [ "${NEUROCLAW_SKIP_KOS:-0}" = "1" ] && return 0
+    if [ "$(uname -s)" != "Linux" ]; then
+        echo -e "    ${GRAY}→ KOS (the AI OS gate) needs Linux; skipping it on this system.${NC}"
+        return 0
+    fi
+    if ! command -v python3 >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
+        echo -e "    ${YELLOW}KOS needs python3 and git; skipping it. Install them and run this again.${NC}"
+        return 0
+    fi
+    if [ -d "$KOS_DIR/.git" ]; then
+        echo -e "    ${GRAY}→ Updating KOS in $KOS_DIR${NC}"
+        git -C "$KOS_DIR" pull --ff-only || echo -e "    ${YELLOW}Could not update KOS; using what is there.${NC}"
+    else
+        echo -e "    ${CYAN}→ Installing KOS into $KOS_DIR${NC}"
+        mkdir -p "$(dirname "$KOS_DIR")"
+        git clone "$KOS_REPO_URL" "$KOS_DIR" || {
+            echo -e "    ${YELLOW}Could not download KOS from $KOS_REPO_URL; skipping it.${NC}"
+            return 0
+        }
+    fi
+    if [ ! -f "$KOS_DIR/bin/kos" ]; then
+        echo -e "    ${YELLOW}$KOS_DIR has no bin/kos; skipping it.${NC}"
+        return 0
+    fi
+    mkdir -p "$KOS_BIN_DIR"
+    ln -sfn "$KOS_DIR/bin/kos" "$KOS_BIN_DIR/kos"
+    chmod +x "$KOS_DIR/bin/kos" 2>/dev/null || true
+    echo -e "    ${GREEN}✓ KOS linked as $KOS_BIN_DIR/kos${NC}"
+    case ":$PATH:" in
+        *":$KOS_BIN_DIR:"*) ;;
+        *) echo -e "    ${YELLOW}Add $KOS_BIN_DIR to your PATH to use \`kos\`.${NC}" ;;
+    esac
+    echo -e "    ${GRAY}Next: kos aios status${NC}"
+}
+
 # AI OS: the four layers (button clicker, app commands, kernel commands, auto skill maker) that KOS
 # (kernal-os, `kos aios`) drives. Report only; this changes nothing on the computer.
 show_ai_os_layers() {
@@ -549,6 +595,7 @@ main() {
             ;;
     esac
     
+    install_kos
     show_ai_os_layers
     show_completion
 }
