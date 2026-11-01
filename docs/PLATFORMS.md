@@ -47,6 +47,7 @@ and the permissions each OS prompts for.
 | Memory | yes | yes | yes | yes | yes | yes |
 | Reasoning engine | yes | yes | yes | yes | yes | yes |
 | Skills | yes | yes | yes | yes | yes | yes |
+| App skills (the auto skill maker reads each app's commands) | yes | yes | yes | yes | yes | yes |
 | Plugins | yes | yes | yes | yes | yes | yes |
 | Extensions | yes | yes | yes | yes | yes | yes |
 | Store | yes | yes | yes | yes | yes | yes |

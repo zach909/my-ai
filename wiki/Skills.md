@@ -48,6 +48,19 @@ The coding skill supports 500+ programming languages:
 
 **And many more:** ABAP, Ada, Agda, Alloy, Apex, APL, Arduino, ATS, Awk, Ballerina, Clojure, COBOL, Crystal, D, Dart, Elixir, Elm, Erlang, F#, Factor, Fortran, Haskell, Haxe, Io, Julia, Kotlin, Lisp, Lua, MATLAB, Nim, OCaml, Pascal, Perl, Prolog, R, Scala, Smalltalk, Swift, Tcl, VHDL, Visual Basic, Zig, and hundreds more.
 
+## App skills: every command of an app, in plain words
+
+The auto skill maker can learn one app at a time. Ask it `app skill git` (from chat, or `kos aios skill app skill git`) and it:
+
+1. **Command-line apps:** runs the app with `--help`, the way you would in a terminal, and reads its subcommands and options.
+2. **Graphical apps:** reads the app's launcher file for the app itself and each action it declares (New Window, Private Window...).
+3. Writes one wiki page, `apps/<app>`, with a short entry per command or control, in the app's own words. A command the app doesn't describe says so; nothing is invented.
+4. When the AI looks for a skill for that app, its wiki search hands it that page.
+
+Limit: buttons and menus inside a running window need the desktop's accessibility interface, which the desktop layer can't read yet, so graphical apps get only what their launcher declares. The page says so under "Not covered".
+
+Code: `models && skills/core/app-catalog.ts`. Tests: `test/core/app-catalog.test.ts`.
+
 ## Creating a Skill
 
 There's no `ExpertBase` class anywhere in the codebase, and a skill isn't a

@@ -23,7 +23,7 @@
 
 import { runAgentLoop, type AgentCapabilities, type LoopResult } from "./agent-loop.js";
 import { decompose } from "./reasoning-engine.js";
-import { listWikiPages } from "./wiki-store.js";
+import { listWikiPages, readWikiPage } from "./wiki-store.js";
 import { listCatalog, STORE_KINDS } from "./store.js";
 import { loadRegistry } from "./prompting-skill-store.js";
 import { readRecentConversationTurns } from "../../src/lib/conversation-log.js";
@@ -127,6 +127,9 @@ function textOf(value: unknown): string {
 }
 
 /** Case-insensitive word overlap. Enough to filter a catalogue; not pretending to be search. */
+/** How much of an app's command page the AI is handed when it searches for a skill for that app. */
+const APP_PAGE_CHARS = 3000;
+
 function matches(haystack: string, query: string): boolean {
   const words = query.toLowerCase().split(/\W+/).filter(w => w.length > 2);
   if (words.length === 0) return true;
@@ -177,10 +180,22 @@ export function buildAgentCapabilities(host: AgentHost, attachmentsOut: ChatAtta
 
   caps.searchWiki = (query: string) => {
     try {
+      const queryWords = new Set(query.toLowerCase().split(/\W+/).filter(Boolean));
+      // An app's own page goes first when the query names the app: common words ("how", "with") match many pages
+      // and would otherwise fill the limit before the page the AI actually needs.
+      const named = (page: { name: string; title: string }) => page.name.startsWith("apps/") && queryWords.has(page.title.toLowerCase());
       return listWikiPages()
         .filter(page => matches(`${page.title} ${page.description} ${page.name}`, query))
+        .sort((a, b) => Number(named(b)) - Number(named(a)))
         .slice(0, PERCEPTION_LIMIT)
-        .map(page => `wiki/${page.name}: ${page.title} — ${page.description}`);
+        .map(page => {
+          const line = `wiki/${page.name}: ${page.title} — ${page.description}`;
+          // An app's page (apps/<app>, made by the auto skill maker) is its command list. The AI is looking
+          // for how to use that app, so it gets the entries themselves, not just the page's name.
+          if (!page.name.startsWith("apps/")) return line;
+          const full = readWikiPage(page.name);
+          return full ? `${line}\n${full.content.slice(0, APP_PAGE_CHARS)}` : line;
+        });
     } catch {
       // A perception source that cannot be read this run is a source that
       // found nothing, not a reason to abandon the task.

@@ -442,6 +442,19 @@ export class SkillMakerExtension extends BasePlugin {
     const input = String(message ?? '').trim();
     if (!input) return { type: 'skill-maker', message: 'Provide skill description to generate a skill file (optionally "description :: source1; source2")' };
 
+    // "app skill <app>": read one app's commands (command-line --help, or a graphical app's declared actions)
+    // and publish them as the wiki page the AI is handed when it looks for a skill for that app.
+    const appAsk = input.match(/^app\s+skill\s+(\S+)$/i);
+    if (appAsk) {
+      try {
+        const { buildAppSkill } = await import('../../models && skills/core/app-catalog.js');
+        const { page, catalog } = buildAppSkill(appAsk[1]);
+        return { type: 'skill-maker', app: catalog.app, page: page.name, commands: catalog.commands.length, options: catalog.options.length, controls: catalog.controls.length, notes: catalog.notes, message: `Wrote wiki/${page.name}: ${catalog.commands.length} commands, ${catalog.options.length} options, ${catalog.controls.length} controls.` };
+      } catch (err) {
+        return { type: 'skill-maker', message: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
     const [descriptionPart, sourcesPart] = input.split(/\s+::\s+/);
     const description = descriptionPart.trim();
     const sources = sourcesPart
