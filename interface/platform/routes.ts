@@ -14,6 +14,7 @@
  * Writing settings additionally needs the owner or an admin; a regular user may
  * read them (the look applies to their pages too) but not change them.
  */
+import { layerList, runLayer } from './ai-os-layers.js';
 import type http from 'node:http';
 import { ADAPTERS, CAPABILITY_IDS, detectPlatform, describeCapabilities, PLATFORM_IDS, type PlatformId } from './adapters.js';
 import { getBuildInfo } from './version.js';
@@ -37,7 +38,7 @@ export interface PlatformRouteContext {
   fromThisMachine(): boolean;
 }
 
-const ROUTES = new Set(['/api/app-info', '/api/app-settings', '/api/app-update', '/api/ai-os', '/manifest.webmanifest', '/sw.js', '/app-icon-192.png', '/app-icon-512.png']);
+const ROUTES = new Set(['/api/app-info', '/api/app-settings', '/api/app-update', '/api/ai-os', '/api/ai-os/layer', '/manifest.webmanifest', '/sw.js', '/app-icon-192.png', '/app-icon-512.png']);
 export const isPlatformRoute = (pathname: string): boolean => ROUTES.has(pathname);
 
 let updateCache: { key: string; at: number; status: UpdateStatus } | null = null;
@@ -68,7 +69,7 @@ export async function handlePlatformRoutes(ctx: PlatformRouteContext): Promise<b
   const { pathname, method, req, res } = ctx;
   if (!isPlatformRoute(pathname)) return false;
   const head = method === 'HEAD';
-  if (method !== 'GET' && !head && !(pathname === '/api/app-settings' && method === 'POST') && !(pathname === '/api/ai-os' && method === 'POST')) {
+  if (method !== 'GET' && !head && !(pathname === '/api/app-settings' && method === 'POST') && !(pathname === '/api/ai-os' && method === 'POST') && !(pathname === '/api/ai-os/layer')) {
     ctx.sendJson(res, { error: 'Method not allowed.' }, 405);
     return true;
   }
@@ -110,6 +111,27 @@ export async function handlePlatformRoutes(ctx: PlatformRouteContext): Promise<b
           return true;
         }
         ctx.sendJson(res, { settings: store.load(), fields: SETTINGS_FIELDS, persistence: { ...store.lastSave, file: store.file } });
+        return true;
+      }
+      case '/api/ai-os/layer': {
+        // The door KOS (`kos aios`) knocks on. GET lists the four layers; POST runs one request on one layer
+        // through the normal tool gate. Admin, from this computer only: KOS has already asked for the password.
+        if (method === 'GET') {
+          ctx.sendJson(res, { layers: layerList() });
+          return true;
+        }
+        if (method !== 'POST') {
+          ctx.sendJson(res, { error: 'Method not allowed.' }, 405);
+          return true;
+        }
+        if (!ctx.isAdmin() || !ctx.fromThisMachine()) {
+          ctx.sendJson(res, { error: 'AI OS layers can only be used by the admin, from this computer.' }, 403);
+          return true;
+        }
+        const body = await ctx.parseBody(req, 8192) as { layer?: unknown; request?: unknown } | null;
+        const { getNeuroclawSystem } = await import('../../src/index.js');
+        const out = await runLayer(body?.layer, body?.request, async (tool, request) => (await getNeuroclawSystem()).pluginRegistry.runTool(tool, request));
+        ctx.sendJson(res, out, out.status === 'bad-request' ? 400 : 200);
         return true;
       }
       case '/api/ai-os': {

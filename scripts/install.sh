@@ -517,6 +517,15 @@ fetch_source() {
     cd "$REPO_DIR"
 }
 
+# AI OS: the four layers (button clicker, app commands, kernel commands, auto skill maker) that KOS
+# (kernal-os, `kos aios`) drives. Report only; this changes nothing on the computer.
+show_ai_os_layers() {
+    [[ -f "scripts/ai-os.mjs" ]] || return 0
+    echo ""
+    echo -e "    ${GRAY}AI OS layers on this computer:${NC}"
+    node scripts/ai-os.mjs layers 2>/dev/null | sed 's/^/      /' || true
+}
+
 main() {
     fetch_source
     install_dependencies
@@ -540,6 +549,7 @@ main() {
             ;;
     esac
     
+    show_ai_os_layers
     show_completion
 }
 
