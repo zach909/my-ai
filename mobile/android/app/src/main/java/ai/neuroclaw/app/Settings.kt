@@ -30,6 +30,19 @@ class Settings(context: Context) {
     val configured: Boolean get() = serverUrl.isNotEmpty()
 
     /**
+     * Start in the shared chat, as every other platform does, once a PC address is saved. On by default; the main
+     * screen has a switch. Back from the chat always returns to the main screen (and the chat on the phone itself).
+     */
+    var openChatOnLaunch: Boolean
+        get() = prefs.getBoolean("openChatOnLaunch", true)
+        set(value) = prefs.edit().putBoolean("openChatOnLaunch", value).apply()
+
+    /** The system permission dialogs are shown on the first launch only; "Grant all runtime permissions" asks again later. */
+    var permissionsAsked: Boolean
+        get() = prefs.getBoolean("permissionsAsked", false)
+        set(value) = prefs.edit().putBoolean("permissionsAsked", value).apply()
+
+    /**
      * The secret the PC must present to the agent bridge (BridgeServer.kt).
      * Made once, from the system's secure random source, and shown in the app
      * so you can paste it into NEUROCLAW_PHONE_BRIDGE_TOKEN.

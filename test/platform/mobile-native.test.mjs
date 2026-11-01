@@ -39,7 +39,11 @@ test('Android: the web screens open the shared interface (home and /settings), n
   assert.match(web, /startsWith\("\/"\)/, 'only same-server paths can be requested');
   const main = text(`${KT}/MainActivity.kt`);
   assert.match(main, /openWeb\("\/"\)/);
-  assert.match(main, /openWeb\("\/settings"\)/);
+  const pages = text(`${KT}/Pages.kt`);
+  assert.match(pages, /Page\("\/", "Chat"\)/);
+  assert.match(pages, /Page\("\/settings", "Settings"\)/);
+  assert.match(main, /Pages\.ALL\.map/, 'the main screen draws a button for every page');
+  assert.match(main, /openWeb\(page\.path\)/);
 });
 
 test('Android: a server that cannot be reached shows a page that says so, and web permissions go only to the chosen server', () => {
@@ -58,7 +62,7 @@ test('Android: buttons share the row width, and the chat panel has a real height
   assert.match(main, /LinearLayout\.LayoutParams\(0, LinearLayout\.LayoutParams\.WRAP_CONTENT, 1f\)/);
   assert.doesNotMatch(main, /addView\(LinearLayout\(context\)\.apply \{ addView\(save\)/, 'no row of unweighted buttons that runs off the screen');
   assert.doesNotMatch(main, /ChatPanel\(context\), LinearLayout\.LayoutParams\([^)]*, 0, 1f\)/, 'a weight inside a ScrollView gives height 0');
-  assert.match(main, /ChatPanel\(context\), LinearLayout\.LayoutParams\([^)]*\(420 \* resources\.displayMetrics\.density\)/);
+  assert.match(main, /ChatPanel\((?:content\.)?context\), LinearLayout\.LayoutParams\([^)]*\(420 \* resources\.displayMetrics\.density\)/);
 });
 
 test('Android: every button declared on the main screen has a click action', () => {
@@ -142,6 +146,144 @@ test('Android: the setup screen has a button that opens the system page where th
   assert.match(main, /VoiceInteractionService\.isActiveService\(this@MainActivity, me\)/);
   assert.match(main, /ACTION_VOICE_INPUT_SETTINGS/);
   assert.match(main, /ACTION_MANAGE_DEFAULT_APPS_SETTINGS/, 'a fallback page for phones without the first');
-  assert.match(main, /addView\(assistant\)/, 'the button is on the screen');
+  assert.match(main, /panel\(assistant,/, 'the button is on the screen');
   assert.match(main, /Only you can change this/, 'it does not pretend the app can take the role itself');
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Parity with the other platforms: every page they reach, the same look, and the chat behaving the same way.
+// ---------------------------------------------------------------------------------------------------------------
+
+test('Android: every page the Settings "More" tab links to has a button on the main screen (only the old WebGL dashboard is left out)', () => {
+  const settingsPage = text('interface/platform/settings-page.ts');
+  const more = [...settingsPage.matchAll(/\['(\/[^']*)', '([^']+)', '[^']*'\]/g)].map((m) => ({ path: m[1], title: m[2] }));
+  assert.ok(more.length >= 6, `found the module links (${more.length})`);
+  const pages = text(`${KT}/Pages.kt`);
+  const server = text('interface/web-server.ts');
+  for (const { path: p, title } of more) {
+    if (p === '/app') continue; // the older dashboard that needs WebGL; Settings > More still lists it
+    assert.ok(pages.includes(`Page("${p}", "${title}")`), `Pages.kt is missing ${title} (${p})`);
+    assert.ok(server.includes(`pathname === '${p}'`), `the server does not serve ${p}`);
+  }
+  assert.doesNotMatch(pages, /Page\("\/app",/);
+});
+
+test('Android: the app starts in the shared chat once a PC is saved, with a switch, and Back returns to the main screen', () => {
+  const main = text(`${KT}/MainActivity.kt`);
+  const settings = text(`${KT}/Settings.kt`);
+  assert.match(settings, /var openChatOnLaunch: Boolean[\s\S]*?getBoolean\("openChatOnLaunch", true\)/, 'on by default');
+  assert.match(main, /savedInstanceState == null && settings\.configured && settings\.openChatOnLaunch/, 'only on a fresh start, only with an address');
+  assert.match(main, /Open the chat when the app starts/);
+  assert.doesNotMatch(main.slice(main.indexOf('openWeb("/")')), /finish\(\)/, 'the main screen stays underneath so Back returns to it');
+  // The permission dialogs would be cut off by opening the chat on top of them, so they come first, once.
+  assert.match(main, /if \(!settings\.permissionsAsked\) \{[\s\S]*?Permissions\.requestAll\(this\)[\s\S]*?\} else if \(savedInstanceState == null/);
+});
+
+test('Android: the native screens use the one look: the palette from interface/ambient.ts, no blue, no stock Material theme', () => {
+  const look = text(`${KT}/Look.kt`);
+  const ambient = text('interface/ambient.ts');
+  // The same tokens the web pages use.
+  for (const hex of ['#110c0e', '#1b1216', '#f8ede9', '#ff9a84', '#ffc4b4', '#8fe3a8', '#ff9aa8']) {
+    assert.ok(ambient.toLowerCase().includes(hex) || /8fe3a8|ff9aa8/.test(hex), `${hex} is in the web look`);
+    assert.ok(look.toLowerCase().includes(hex), `Look.kt carries ${hex}`);
+  }
+  // No blue anywhere in the app's own colours: no hex colour whose blue channel is its strongest.
+  const files = [...walk(path.join(ROOT, 'mobile/android/app/src/main/java')), ...walk(path.join(ROOT, 'mobile/android/app/src/main/res'))]
+    .filter((f) => /\.(kt|xml)$/.test(f));
+  for (const f of files) {
+    for (const m of readFileSync(f, 'utf8').matchAll(/#(?:[0-9a-fA-F]{2})?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})\b/g)) {
+      const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16));
+      assert.ok(!(b > r && b > g), `${path.relative(ROOT, f)} has a blue colour ${m[0]}`);
+    }
+  }
+  const manifest = text('mobile/android/app/src/main/AndroidManifest.xml');
+  assert.match(manifest, /android:theme="@style\/Theme\.NeuroClaw"/);
+  assert.doesNotMatch(manifest, /Theme\.Material\.Light/);
+  const themes = text('mobile/android/app/src/main/res/values/themes.xml');
+  assert.match(themes, /parent="@android:style\/Theme\.Material\.NoActionBar"/);
+  assert.match(themes, /android:colorAccent">@color\/nc_accent</);
+  // Round and soft: buttons are pills, inputs are pills, panels are big-radius glass.
+  assert.match(look, /fun button\([\s\S]*?shape\(c,[^\n]*, 999\)/);
+  assert.match(look, /fun input\([\s\S]*?radiusDp: Int = 999/);
+  assert.match(look, /fun glass\(view: View, radiusDp: Int = 32/);
+  assert.match(look, /OvershootInterpolator/, 'the spring on release');
+  assert.match(look, /ANIMATOR_DURATION_SCALE/, 'and it stands down when animations are off');
+});
+
+test('Android: the ring behind the native screens is the generated copy of the shared one, and the page it runs in has no file or network access', () => {
+  const dir = 'mobile/android/app/src/main/assets/look';
+  // browser-extension/ambient.* are pinned to interface/ambient.ts by test/core/ambient-copies.test.ts.
+  assert.equal(text(`${dir}/ambient.css`), text('browser-extension/ambient.css'), 'run: node scripts/sync-ambient.mjs');
+  assert.equal(text(`${dir}/ambient.js`), text('browser-extension/ambient.js'), 'run: node scripts/sync-ambient.mjs');
+  assert.match(text('scripts/sync-ambient.mjs'), /'mobile\/android\/app\/src\/main\/assets\/look'/);
+  assert.match(text('test/core/ambient-copies.test.ts'), /'mobile\/android\/app\/src\/main\/assets\/look'/);
+  const look = text(`${KT}/Look.kt`);
+  assert.match(look, /look\/ambient\.css/);
+  assert.match(look, /look\/ambient\.js/);
+  assert.match(look, /allowFileAccess = false/);
+  assert.match(look, /allowContentAccess = false/);
+  assert.match(look, /loadDataWithBaseURL\(\s*null,/, 'no address, so the page cannot reach anything');
+  assert.match(look, /shouldOverrideUrlLoading[^\n]*= true/, 'it never navigates away');
+  // Inlined into one page, so neither file may contain a closing tag that would end it early.
+  assert.doesNotMatch(text(`${dir}/ambient.js`), /<\/script/i);
+  assert.doesNotMatch(text(`${dir}/ambient.css`), /<\/style/i);
+  // Every native screen that has the ring pauses it out of sight, and releases it.
+  const main = text(`${KT}/MainActivity.kt`);
+  assert.match(main, /Look\.ring\(this\)/);
+  assert.match(main, /ring\?\.onPause\(\)/);
+  assert.match(main, /ring\?\.destroy\(\)/);
+});
+
+test('Android: screens are drawn edge to edge and padded by the system bars and the keyboard (Android 15 requires it)', () => {
+  const look = text(`${KT}/Look.kt`);
+  assert.match(look, /setDecorFitsSystemWindows\(false\)/);
+  assert.match(look, /WindowInsets\.Type\.ime\(\)/);
+  assert.match(text(`${KT}/MainActivity.kt`), /Look\.fitSystemBars\(this, scroll\)/);
+  assert.match(text(`${KT}/WebActivity.kt`), /Look\.fitSystemBars\(this, root\)/);
+});
+
+test('Android: files the pages offer to download (chat backup, exports) are saved to Downloads instead of being dropped, and only the chosen server is signed in', () => {
+  // Settings > Data > "Download chats" is a plain <a download>; a WebView ignores those unless the app handles them.
+  assert.match(text('interface/platform/settings-page.ts'), /href: '\/api\/chat-history\/export', download/);
+  const web = text(`${KT}/WebActivity.kt`);
+  assert.match(web, /setDownloadListener/);
+  assert.match(web, /DownloadManager\.Request/);
+  assert.match(web, /DIRECTORY_DOWNLOADS/);
+  assert.match(web, /if \(base\.isEmpty\(\) \|\| !url\.startsWith\(base\)\)/, 'a file from elsewhere is not given the cookie or password');
+  assert.ok(web.indexOf('addRequestHeader("Cookie"') > web.indexOf('!url.startsWith(base)'), 'the cookie is added only after the server check');
+});
+
+test('Android: the unreachable-server page is in the house look and says how to use the chat on the phone', () => {
+  const web = text(`${KT}/WebActivity.kt`);
+  assert.match(web, /Can't reach NeuroClaw/);
+  assert.match(web, /Press Back to use the chat on this phone/);
+  assert.match(web, /#110c0e/);
+  assert.match(web, /border-radius:999px/);
+  assert.match(web, /setBackgroundColor\(Look\.GROUND\)/, 'no white flash before a page loads');
+  assert.match(web, /web\.onPause\(\)/);
+  assert.match(web, /web\.destroy\(\)/);
+});
+
+test('Android: prompt buttons in a reply are read by the same rule as the chat page, and tapping one sends its prompt', () => {
+  const ts = text('interface/prompt-buttons.ts');
+  const kt = text(`${KT}/PromptButtons.kt`);
+  for (const [name, re] of [['MAX_PER_MESSAGE', /PROMPT_BUTTON_MAX_PER_MESSAGE = (\d+)/], ['LABEL_MAX', /PROMPT_BUTTON_LABEL_MAX = (\d+)/], ['PROMPT_MAX', /PROMPT_BUTTON_PROMPT_MAX = (\d+)/]]) {
+    assert.equal(new RegExp(`const val ${name} = (\\d+)`).exec(kt)?.[1], re.exec(ts)?.[1], `${name} matches the TypeScript`);
+  }
+  // The marker pattern is the very same expression.
+  const tsRegex = /const re = \/(.+)\/gi;/.exec(ts)[1];
+  const ktRegex = /Regex\("(.+)", RegexOption\.IGNORE_CASE\)/.exec(kt)[1].replace(/\\\\/g, '\\');
+  assert.equal(ktRegex, tsRegex);
+  // The same decisions: a newline in the label, a bad place, and the limits leave the marker as text.
+  assert.match(kt, /bits\[0\]\.contains\('\\n'\) \|\| bits\[0\]\.contains\('\\r'\)/);
+  assert.match(kt, /where != "menu" && where != "desktop"/);
+  assert.match(kt, /count >= MAX_PER_MESSAGE \|\| label\.isEmpty\(\) \|\| prompt\.isEmpty\(\) \|\| label\.length > LABEL_MAX \|\| prompt\.length > PROMPT_MAX/);
+  // The chat draws them and a tap goes through the ordinary send.
+  const chat = text(`${KT}/ChatPanel.kt`);
+  assert.match(chat, /PromptButtons\.split\(text\)/);
+  assert.match(chat, /setOnClickListener \{ submit\(part\.prompt\) \}/);
+  assert.match(chat, /private fun submit\(prompt: String\? = null\)[\s\S]*?Shared\.brain\(context\)\.send\(text\)/, 'the same path as typed text: brain.send');
+  assert.match(chat, /if \(text\.isEmpty\(\) \|\| !send\.isEnabled\) return/, 'no second send while a reply is on its way');
+  // A [[put: ...]] needs a desktop or app menu; the phone shows the label and places nothing.
+  assert.match(chat, /part\.put != null -> /);
 });
