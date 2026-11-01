@@ -80,6 +80,7 @@ and the permissions each OS prompts for.
 | Self-healing | yes | yes | yes | no | partly | partly |
 | Hive mind | yes | yes | yes | no | partly | partly |
 | AI monitor (judge agent) | yes | yes | yes | no | partly | partly |
+| Mind reader (reads the network’s firing) | yes | yes | yes | no | partly | partly |
 | Alignment protocol (kill switch) | yes | yes | yes | no | partly | partly |
 <!-- parity-matrix:end -->
 

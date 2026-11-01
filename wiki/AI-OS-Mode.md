@@ -44,6 +44,21 @@ Turning AI OS mode on also gives you the nearest thing each system allows to "th
 
 If the GNOME shortcut list ever comes back in a format this does not expect, it is left completely alone and the step says so.
 
+## The four AI OS layers, with KOS as the engine
+
+AI OS is the AI's three access layers plus the skill maker, and nothing else of NeuroClaw:
+
+| Layer | What it is | NeuroClaw tool |
+|---|---|---|
+| `gui` | graphical button clicker | `desktop` |
+| `app` | terminal: app commands | `terminal` |
+| `kernel` | kernel commands (Linux only) | `linux-permission-tools` |
+| `skill` | auto skill maker | `skill-maker` |
+
+On Linux, **KOS** (the kernal-os repo) is the gate in front of them: `kos aios gui|app|kernel|skill WORDS...` asks for your KOS password for that request, logs it, then calls `POST /api/ai-os/layer` on this computer. The route accepts only those four layers, only from the admin on this computer, and runs them through the same tool gate as chat, so approvals and Computer Access switches still apply. `node scripts/ai-os.mjs layers` shows them, and the installer prints that list at the end.
+
+Limits: KOS does not autostart anything, so the engine must be running (see the switch above). KOS needs Linux; on macOS and Windows the layers route exists but only the `gui`, `app` and `skill` layers are offered and nothing calls it for you.
+
 ## What it does not do
 
 - **It gives the agent no extra access.** Computer access, tool safety and approvals behave exactly as before. This only decides *when the engine starts*.
