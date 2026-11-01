@@ -521,7 +521,7 @@ fetch_source() {
 # four AI OS layers (button clicker, app commands, kernel commands, auto skill maker): `kos aios ...`.
 # Linux only (KOS needs the Linux kernel's Landlock and namespaces). Never fatal: NeuroClaw works without it.
 # Installs for this user only (no sudo): the source goes in ~/.local/share/kernal-os and `kos` is linked
-# into ~/.local/bin. It does NOT run `kos setup` (that is where you choose your password) and starts nothing.
+# into ~/.local/bin. It starts nothing, and AI OS asks for no password.
 # NEUROCLAW_SKIP_KOS=1 skips it; KOS_REPO_URL overrides where it comes from (the owner's repo by default).
 KOS_REPO_URL="${KOS_REPO_URL:-https://github.com/zach909/kernal-os.git}"
 KOS_DIR="${KOS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/kernal-os}"
@@ -560,7 +560,7 @@ install_kos() {
         *":$KOS_BIN_DIR:"*) ;;
         *) echo -e "    ${YELLOW}Add $KOS_BIN_DIR to your PATH to use \`kos\`.${NC}" ;;
     esac
-    echo -e "    ${GRAY}Next: kos setup (choose your password), then: kos aios status${NC}"
+    echo -e "    ${GRAY}Next: kos aios status${NC}"
 }
 
 # AI OS: the four layers (button clicker, app commands, kernel commands, auto skill maker) that KOS

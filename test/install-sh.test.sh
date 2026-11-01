@@ -263,7 +263,7 @@ esac
 rm -rf "$_shortcut_tmp"
 trap - EXIT
 
-# --- install_kos(): links the owner's KOS for this user only, never fatal, never sets a password ---
+# --- install_kos(): links the owner's KOS for this user only, never fatal, starts nothing, asks for no password ---
 _kos_tmp="$(mktemp -d)"
 trap 'rm -rf "$_kos_tmp"' EXIT
 (
@@ -280,8 +280,8 @@ _skip_out="$(source scripts/install.sh; NEUROCLAW_SKIP_KOS=1 KOS_DIR="$_kos_tmp/
 check $? "NEUROCLAW_SKIP_KOS=1 installs nothing"
 _bad_out="$(source scripts/install.sh; KOS_REPO_URL="$_kos_tmp/missing" KOS_DIR="$_kos_tmp/bad" install_kos 2>&1; echo "rc=$?")"
 case "$_bad_out" in *"rc=0") check 0 "a failed KOS download is not fatal" ;; *) check 1 "a failed KOS download is not fatal" ;; esac
-! grep -q 'kos setup' <(sed -n '/^install_kos()/,/^}/p' scripts/install.sh | grep -v 'Next:')
-check $? "install_kos() never runs kos setup (the password is yours to choose)"
+! sed -n '/^install_kos()/,/^}/p' scripts/install.sh | grep -q 'kos setup'
+check $? "install_kos() never runs kos setup and never mentions a password step"
 rm -rf "$_kos_tmp"
 
 echo ""
