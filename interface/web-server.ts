@@ -32,6 +32,7 @@ import { pullStoreCatalog } from '../models && skills/core/store-fetch.js';
 import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
+import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, promptButtonSkillsFor } from './prompt-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
@@ -727,6 +728,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     z-index: 1;
   }
 ${VISUAL_CSS}
+${PROMPT_BUTTON_CSS}
 </style>
 </head>
 <body>
@@ -745,6 +747,7 @@ ${VISUAL_CSS}
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
+<script>${PROMPT_BUTTON_CLIENT_JS}</script>
 <script>
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
@@ -947,6 +950,12 @@ ${VISUAL_CSS}
     const hasVisual = drawn.some(p => p.kind === 'visual');
     content.textContent = hasVisual ? drawn.filter(p => p.kind === 'text').map(p => p.text).join('\\n') : text;
     if (hasVisual && !content.textContent) content.style.display = 'none';
+    // Prompt buttons: [[ask: Label | prompt]] anywhere in the AI's prose becomes a button, and a click sends the
+    // prompt as the next turn. Like a panel, a reply with buttons gets no pen: editing the flattened text would
+    // drop the prompts the buttons carry.
+    const proseWithButtons = type === 'ai' ? content.textContent : '';
+    const hasButtons = !!proseWithButtons && ncButtons.has(proseWithButtons);
+    if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
     div.appendChild(content);
     if (hasVisual) ncVisuals.attach(div, text);
     const ts = document.createElement('div');
@@ -963,7 +972,7 @@ ${VISUAL_CSS}
       pen.title = 'Edit what the AI said';
       pen.setAttribute('aria-label', 'Edit what the AI said');
       pen.onclick = () => openEditor(div, content, ts, pen, entry, (next) => { current = next; });
-      if (!hasVisual) ts.appendChild(pen);
+      if (!hasVisual && !hasButtons) ts.appendChild(pen);
 
       // Three dots, next to the pen: what the answer was built from. Closed
       // by default -- it is reference, not part of reading the reply.
@@ -1061,6 +1070,7 @@ ${VISUAL_CSS}
         body: JSON.stringify({
           message: ncVisuals.plain(msg),
           visuals: ncVisuals.enabled(),
+          buttons: true,
           visualEvent,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
@@ -4411,7 +4421,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, visualSkillsFor(body));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)]);
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;
