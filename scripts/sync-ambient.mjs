@@ -20,6 +20,8 @@ const { AMBIENT_CSS, AMBIENT_JS } = await import(pathToFileURL(join(root, 'dist'
 export const AMBIENT_COPY_DIRS = [
   'browser-extension',
   'interface/static',
+  // The Android app draws the same ring behind its native screens (mobile/android/.../Look.kt inlines these two files).
+  'mobile/android/app/src/main/assets/look',
 ];
 
 for (const dir of AMBIENT_COPY_DIRS) {

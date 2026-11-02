@@ -22,9 +22,10 @@ test('a change rebuilds only what it affects', () => {
   assert.deepEqual(on(affectedTargets(['browser-extension/app.js'])), ['extension']);
   assert.deepEqual(on(affectedTargets(['mobile/android/app/src/main/java/ai/neuroclaw/app/WebActivity.kt'])), ['android']);
   assert.deepEqual(on(affectedTargets(['mobile/ios/NeuroClaw/ContentView.swift'])), ['ios']);
-  assert.deepEqual(on(affectedTargets(['interface/web-server.ts'])), ['linux', 'macos', 'windows'], 'engine and shared UI flow into every desktop package');
+  assert.deepEqual(on(affectedTargets(['interface/web-server.ts'])), ['android', 'linux', 'macos', 'windows'], 'engine and shared UI flow into every desktop package and the Android app, which runs the same server');
+  assert.deepEqual(on(affectedTargets(['mobile/server/src/shims/fs.ts'])), ['android'], 'the phone server\'s own shims rebuild the Android app only');
   assert.deepEqual(on(affectedTargets(['models && skills/onebrain/model.json'])), ['android', 'ios', 'linux', 'macos', 'windows'], 'the model is embedded in the phone apps too');
-  assert.deepEqual(on(affectedTargets(['interface/ambient.ts'])), ['extension', 'linux', 'macos', 'windows'], 'the shared look is copied into the extension');
+  assert.deepEqual(on(affectedTargets(['interface/ambient.ts'])), ['android', 'extension', 'linux', 'macos', 'windows'], 'the shared look is copied into the extension and the Android app');
   assert.deepEqual(on(affectedTargets(['scripts/release/package-macos.mjs'])), ['linux', 'macos', 'windows'].filter((x) => x !== 'x'));
   assert.deepEqual(on(affectedTargets(['package.json'])), ['android', 'extension', 'ios', 'linux', 'macos', 'windows'], 'a version bump rebuilds everything');
   assert.deepEqual(on(affectedTargets(['.github/workflows/ci.yml'])), ['android', 'extension', 'ios', 'linux', 'macos', 'windows'], 'a pipeline change is tested by building everything');

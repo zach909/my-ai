@@ -164,7 +164,7 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'mobile-apps', title: 'Phone apps', description: 'Native Android and iOS apps: on-phone brain, setup screen, and the shared interface (home chat and Settings) in a web view.',
-    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/WebActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/MainActivity.kt', 'mobile/ios/NeuroClaw/WebAppView.swift', 'mobile/ios/NeuroClaw/ContentView.swift'],
+    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/WebActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/MainActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/Look.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/Pages.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/PromptButtons.kt', 'mobile/ios/NeuroClaw/WebAppView.swift', 'mobile/ios/NeuroClaw/ContentView.swift'],
     routes: [],
     needs: [['localEngine'], ['remoteEngine']], tests: [n('test/platform/mobile-native.test.mjs'), n('test/platform/mobile-ui.test.mjs')], onlyOn: ['android', 'ios'],
   },
