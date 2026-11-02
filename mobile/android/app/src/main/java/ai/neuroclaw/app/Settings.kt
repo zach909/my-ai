@@ -58,6 +58,21 @@ class Settings(context: Context) {
             return made
         }
 
+    /**
+     * The secret that lets this app's own web screen talk to its local server (PhoneServer.kt). Made once from the
+     * system's secure random source. Other apps on the phone can reach the loopback address too, but not this.
+     */
+    val phoneToken: String
+        get() {
+            val existing = prefs.getString("phoneToken", null)
+            if (!existing.isNullOrEmpty()) return existing
+            val bytes = ByteArray(24)
+            java.security.SecureRandom().nextBytes(bytes)
+            val made = bytes.joinToString("") { "%02x".format(it) }
+            prefs.edit().putString("phoneToken", made).apply()
+            return made
+        }
+
     /** Whether the bridge listens on Wi-Fi (for a PC) rather than only on this phone. Off by default. */
     var bridgeLan: Boolean
         get() = prefs.getBoolean("bridgeLan", false)

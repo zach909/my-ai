@@ -154,11 +154,11 @@ export const ADAPTERS: Record<PlatformId, PlatformAdapter> = {
     },
   },
   android: {
-    id: 'android', label: 'Android', uiHost: 'Native app (Kotlin) with a WebView for the shared UI', engineHost: 'the app\'s own on-phone network (mobile/brain bundle)',
+    id: 'android', label: 'Android', uiHost: 'Native app (Kotlin) with a WebView for the shared UI', engineHost: 'the same engine and web server a computer runs, bundled into the app and served on the phone itself (mobile/server), plus the on-phone brain (mobile/brain)',
     runtime: 'native-app', updateMechanism: 'play-store', artifacts: ['android-apk'],
     capabilities: {
-      localEngine: some('The phone runs the bundled brain (about 100 KB), not the full desktop engine.'),
-      remoteEngine: ok('Sync with, and open the web app of, a NeuroClaw server on your network.'),
+      localEngine: some('The phone runs the computer\'s own engine and web server (mobile/server), reached on 127.0.0.1 inside the app, with Node replaced by this project\'s shims: the pages are byte-identical to the computer\'s and the API answers. What a phone cannot do (start programs, sandbox code, AES, signing) says so. It is tested in Node with a phone-shaped host and compiled by CI; it has not been run on a device here, so speed on real hardware (a chat reply is several seconds on a desktop CPU) is unmeasured.'),
+      remoteEngine: ok('Optionally sync with a NeuroClaw server on your network; the app does not need one.'),
       offlineChat: ok('The on-phone network answers with no connection.'),
       backgroundService: some('Android limits background work. The overlay and bridge services run only while enabled by the user.'),
       fileAccess: some('Scoped storage and the permissions you grant.'),
@@ -181,7 +181,7 @@ export const ADAPTERS: Record<PlatformId, PlatformAdapter> = {
     runtime: 'native-app', updateMechanism: 'app-store', artifacts: ['ios-simulator-app'],
     capabilities: {
       localEngine: some('The phone runs the bundled brain, not the full desktop engine.'),
-      remoteEngine: ok('Sync with, and open the web app of, a NeuroClaw server on your network.'),
+      remoteEngine: ok('Optionally sync with a NeuroClaw server on your network; the app does not need one.'),
       offlineChat: ok('The on-phone network answers with no connection.'),
       backgroundService: no('iOS does not allow an app to keep a server running in the background.'),
       fileAccess: some('Only what the file picker and photo picker hand the app.'),

@@ -26,14 +26,14 @@ const CRC_TABLE = (() => {
   return table;
 })();
 
-function crc32(data: Uint8Array): number {
+export function crc32(data: Uint8Array): number {
   let c = 0xffffffff;
   for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
 /** RFC 1951 §3.2.4: one or more "stored" (BTYPE=00) blocks, each at most 65535 bytes. */
-function deflateStore(data: Uint8Array): Uint8Array {
+export function deflateStore(data: Uint8Array): Uint8Array {
   const MAX_BLOCK = 0xffff;
   const blockCount = Math.max(1, Math.ceil(data.length / MAX_BLOCK));
   const out = new Uint8Array(blockCount * 5 + data.length);
@@ -147,7 +147,7 @@ function fixedDistanceTable(): HuffmanTable {
 }
 
 /** RFC 1951 full raw inflate: stored, fixed-Huffman, and dynamic-Huffman blocks. */
-function inflateRaw(data: Uint8Array): Uint8Array {
+export function inflateRaw(data: Uint8Array): Uint8Array {
   const reader = new BitReader(data);
   const chunks: number[] = [];
 

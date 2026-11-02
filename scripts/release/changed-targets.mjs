@@ -25,13 +25,15 @@ const DESKTOP = ['linux', 'windows', 'macos'];
 const RULES = [
   // [pattern, targets]
   [/^(\.github\/workflows\/|package\.json$|package-lock\.json$|scripts\/release\/(version|manifest|zip|packaging|changed-targets|summary)\.mjs$)/, TARGETS],
-  [/^(interface|models && skills|plugins|plugin_manager|extension_system|extension-builder|tsconfig\.backend\.json)(\/|$)/, [...DESKTOP]],
+  // The Android app runs this same engine and server on the phone (mobile/server), so these flow into it as well.
+  [/^(interface|models && skills|plugins|plugin_manager|extension_system|extension-builder|tsconfig\.backend\.json)(\/|$)/, [...DESKTOP, 'android']],
+  [/^(mobile\/server\/|scripts\/release\/(phone-bundle|build-mobile-server)\.mjs$)/, ['android']],
   [/^(src\/(index\.ts|lib\/error-log\.ts|server\/)|config\/|wiki\/|generated\/)/, [...DESKTOP]],
   [/^scripts\/(desktop-launcher\.mjs|build-backend\.mjs|learning-loader\.mjs|release\/(stage-app|app-home|icons|package-(linux|windows|macos))\.mjs|release\/macos\/)/, [...DESKTOP]],
   [/^scripts\/[^/]+\.mjs$/, [...DESKTOP]],
   // The extension embeds the shared look and the icon renderer's output.
   [/^(browser-extension\/|interface\/ambient\.ts$|interface\/platform\/icon\.ts$|scripts\/release\/(build-extension|make-icons)\.mjs$)/, ['extension']],
-  // Phone apps embed the OneBrain model and the on-phone brain bundle; the interface itself is fetched from the server.
+  // Phone apps embed the OneBrain model and the on-phone brain bundle. Android also embeds the whole server (above); iOS still shows the interface from a server.
   [/^mobile\/android\//, ['android']],
   [/^mobile\/ios\//, ['ios']],
   [/^(mobile\/brain\/|models && skills\/onebrain\/)/, ['android', 'ios']],

@@ -19,10 +19,11 @@ import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * The phone's home screen: your PC's address, a button for every page of the shared interface (chat, Settings,
- * Accounts, Commons, Sharing, Store, Extension Builder, Self-improvement), the chat that runs on the phone itself,
- * and the user-controlled Android runtime and special-access settings. Once a PC address is saved the app starts
- * in the shared chat like every other platform; Back returns here.
+ * The phone's home screen: a button for every page of the shared interface (chat, Settings, Accounts, Commons,
+ * Sharing, Store, Extension Builder, Self-improvement), the chat that runs on the phone itself, an optional PC to
+ * sync with, and the user-controlled Android runtime and special-access settings. The pages are NeuroClaw's own
+ * server running on this phone (PhoneServer.kt), so nothing here needs a PC. The app starts in the shared chat
+ * like every other platform; Back returns here.
  *
  * Drawn in the house look (Look.kt): the ring behind, glass sections, pill buttons, coral on warm dark.
  * Android requires the user to approve restricted capabilities in system UI; this app cannot silently grant them.
@@ -76,9 +77,7 @@ class MainActivity : Activity() {
     }
 
     private fun openWeb(path: String) {
-        val configured = Shared.brain(this).settings.serverUrl
-        if (configured.isEmpty()) status.text = "Enter your PC address and tap Save first."
-        else startActivity(Intent(this, WebActivity::class.java).putExtra(WebActivity.EXTRA_PATH, path))
+        startActivity(Intent(this, WebActivity::class.java).putExtra(WebActivity.EXTRA_PATH, path))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,14 +85,17 @@ class MainActivity : Activity() {
         val brain = Shared.brain(this)
         val settings = brain.settings
         val pad = (16 * resources.displayMetrics.density).toInt()
+        // Start NeuroClaw's own server now, so it is warming up while the permission dialogs and the home screen show.
+        PhoneServer.get(this).start()
+        PhoneServer.get(this).whenReady { refreshStatus() }
 
         val url = EditText(this).apply {
-            hint = "PC address, e.g. http://192.168.1.20:7861"
+            hint = "Optional: a PC to sync with, e.g. http://192.168.1.20:7861"
             setText(settings.serverUrl)
             inputType = InputType.TYPE_TEXT_VARIATION_URI
         }
         val password = EditText(this).apply {
-            hint = "Remote Access password (blank if none)"
+            hint = "The PC's Remote Access password (blank if none)"
             setText(settings.password)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
@@ -338,7 +340,7 @@ class MainActivity : Activity() {
             setPadding(Look.dp(this@MainActivity, 8), Look.dp(this@MainActivity, 8), 0, 0)
         }
         val subtitle = TextView(this).apply {
-            text = "Runs on this phone. Syncs with your PC when it can reach it."
+            text = "Runs entirely on this phone. A PC is optional, for syncing."
             tag = Look.DIMMED
             setPadding(Look.dp(this@MainActivity, 8), 0, 0, 0)
         }
@@ -350,7 +352,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
             addView(title); addView(subtitle)
-            addView(heading("Your PC"))
+            addView(heading("Sync with a PC (optional)"))
             addView(panel(url, password, row(save, sync)))
             addView(heading("Open"))
             addView(panel(*pageRows.toTypedArray(), openOnLaunch))
@@ -386,7 +388,7 @@ class MainActivity : Activity() {
             // First launch: the system permission dialogs, once. "Grant all runtime permissions" asks again later.
             settings.permissionsAsked = true
             Permissions.requestAll(this)
-        } else if (savedInstanceState == null && settings.configured && settings.openChatOnLaunch) {
+        } else if (savedInstanceState == null && settings.openChatOnLaunch) {
             openWeb("/")
         }
     }
@@ -417,7 +419,15 @@ class MainActivity : Activity() {
         val declared = Permissions.declared(this)
         val packageManagerGranted = declared.count { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
         status.text = buildString {
-            append(if (brain.settings.configured) "PC for syncing: ${brain.settings.serverUrl}" else "PC: not set (everything stays on the phone)")
+            val server = PhoneServer.get(this@MainActivity)
+            append(
+                when (server.state) {
+                    PhoneServer.State.STARTING -> "NeuroClaw on this phone: starting..."
+                    PhoneServer.State.READY -> "NeuroClaw on this phone: running"
+                    PhoneServer.State.FAILED -> "NeuroClaw on this phone: did not start (${server.error ?: "unknown reason"})"
+                },
+            )
+            append(if (brain.settings.configured) "\nPC for syncing: ${brain.settings.serverUrl}" else "\nPC: not set (everything stays on the phone)")
             append("\nOver other apps: $overlay")
             append("\nDeclared permissions: ${declared.size}; PackageManager reports granted: $packageManagerGranted.")
             append(if (missing.isEmpty()) "\nAll discovered declared dangerous runtime permissions are granted." else "\n${missing.size} declared dangerous runtime permission(s) still need consent or are restricted -- tap \"Grant all runtime permissions\" and review the audit.")
