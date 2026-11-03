@@ -9412,6 +9412,9 @@ exports.YesNoDoorway = YesNoDoorway;
   __modules[8] = function (module, exports, require) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.crc32 = crc32;
+exports.deflateStore = deflateStore;
+exports.inflateRaw = inflateRaw;
 exports.gzipSync = gzipSync;
 exports.gunzipSync = gunzipSync;
 /**

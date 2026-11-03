@@ -3,23 +3,34 @@ package ai.neuroclaw.app
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
 import android.service.voice.VoiceInteractionService
 import android.text.InputType
+import android.view.View
+import android.webkit.WebView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * Setup and full-screen chat, plus user-controlled Android runtime and special-access settings.
+ * The phone's home screen: a button for every page of the shared interface (chat, Settings, Accounts, Commons,
+ * Sharing, Store, Extension Builder, Self-improvement), the chat that runs on the phone itself, an optional PC to
+ * sync with, and the user-controlled Android runtime and special-access settings. The pages are NeuroClaw's own
+ * server running on this phone (PhoneServer.kt), so nothing here needs a PC. The app starts in the shared chat
+ * like every other platform; Back returns here.
+ *
+ * Drawn in the house look (Look.kt): the ring behind, glass sections, pill buttons, coral on warm dark.
  * Android requires the user to approve restricted capabilities in system UI; this app cannot silently grant them.
  */
 class MainActivity : Activity() {
     private lateinit var status: TextView
+    private var ring: WebView? = null
 
     private fun settingsButton(label: String, action: String, appSpecific: Boolean = false): Button =
         Button(this).apply {
@@ -38,13 +49,35 @@ class MainActivity : Activity() {
     /** Buttons side by side, each taking an equal share of the width, so none runs off the edge of a phone screen. */
     private fun row(vararg views: android.view.View): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        views.forEach { addView(it, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)) }
+        views.forEach { addView(it, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(gap(), gap(), gap(), gap()) }) }
+    }
+
+    private fun gap() = Look.dp(this, 3)
+
+    /** A glass section holding the given views, one under another, with a small gap around each. */
+    private fun panel(vararg views: android.view.View): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        val inset = Look.dp(this@MainActivity, 12)
+        setPadding(inset, inset, inset, inset)
+        Look.glass(this, 32)
+        views.forEach {
+            // A row already puts its own gap around each button.
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            if (it !is LinearLayout) lp.setMargins(gap(), gap(), gap(), gap())
+            addView(it, lp)
+        }
+    }
+
+    /** The small dimmed heading above a section. */
+    private fun heading(label: String): TextView = TextView(this).apply {
+        text = label
+        textSize = 13f
+        tag = Look.DIMMED
+        setPadding(Look.dp(this@MainActivity, 8), Look.dp(this@MainActivity, 18), 0, Look.dp(this@MainActivity, 6))
     }
 
     private fun openWeb(path: String) {
-        val configured = Shared.brain(this).settings.serverUrl
-        if (configured.isEmpty()) status.text = "Enter your PC address and tap Save first."
-        else startActivity(Intent(this, WebActivity::class.java).putExtra(WebActivity.EXTRA_PATH, path))
+        startActivity(Intent(this, WebActivity::class.java).putExtra(WebActivity.EXTRA_PATH, path))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,14 +85,17 @@ class MainActivity : Activity() {
         val brain = Shared.brain(this)
         val settings = brain.settings
         val pad = (16 * resources.displayMetrics.density).toInt()
+        // Start NeuroClaw's own server now, so it is warming up while the permission dialogs and the home screen show.
+        PhoneServer.get(this).start()
+        PhoneServer.get(this).whenReady { refreshStatus() }
 
         val url = EditText(this).apply {
-            hint = "PC address, e.g. http://192.168.1.20:7861"
+            hint = "Optional: a PC to sync with, e.g. http://192.168.1.20:7861"
             setText(settings.serverUrl)
             inputType = InputType.TYPE_TEXT_VARIATION_URI
         }
         val password = EditText(this).apply {
-            hint = "Remote Access password (blank if none)"
+            hint = "The PC's Remote Access password (blank if none)"
             setText(settings.password)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
@@ -74,13 +110,21 @@ class MainActivity : Activity() {
                 brain.syncInBackground()
             }
         }
-        val webApp = Button(this).apply {
-            text = "Open web app"
-            setOnClickListener { openWeb("/") }
+        // One button for each page of the shared interface (Pages.kt); the first, the chat, is the main one.
+        val pageButtons = Pages.ALL.map { page ->
+            Button(this).apply {
+                text = page.title
+                if (page.path == "/") tag = Look.PRIMARY
+                setOnClickListener { openWeb(page.path) }
+            }
         }
-        val webSettings = Button(this).apply {
-            text = "Web settings"
-            setOnClickListener { openWeb("/settings") }
+        val openOnLaunch = Button(this).apply {
+            fun label() = if (settings.openChatOnLaunch) "Open the chat when the app starts: on" else "Open the chat when the app starts: off"
+            text = label()
+            setOnClickListener {
+                settings.openChatOnLaunch = !settings.openChatOnLaunch
+                text = label()
+            }
         }
         val overlay = Button(this).apply {
             text = "Allow over other apps"
@@ -274,40 +318,98 @@ class MainActivity : Activity() {
         specialAccess.addView(settingsButton("Screen capture consent", "android.settings.SETTINGS"))
         specialAccess.addView(settingsButton("Notification channel controls", AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS, true))
 
+        val advanced = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            addView(rootControls)
+            addView(specialAccess)
+        }
+        val advancedToggle = Button(this).apply {
+            text = "Show advanced access and root"
+            setOnClickListener {
+                val show = advanced.visibility != View.VISIBLE
+                advanced.visibility = if (show) View.VISIBLE else View.GONE
+                text = if (show) "Hide advanced access and root" else "Show advanced access and root"
+            }
+        }
+
+        val title = TextView(this).apply {
+            text = "NeuroClaw"
+            textSize = 30f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(Look.dp(this@MainActivity, 8), Look.dp(this@MainActivity, 8), 0, 0)
+        }
+        val subtitle = TextView(this).apply {
+            text = "Runs entirely on this phone. A PC is optional, for syncing."
+            tag = Look.DIMMED
+            setPadding(Look.dp(this@MainActivity, 8), 0, 0, 0)
+        }
+        status.tag = Look.DIMMED
+        status.setTextIsSelectable(true)
+
+        val pageRows = pageButtons.chunked(2).map { pair -> row(*pair.toTypedArray()) }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            addView(url); addView(password)
-            addView(row(save, webApp, webSettings))
-            addView(row(overlay, start, stop))
-            addView(assistant)
-            addView(row(sync))
-            addView(grant)
-            addView(audit)
-            addView(backgroundLocation)
-            addView(backgroundSensors)
-            addView(rootControls)
-            addView(row(bridge, bridgeLan))
-            addView(specialAccess)
-            addView(status)
-            // A weight of 1 inside a ScrollView gets no height at all, so the chat used to be invisible. Give it a real one.
-            addView(ChatPanel(context), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (420 * resources.displayMetrics.density).toInt()))
+            addView(title); addView(subtitle)
+            addView(heading("Sync with a PC (optional)"))
+            addView(panel(url, password, row(save, sync)))
+            addView(heading("Open"))
+            addView(panel(*pageRows.toTypedArray(), openOnLaunch))
+            addView(heading("Assistant and bubble"))
+            addView(panel(assistant, row(overlay, start, stop)))
+            addView(heading("Permissions"))
+            addView(panel(grant, audit, backgroundLocation, backgroundSensors, row(bridge, bridgeLan), advancedToggle, advanced))
+            addView(heading("Status"))
+            addView(panel(status))
+            addView(heading("Chat on this phone"))
         }
-        setContentView(ScrollView(this).apply { addView(content) })
+        // Style everything built so far; the chat panel styles itself (its own text colours must survive).
+        Look.styleTree(content)
+        // A weight of 1 inside a ScrollView gets no height at all, so the chat used to be invisible. Give it a real one.
+        content.addView(ChatPanel(content.context), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (420 * resources.displayMetrics.density).toInt()))
 
-        Permissions.requestAll(this)
+        // The ring is the bottom layer; the sections scroll over it. The scroll view is padded by the system bars
+        // and the keyboard but not clipped to them, so content slides under the bars as it scrolls.
+        val ringView = Look.ring(this).also { ring = it }
+        val scroll = ScrollView(this).apply {
+            clipToPadding = false
+            addView(content)
+        }
+        setContentView(FrameLayout(this).apply {
+            setBackgroundColor(Look.GROUND)
+            addView(ringView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(scroll, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        })
+        Look.fitSystemBars(this, scroll)
+
         refreshStatus()
+        if (!settings.permissionsAsked) {
+            // First launch: the system permission dialogs, once. "Grant all runtime permissions" asks again later.
+            settings.permissionsAsked = true
+            Permissions.requestAll(this)
+        } else if (savedInstanceState == null && settings.openChatOnLaunch) {
+            openWeb("/")
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        ring?.onPause()
         val brain = Shared.brain(this)
         Shared.io.execute { brain.phone.save() }
     }
 
     override fun onResume() {
         super.onResume()
+        ring?.onResume()
         refreshStatus()
+    }
+
+    override fun onDestroy() {
+        ring?.destroy()
+        ring = null
+        super.onDestroy()
     }
 
     private fun refreshStatus() {
@@ -317,7 +419,15 @@ class MainActivity : Activity() {
         val declared = Permissions.declared(this)
         val packageManagerGranted = declared.count { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
         status.text = buildString {
-            append(if (brain.settings.configured) "PC for syncing: ${brain.settings.serverUrl}" else "PC: not set (everything stays on the phone)")
+            val server = PhoneServer.get(this@MainActivity)
+            append(
+                when (server.state) {
+                    PhoneServer.State.STARTING -> "NeuroClaw on this phone: starting..."
+                    PhoneServer.State.READY -> "NeuroClaw on this phone: running"
+                    PhoneServer.State.FAILED -> "NeuroClaw on this phone: did not start (${server.error ?: "unknown reason"})"
+                },
+            )
+            append(if (brain.settings.configured) "\nPC for syncing: ${brain.settings.serverUrl}" else "\nPC: not set (everything stays on the phone)")
             append("\nOver other apps: $overlay")
             append("\nDeclared permissions: ${declared.size}; PackageManager reports granted: $packageManagerGranted.")
             append(if (missing.isEmpty()) "\nAll discovered declared dangerous runtime permissions are granted." else "\n${missing.size} declared dangerous runtime permission(s) still need consent or are restricted -- tap \"Grant all runtime permissions\" and review the audit.")

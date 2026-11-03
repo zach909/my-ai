@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The house palette (AGENTS.md, VISUAL STYLE; the same values as interface/ambient.ts and Look.kt). Soft coral on warm dark, no blue. -->
+<resources>
+    <color name="nc_ground">#110c0e</color>
+    <color name="nc_ground_2">#1b1216</color>
+    <color name="nc_ink">#f8ede9</color>
+    <color name="nc_dim">#9ef8ede9</color>
+    <color name="nc_faint">#66f8ede9</color>
+    <color name="nc_line">#33ffe4da</color>
+    <color name="nc_accent">#ff9a84</color>
+    <color name="nc_accent_soft">#ffc4b4</color>
+    <color name="nc_accent_deep">#e8705a</color>
+    <color name="nc_highlight">#29ff9a84</color>
+</resources>

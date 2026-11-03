@@ -50,9 +50,9 @@ const ENGINE: CapabilityId[][] = [['localEngine'], ['remoteEngine']];
 export const FEATURES: Feature[] = [
   {
     id: 'chat', title: 'Chat', description: 'Talk to the agent; replies come from the OneBrain mesh through the bit-level Zip Loop.',
-    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
-    routes: ['POST /api/chat', 'POST /api/chat/messages', 'POST /api/chat/correct', 'GET /api/status'],
-    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
+    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'GET /api/status'],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
@@ -170,7 +170,7 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'mobile-apps', title: 'Phone apps', description: 'Native Android and iOS apps: on-phone brain, setup screen, and the shared interface (home chat and Settings) in a web view.',
-    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/WebActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/MainActivity.kt', 'mobile/ios/NeuroClaw/WebAppView.swift', 'mobile/ios/NeuroClaw/ContentView.swift'],
+    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/WebActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/MainActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/Look.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/Pages.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/PromptButtons.kt', 'mobile/ios/NeuroClaw/WebAppView.swift', 'mobile/ios/NeuroClaw/ContentView.swift'],
     routes: [],
     needs: [['localEngine'], ['remoteEngine']], tests: [n('test/platform/mobile-native.test.mjs'), n('test/platform/mobile-ui.test.mjs')], onlyOn: ['android', 'ios'],
   },

@@ -145,7 +145,7 @@ export function builderPage(): string {
 
   <div id="create" class="tab-content active">
     <div class="info">
-      <p><strong>Create a new extension</strong> to add custom capabilities to your NeuroClaw instance.</p>
+      <p><strong>Build an extension</strong> from NeuroLang: neurons, values and definitions that join the network. Built extensions are saved in extension-builder/extensions.</p>
     </div>
     <div class="card">
       <h2>New Extension</h2>
@@ -158,11 +158,12 @@ export function builderPage(): string {
         <input type="text" id="extDesc" placeholder="What does your extension do?">
       </div>
       <div class="form-group">
-        <label>Extension Code (JavaScript)</label>
-        <textarea id="extCode" placeholder="export default function myExtension() { /* your code */ }"></textarea>
+        <label>NeuroLang code (see the Templates tab)</label>
+        <textarea id="extCode" placeholder="name=&quot;greeter&quot;"></textarea>
       </div>
-      <button onclick="saveExtension()">Create Extension</button>
-      <button onclick="testExtension()">Test</button>
+      <div class="form-group"><label><input type="checkbox" id="extQuantize"> Quantize to 8 bits when saving</label></div>
+      <button onclick="saveExtension()">Build Extension</button>
+      <p id="build-result" role="status"></p>
     </div>
   </div>
 
@@ -197,100 +198,86 @@ export function builderPage(): string {
 </main>
 
 <script>
-  document.querySelectorAll('.tab-button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      e.target.classList.add('active');
-      const tabName = e.target.dataset.tab;
-      document.getElementById(tabName).classList.add('active');
-      if (tabName === 'my-extensions') {
-        loadMyExtensions();
-      }
+  function h(tag, text, cls) {
+    var e = document.createElement(tag);
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    if (cls) e.className = cls;
+    return e;
+  }
+
+  document.querySelectorAll('.tab-button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tab-button').forEach(function (x) { x.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+      b.classList.add('active');
+      document.getElementById(b.dataset.tab).classList.add('active');
+      if (b.dataset.tab === 'my-extensions') loadMyExtensions();
     });
   });
 
-  async function saveExtension() {
-    const name = document.getElementById('extName').value;
-    const desc = document.getElementById('extDesc').value;
-    const code = document.getElementById('extCode').value;
-
-    if (!name || !code) {
-      alert('Name and code are required');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/extensions/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description: desc, code })
-      });
-      if (res.ok) {
-        alert('Extension created: ' + name);
-        document.getElementById('extName').value = '';
-        document.getElementById('extDesc').value = '';
-        document.getElementById('extCode').value = '';
-      } else {
-        alert('Error creating extension');
-      }
-    } catch (e) {
-      alert('Error: ' + e.message);
-    }
+  function setResult(text, isError) {
+    var box = document.getElementById('build-result');
+    box.textContent = text;
+    box.style.color = isError ? '#ff9a84' : '';
   }
 
-  function testExtension() {
-    const code = document.getElementById('extCode').value;
-    if (!code) {
-      alert('Enter code to test');
-      return;
-    }
-    console.log('Testing extension...');
+  async function saveExtension() {
+    var name = document.getElementById('extName').value.trim();
+    var description = document.getElementById('extDesc').value.trim();
+    var code = document.getElementById('extCode').value;
+    var quantize = document.getElementById('extQuantize').checked;
+    if (!name || !code.trim()) { setResult('Name and NeuroLang code are both required.', true); return; }
+    setResult('Building...');
     try {
-      eval('(async () => { ' + code + ' })()');
-      alert('Test passed');
+      var res = await fetch('/api/extension/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, description: description, code: code, quantize: quantize })
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) {
+        var errs = Array.isArray(data.errors) ? data.errors.map(function (e) { return typeof e === 'string' ? e : JSON.stringify(e); }) : [];
+        setResult('Build failed: ' + (errs.length ? errs.join('; ') : (data.error || 'HTTP ' + res.status)), true);
+        return;
+      }
+      var neurons = (data.neurons || []).map(function (n) { return n.name; }).join(', ') || 'none';
+      setResult('Built "' + data.name + '": ' + data.stats.neuronCount + ' neuron(s) (' + neurons + '), saved as ' + data.savedAs + '.', false);
     } catch (e) {
-      alert('Test error: ' + e.message);
+      setResult('Error: ' + e.message, true);
     }
   }
 
   async function loadMyExtensions() {
+    var list = document.getElementById('extensions-list');
+    list.replaceChildren(h('div', 'Loading...'));
     try {
-      const res = await fetch('/api/extensions');
-      if (!res.ok) throw new Error('Failed to load extensions');
-      const exts = await res.json();
-      const html = exts?.map(ext => \`
-        <div class="card">
-          <h2>\${ext.name}</h2>
-          <p>\${ext.description || 'No description'}</p>
-          <button onclick="editExtension('\${ext.name}')">Edit</button>
-          <button onclick="deleteExtension('\${ext.name}')">Delete</button>
-        </div>
-      \`).join('') || '<div>No extensions yet</div>';
-      document.getElementById('extensions-list').innerHTML = html;
+      var res = await fetch('/api/extension/list');
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+      var exts = data.extensions || [];
+      if (!exts.length) { list.replaceChildren(h('div', 'No extensions yet. Build one in the Create tab.')); return; }
+      list.replaceChildren.apply(list, exts.map(function (ext) {
+        var card = h('div', null, 'card');
+        card.appendChild(h('h2', ext.name));
+        card.appendChild(h('p', ext.neurons + ' neuron(s)' + (ext.quantized ? ', quantized to ' + ext.bits + ' bits' : '') + ' - ' + ext.file));
+        return card;
+      }));
     } catch (e) {
-      document.getElementById('extensions-list').innerHTML = '<div style="color: #ff9a84;">' + e.message + '</div>';
+      var err = h('div', 'Could not load extensions: ' + e.message);
+      err.style.color = '#ff9a84';
+      list.replaceChildren(err);
     }
   }
 
   function useTemplate(type) {
-    const templates = {
-      skill: 'export function mySkill(input) { return input.toUpperCase(); }',
-      tool: 'export async function fetchData(url) { const res = await fetch(url); return res.json(); }',
-      processor: 'export function processStream(data) { return data.filter(x => x.valid); }',
-      ui: 'export function renderComponent() { const el = document.createElement("div"); el.textContent = "Hello"; return el; }'
+    var templates = {
+      skill: 'name="greeter"\\n"greeter"@value="3"\\n"greeter"@definition="Hello! How can I help?"',
+      tool: 'name="lookup"\\n"lookup"@value="5"\\n"lookup"@definition="Looking that up for you."\\nname="answer"\\n"answer"@connections=".lookup*0.8"',
+      processor: 'name="input_layer"\\n"input_layer"@value="10"\\nname="hidden_layer"\\n"hidden_layer"@connections=".input_layer*0.5"\\nname="output_layer"\\n"output_layer"@connections=".hidden_layer*0.5"',
+      ui: 'name="button_label"\\n"button_label"@value="2"\\n"button_label"@definition="Click me"'
     };
     document.getElementById('extCode').value = templates[type] || '';
-  }
-
-  function editExtension(name) {
-    console.log('Edit:', name);
-  }
-
-  function deleteExtension(name) {
-    if (confirm('Delete ' + name + '?')) {
-      console.log('Delete:', name);
-    }
+    document.querySelector('[data-tab="create"]') && document.querySelector('[data-tab="create"]').click();
   }
 </script>`;
 }

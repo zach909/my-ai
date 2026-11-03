@@ -100,7 +100,7 @@ async function registerRealPlugins(pluginRegistry: PluginRegistry): Promise<void
   }
 }
 
-async function buildCore() {
+export async function buildCore() {
   const llm = new NeuroclawLLM();
   const pipeline = new NeuroPipeline();
   // One brain here too: back the plugin skill mesh with the language brain's own

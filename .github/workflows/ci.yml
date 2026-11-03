@@ -85,6 +85,8 @@ jobs:
         run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Type check
         run: node node_modules/typescript/bin/tsc -p tsconfig.backend.json --noEmit
+      - name: Type check the phone server (mobile/server)
+        run: node node_modules/typescript/bin/tsc -p mobile/server/tsconfig.json
       - name: Build the backend
         run: node scripts/build-backend.mjs
       - name: Shared look and icons are in step with their sources
@@ -311,6 +313,10 @@ jobs:
       - run: node scripts/release/use-node.mjs 22
       - run: node scripts/release/version.mjs check
       # The runner image already carries JDK 17, the Android SDK and Gradle, so no setup actions are used.
+      - name: Install the build tools named in package.json (typescript, vitest; nothing else)
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Bundle NeuroClaw's own server for the phone (the engine and web server the computer runs)
+        run: node scripts/release/build-mobile-server.mjs
       - name: Build the debug APK
         working-directory: mobile/android
         run: |

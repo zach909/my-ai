@@ -30,6 +30,19 @@ class Settings(context: Context) {
     val configured: Boolean get() = serverUrl.isNotEmpty()
 
     /**
+     * Start in the shared chat, as every other platform does, once a PC address is saved. On by default; the main
+     * screen has a switch. Back from the chat always returns to the main screen (and the chat on the phone itself).
+     */
+    var openChatOnLaunch: Boolean
+        get() = prefs.getBoolean("openChatOnLaunch", true)
+        set(value) = prefs.edit().putBoolean("openChatOnLaunch", value).apply()
+
+    /** The system permission dialogs are shown on the first launch only; "Grant all runtime permissions" asks again later. */
+    var permissionsAsked: Boolean
+        get() = prefs.getBoolean("permissionsAsked", false)
+        set(value) = prefs.edit().putBoolean("permissionsAsked", value).apply()
+
+    /**
      * The secret the PC must present to the agent bridge (BridgeServer.kt).
      * Made once, from the system's secure random source, and shown in the app
      * so you can paste it into NEUROCLAW_PHONE_BRIDGE_TOKEN.
@@ -42,6 +55,21 @@ class Settings(context: Context) {
             java.security.SecureRandom().nextBytes(bytes)
             val made = bytes.joinToString("") { "%02x".format(it) }
             prefs.edit().putString("bridgeToken", made).apply()
+            return made
+        }
+
+    /**
+     * The secret that lets this app's own web screen talk to its local server (PhoneServer.kt). Made once from the
+     * system's secure random source. Other apps on the phone can reach the loopback address too, but not this.
+     */
+    val phoneToken: String
+        get() {
+            val existing = prefs.getString("phoneToken", null)
+            if (!existing.isNullOrEmpty()) return existing
+            val bytes = ByteArray(24)
+            java.security.SecureRandom().nextBytes(bytes)
+            val made = bytes.joinToString("") { "%02x".format(it) }
+            prefs.edit().putString("phoneToken", made).apply()
             return made
         }
 

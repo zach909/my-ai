@@ -1,6 +1,6 @@
 # NeuroClaw on your phone
 
-Two native apps that run NeuroClaw's **full network on the phone, offline**, and **sync with your PC** whenever they can reach it.
+Two native apps that run NeuroClaw's **network on the phone, offline**, and **sync with your PC** whenever they can reach it. On Android the whole app, pages included, runs on the phone: the computer's own server is bundled into it.
 
 The network on the phone is not a port. It is the PC's own engine code, bundled into one file (`mobile/brain/bundle/neuroclaw-brain.js`, about 100 KB) that both apps run in a hidden web view. Android and iPhone therefore run exactly the same brain as the PC.
 
@@ -11,10 +11,24 @@ The network on the phone is not a port. It is the PC's own engine code, bundled 
 | Photo for training data | Only when you tap **Photo**; kept on the phone until it syncs | Same |
 | Screen capture | **Screen** button, one screenshot per tap | Not built — iOS has no app-level screenshot API |
 | Agent bridge (lets NeuroClaw on your PC see and screenshot the phone, and drive the app) | Accessibility service, off until you turn it on in Android settings. Sees every window and can screenshot the screen (Android 11+); types, taps and presses Back **only in NeuroClaw's own windows** | Permissions → Agent bridge. Own screen only: window list, screenshot, typing into the focused field. No taps. Answers only while the app is open |
-| Full web interface (same screens as the browser) | **Open web app** button: the PC's full web dashboard (`/app`, served by the backend) in Android's built-in WebView. Needs the PC address; the page does its own login | **Web app** toolbar button: the same, in WKWebView |
+| Full web interface (same screens as the browser) | **Runs on the phone itself, with no PC.** The app contains the computer's own engine and web server (`mobile/server`, bundled by `scripts/release/build-mobile-server.mjs`, run by `PhoneServer.kt`) and shows its pages in Android's built-in WebView from `127.0.0.1` inside the app, so every page and API route is the one the computer runs (a test compares them byte for byte). The app opens straight into the chat; the main screen has a button for each page (Chat, Settings, Accounts, Commons, Sharing, Store, Extension Builder, Self-improvement). Files a page offers to download, such as Settings > Data > Download chats, go to the Downloads folder | **Web app** toolbar button: the chat and Settings, in WKWebView, from a server on your network (iOS does not run the server yet) |
+| Look | The main screen, the chat panel, the bubble and the assistant sheet are drawn in the house look (`Look.kt`: soft coral on warm dark, pill buttons, glass panels, the same ring behind, no blue; the ring is the generated `assets/look/ambient.*`, refreshed by `node scripts/sync-ambient.mjs`). Pages from the PC already have it | Same pages; the native screens are not restyled yet |
+| Prompt buttons (`[[ask: Label \| prompt]]` in a reply) | Drawn as pills in the phone's chat; a tap sends the prompt (`PromptButtons.kt`, the same rule as `interface/prompt-buttons.ts`) | Not built in the native chat; the web view has them |
 | Voice-to-text | 🎙 button in chat | Same (mic button) |
 | Every permission in one place | **Grant all permissions** (main screen) | **Permissions** (Settings → PC → Permissions) |
 | Sync with the PC | Automatic after each message or photo, plus **Sync now** | Same |
+
+### The phone's server (Android)
+
+`mobile/server/src` is the entry and the project's own replacements for the parts of Node the engine uses (`shims/`: files in the app's private storage, `http` that hands requests to the server's own handler, hashes, zlib, and so on; what a phone cannot do, such as start programs, sandbox code, AES or signing, says so). Build it with `node scripts/release/build-mobile-server.mjs` (needs the `typescript` build tool; the APK script and CI do this for you). The output, `mobile/server/bundle/neuroclaw-server.js` (about 4 MB), is generated and not committed.
+
+To see exactly what the phone serves without a phone: `node test/platform/phone-runner.mjs` prints a port on `127.0.0.1`; open it in a browser. It runs the bundle with Node's `process` and `Buffer` removed and storage only through the same `NativeHost` door the app implements, so anything the engine still reaches for outside the shims fails there as it would on the phone. `test/platform/phone-server.test.mjs` compares its pages with a real computer-side server; `test/platform/phone-shims.test.mjs` checks the shims against Node's own on many inputs.
+
+**Not done or not verified (read this before trusting it on a device):**
+- Not run on a real phone. The Kotlin (`PhoneServer.kt` and the screens) is compiled by the CI Android job only; the JavaScript is tested in Node with a phone-shaped host.
+- Speed: a chat reply takes about 10 seconds on a desktop CPU in this engine, so expect it slower on a phone. The bubble and assistant sheet still use the smaller phone brain (`PhoneNetwork.kt`), not this server.
+- The PNG the server draws for the app icon is not compressed (the phone's zlib writes stored blocks): it is valid but larger than on a computer.
+- Outbound requests (store, wiki, web search) use the engine page's own `fetch`; they are untested on a device.
 
 ## Fastest route: install it from the browser (PWA)
 

@@ -11,3 +11,5 @@ store/
 
 # Rust build output (node scripts/build-native.mjs); regenerated, not source.
 native/target/
+# NeuroClaw's server bundled for the phone (node scripts/release/build-mobile-server.mjs); regenerated, not source.
+mobile/server/bundle/

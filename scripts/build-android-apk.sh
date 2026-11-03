@@ -72,6 +72,10 @@ fi
 # Export for build
 export ANDROID_HOME
 
+# NeuroClaw's own server for the phone (the engine and web server the computer runs), bundled for the app.
+echo "Bundling the phone server..."
+node "$PROJECT_ROOT/scripts/release/build-mobile-server.mjs"
+
 # Build
 cd "$ANDROID_DIR"
 
