@@ -79,6 +79,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/net-skill-store.test.ts'), v('test/core/prompting-skills.test.ts')],
   },
   {
+    id: 'app-skills', title: 'App skills (the auto skill maker reads each app\'s commands)', description: 'For one named app, reads its commands (a command-line app\'s --help, or a graphical app\'s declared actions) and publishes a wiki page with a short entry per command; the AI is handed that page when it looks for a skill for the app.',
+    implementation: ['models && skills/core/app-catalog.ts', 'models && skills/core/agent-capabilities.ts', 'plugins/extensions/index.ts'],
+    routes: [],
+    needs: ENGINE, tests: [v('test/core/app-catalog.test.ts')],
+  },
+  {
     id: 'plugins', title: 'Plugins', description: 'Tool plugins the agent can call (research, calendar, files, tasks...).',
     implementation: ['plugins/index.ts', 'plugin_manager/registry.ts'],
     routes: ['GET /api/plugins'],
