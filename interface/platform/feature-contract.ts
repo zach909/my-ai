@@ -182,9 +182,9 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'ai-os', title: 'AI OS mode (start with the computer)', description: 'Makes the engine part of the computer\'s sign-in, so the AI is running before any window is opened: a systemd user service or autostart entry on Linux, a LaunchAgent on macOS, a hidden per-user startup script on Windows. Per-user, undone with one switch, and it grants the agent no extra access. Also adds an assistant entry point where the OS has one to offer: a Start menu shortcut with a Ctrl+Alt+N hotkey on Windows, an application-menu entry and a GNOME Ctrl+Alt+N shortcut on Debian and other Linux. It cannot replace Copilot or Siri, which those systems do not allow.',
-    implementation: ['interface/platform/ai-os.ts', 'interface/platform/ai-os-layers.ts', 'interface/platform/routes.ts', 'interface/platform/settings-page.ts', 'scripts/ai-os.mjs'],
-    routes: ['GET /api/ai-os', 'POST /api/ai-os', 'GET /api/ai-os/layer', 'POST /api/ai-os/layer'],
-    needs: [['localEngine', 'backgroundService']], tests: [n('test/platform/ai-os.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+    implementation: ['interface/platform/ai-os.ts', 'interface/platform/ai-os-layers.ts', 'interface/platform/kos-apps.ts', 'interface/platform/routes.ts', 'interface/platform/settings-page.ts', 'scripts/ai-os.mjs'],
+    routes: ['GET /api/ai-os', 'POST /api/ai-os', 'GET /api/ai-os/layer', 'POST /api/ai-os/layer', 'GET /api/ai-os/apps', 'POST /api/ai-os/apps'],
+    needs: [['localEngine', 'backgroundService']], tests: [n('test/platform/ai-os.test.mjs'), n('test/platform/kos-apps.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
   },
   {
     id: 'system-assistant', title: 'Default digital assistant (Android)', description: 'NeuroClaw can be chosen under Settings > Default apps > Digital assistant app, the role Gemini holds, and then opens as a chat sheet from the power-button long press and the home gesture. Only the person can make the choice; there is no "Hey ..." wake word, which Android reserves for the phone\'s maker.',
