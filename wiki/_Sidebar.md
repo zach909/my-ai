@@ -27,6 +27,7 @@
 - [[Plugins|Plugins]]
 - [[Skills|Skills]]
 - [[Code-to-Net|Code-to-Net]]
+- [[Net Maker|Net-Maker]]
 - [[Net Search|Net-Search]]
 
 ## Reference

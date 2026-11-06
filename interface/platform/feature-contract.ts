@@ -151,6 +151,13 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/commons-routes.test.ts')],
   },
   {
+    id: 'weights', title: 'Net maker, net skill maker and weight editor',
+    description: 'Write a program that makes a network or a skill, see what each weight does, change it a little, and compile code into weights.',
+    implementation: ['models && skills/core/neuro-build.ts', 'models && skills/core/weight-editor.ts', 'interface/weights-routes.ts', 'interface/weights-page.ts'],
+    routes: ['GET /weights'],
+    needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts')],
+  },
+  {
     id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',
     implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs'],
     routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],

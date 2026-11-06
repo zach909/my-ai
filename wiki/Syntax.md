@@ -15,6 +15,15 @@ A condensed cheat-sheet for the [[NeuroLang]] directive grammar, plus the spec-l
 | `"netsearch"@name="x"` | Name a [[Net-Search]] definition |
 | `"netsearch"@net="path"` | Corpus location for that search |
 | `train` | Run training over the contracts defined so far |
+| `kind="network"` / `kind="skill"` | A network of its own, or a skill grafted into the live AI ([[Net-Maker]]) |
+| `neurons="64"` | Make 64 neurons (`n1`..`n64`), each connected to the others |
+| `neurons@value=` / `@vale=` / `@frozen=` | Defaults for those neurons |
+| `"x"@frozen="now"` / `"after"` | Never trained or edited, or frozen once training is done |
+| `"x"@input="text"` | Typing this drives `x` as hard as a neuron can be driven |
+| `"x"@response="text"` | With only `x` driven, the output must say this |
+| `"x"@reads="y"` | Which neuron says the response (default: the output neuron) |
+| `train="responses"` / `"predict"` / `"random"` | Train the responses, learn to predict given text, or predict generated content |
+| `train@epochs=` / `@rounds=` / `@seed=` / `@text=` | How long, how many rounds, the random seed, the text to predict |
 
 ## Spec-literal vs. dialect spelling
 

@@ -222,6 +222,10 @@ vale="15"
 conections=".sorting-basics"*"0.8"+"0.3"
 ```
 
+### Net maker and net skill maker
+
+A skill can be made from a short program (`kind="skill"`) and grafted into the live AI, or a network of its own can be made (`kind="network"`). See [[Net-Maker]].
+
 ### Code-to-Net Import
 
 Import binary code as skill components:

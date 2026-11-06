@@ -33,6 +33,7 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 - [[Plugins|Plugins]] - API connections to external services
 - [[Skills|Skills]] - Expert modules added to MoE
 - [[Code-to-Net|Code-to-Net]] - Import binary code as neural networks
+- [[Net Maker|Net-Maker]] - Make a network or a skill from a program, edit its weights, compile code
 - [[Net Search|Net-Search]] - Deep learning-powered neuron search
 
 ### System Features
