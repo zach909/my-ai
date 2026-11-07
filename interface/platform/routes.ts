@@ -8,6 +8,8 @@
  *   GET  /api/app-update      is this build current, behind, or could the check not complete
  *   GET  /api/ai-os           is AI OS mode (start with the computer) on, and can this viewer change it
  *   POST /api/ai-os           {enabled: boolean}  turn it on or off (admin, from the computer itself)
+ *   GET  /api/ai-os/apps      the KOS apps, which version of the system this computer is set to, and which apps it lets open
+ *   POST /api/ai-os/apps      {action: open|install|remove|edition, ...}  open an app by address, or manage them (admin, this computer)
  *   GET  /manifest.webmanifest, /sw.js, /app-icon-192.png, /app-icon-512.png   the installable app
  *
  * Everything but the install files sits behind the server's normal gate.
@@ -24,6 +26,7 @@ import { renderIconPng } from './icon.js';
 import { serviceWorkerSource, webManifest } from './pwa.js';
 import { FEATURES, featureSupport } from './feature-contract.js';
 import { aiOsStatus, currentEnv, disableAiOs, enableAiOs } from './ai-os.js';
+import { KosAppError, checkOpen, openApp, sharedKosApps } from './kos-apps.js';
 
 export interface PlatformRouteContext {
   req: http.IncomingMessage;
@@ -38,7 +41,7 @@ export interface PlatformRouteContext {
   fromThisMachine(): boolean;
 }
 
-const ROUTES = new Set(['/api/app-info', '/api/app-settings', '/api/app-update', '/api/ai-os', '/api/ai-os/layer', '/manifest.webmanifest', '/sw.js', '/app-icon-192.png', '/app-icon-512.png']);
+const ROUTES = new Set(['/api/app-info', '/api/app-settings', '/api/app-update', '/api/ai-os', '/api/ai-os/layer', '/api/ai-os/apps', '/manifest.webmanifest', '/sw.js', '/app-icon-192.png', '/app-icon-512.png']);
 export const isPlatformRoute = (pathname: string): boolean => ROUTES.has(pathname);
 
 let updateCache: { key: string; at: number; status: UpdateStatus } | null = null;
@@ -69,7 +72,7 @@ export async function handlePlatformRoutes(ctx: PlatformRouteContext): Promise<b
   const { pathname, method, req, res } = ctx;
   if (!isPlatformRoute(pathname)) return false;
   const head = method === 'HEAD';
-  if (method !== 'GET' && !head && !(pathname === '/api/app-settings' && method === 'POST') && !(pathname === '/api/ai-os' && method === 'POST') && !(pathname === '/api/ai-os/layer')) {
+  if (method !== 'GET' && !head && !(pathname === '/api/app-settings' && method === 'POST') && !(pathname === '/api/ai-os' && method === 'POST') && !(pathname === '/api/ai-os/layer') && !(pathname === '/api/ai-os/apps' && method === 'POST')) {
     ctx.sendJson(res, { error: 'Method not allowed.' }, 405);
     return true;
   }
@@ -129,10 +132,46 @@ export async function handlePlatformRoutes(ctx: PlatformRouteContext): Promise<b
           return true;
         }
         const body = await ctx.parseBody(req, 8192) as { layer?: unknown; request?: unknown } | null;
+        if (body?.layer === 'kernel' && sharedKosApps().edition() !== 'system') {
+          ctx.sendJson(res, { status: 'refused', text: 'Kernel commands are closed in the extension version of KOS. Switch this computer to the system version first.' });
+          return true;
+        }
         const { getNeuroclawSystem } = await import('../../src/index.js');
         const out = await runLayer(body?.layer, body?.request, async (tool, request) => (await getNeuroclawSystem()).pluginRegistry.runTool(tool, request));
         ctx.sendJson(res, out, out.status === 'bad-request' ? 400 : 200);
         return true;
+      }
+      case '/api/ai-os/apps': {
+        // Opening apps by address. Every app request is run through runLayer() (kos-apps.ts), so the same tool gate
+        // as chat applies. Admin, from this computer only, like the layer door it sits on.
+        const store = sharedKosApps();
+        if (!ctx.isAdmin() || !ctx.fromThisMachine()) {
+          ctx.sendJson(res, { error: 'KOS apps can only be used by the admin, from this computer.' }, 403);
+          return true;
+        }
+        if (method !== 'POST') {
+          const edition = store.edition();
+          ctx.sendJson(res, { edition, apps: store.list().map((a) => ({ id: a.id, name: a.name, scope: a.scope, builtin: !!a.builtin, openable: checkOpen(a, edition).ok })) });
+          return true;
+        }
+        const body = await ctx.parseBody(req, 8192) as { action?: unknown; address?: unknown; app?: unknown; id?: unknown; edition?: unknown } | null;
+        try {
+          switch (body?.action) {
+            case 'open': {
+              const { getNeuroclawSystem } = await import('../../src/index.js');
+              const out = await openApp(body.address, { apps: store.list(), edition: store.edition(), run: async (tool, request) => (await getNeuroclawSystem()).pluginRegistry.runTool(tool, request) });
+              ctx.sendJson(res, out, out.status === 'bad-request' ? 400 : 200);
+              return true;
+            }
+            case 'install': ctx.sendJson(res, { app: store.install(body.app) }); return true;
+            case 'remove': ctx.sendJson(res, { removed: store.remove(body.id) }); return true;
+            case 'edition': ctx.sendJson(res, { edition: store.setEdition(body.edition) }); return true;
+            default: ctx.sendJson(res, { error: 'action must be open, install, remove or edition.' }, 400); return true;
+          }
+        } catch (err) {
+          if (err instanceof KosAppError) { ctx.sendJson(res, { error: err.message }, err.status); return true; }
+          throw err;
+        }
       }
       case '/api/ai-os': {
         // Turning this on changes the computer outside the app's own folders (it adds a login item), so

@@ -146,7 +146,7 @@ export function planOsButton(
   return { unavailable: `This system (${system.platform}) has no launcher folder this can write to. The button is saved in NeuroClaw and opens at ${url}.` };
 }
 
-export const isUnavailable = (p: LauncherPlan | Unavailable): p is Unavailable => "unavailable" in p;
+export const isUnavailable = <T extends object>(p: T | Unavailable): p is Unavailable => "unavailable" in p;
 
 export class OsButtonStore {
   /** Approvals handed out by a preview, by button id. In memory only: a restart cancels them. */

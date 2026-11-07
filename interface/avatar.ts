@@ -25,8 +25,15 @@ export const VOICE_RATE = 8000;
 export const VOICE_MAX_BYTES = 256;
 export const FACE_SIZE = 32;
 
-/** Microphone samples (-1..1 at `fromRate`) as 8-bit unsigned sound at `toRate`, at most `maxBytes` of it. */
-export function pcmToBytes(samples: ArrayLike<number>, fromRate: number, toRate: number = VOICE_RATE, maxBytes: number = VOICE_MAX_BYTES): Uint8Array {
+/**
+ * Microphone samples (-1..1 at `fromRate`) as 8-bit unsigned sound at `toRate`, at most `maxBytes` of it.
+ *
+ * This function's source is copied into the page (`pcmToBytes.toString()` below), so like splitPromptButtons it must
+ * name nothing from outside itself: the defaults are the literal values of VOICE_RATE and VOICE_MAX_BYTES (8000 and
+ * 256), kept in step by hand. A reference to the exported constants would be rewritten to `exports.VOICE_RATE` by any
+ * CommonJS build (the phone's server is one) and then throw in the browser.
+ */
+export function pcmToBytes(samples: ArrayLike<number>, fromRate: number, toRate: number = 8000, maxBytes: number = 256): Uint8Array {
   const step = fromRate / toRate;
   const total = Math.min(maxBytes, Math.floor(samples.length / step));
   const out = new Uint8Array(total);

@@ -8,7 +8,8 @@ and what is still unfinished. The two matrices below are generated from `interfa
 
 > **House rule that shaped every decision here:** no third-party code (`AGENTS.md`). So there is no Electron,
 > Capacitor, React Native or Flutter in the new path. The desktop apps use the engine's own Node runtime plus the
-> operating system's own browser engine (Edge/Chrome/Chromium app window, or WebKit on macOS); the phones use
+> operating system's own web view in the app's own window (WebKit on macOS, WebKitGTK on Linux; Windows still uses an
+> Edge/Chrome app window, see "Unfinished"), with no browser needed and no network port on macOS and Linux; the phones use
 > their own system web views; installers are built with tools each OS ships (`dpkg-deb`, IExpress, `hdiutil`).
 
 ## The layers
@@ -34,8 +35,9 @@ and what is still unfinished. The two matrices below are generated from `interfa
 ```
 
 Everything a person sees is the **same two web pages**, served by the engine: the home chat (`/`) and Settings
-(`/settings`). The desktop app shows them in an app window, the Chrome extension opens them, and the phone apps show
-them in a web view. Change a page once and every platform shows it the next time it connects; no per-platform copy
+(`/settings`). The desktop app shows them in its own window, the Chrome extension opens them, and the phone apps show
+them in a web view (on Android the engine and server run inside the app itself, `mobile/server`; on iOS they come from a
+server on your network for now). Change a page once and every platform shows it the next time it connects; no per-platform copy
 exists to edit. Platform code is only the part that has to differ: starting the engine, the window, installation,
 and the permissions each OS prompts for.
 
@@ -47,6 +49,7 @@ and the permissions each OS prompts for.
 | Memory | yes | yes | yes | yes | yes | yes |
 | Reasoning engine | yes | yes | yes | yes | yes | yes |
 | Skills | yes | yes | yes | yes | yes | yes |
+| App skills (the auto skill maker reads each app's commands) | yes | yes | yes | yes | yes | yes |
 | Plugins | yes | yes | yes | yes | yes | yes |
 | Extensions | yes | yes | yes | yes | yes | yes |
 | Store | yes | yes | yes | yes | yes | yes |
@@ -58,6 +61,7 @@ and the permissions each OS prompts for.
 | Remote access password | yes | yes | yes | no | partly | partly |
 | Accounts | yes | yes | yes | no | partly | partly |
 | Commons | yes | yes | yes | no | partly | partly |
+| Net maker, net skill maker and weight editor | yes | yes | yes | no | partly | partly |
 | Self-improvement | partly | partly | partly | no | partly | no |
 | Desktop control | no | partly | no | no | partly | no |
 | Phone sync | no | no | no | no | yes | yes |
@@ -118,6 +122,7 @@ of platform (the desktop launcher, the extension, phone sync) is `no` elsewhere 
 | **The installed app could not run from a read-only place** | Wiki, store, extension-builder and generated content are also resolved against the working directory. | The launcher runs a per-user, writable copy of the app (`scripts/release/app-home.mjs`): code is replaced on update, your own pages and files are never touched. |
 | **Phone and narrow-window layouts overflowed** | The home page's input row had no `min-width: 0` so Send ran off a 360px screen; the page used `100vh` (taller than a phone's visible area); the React Settings page lost its layout under about 420px; Commons, Accounts and the login form were wider than the screen because of grid `min-content`. | Fixed in the page CSS; every page is checked at 360, 390, 768 and 1280px for sideways scroll, tap-target size and console errors (`test/platform/mobile-ui.test.mjs`). |
 | **Android controls looked dead** | The address hint said port 3000 (the old dev server; NeuroClaw is on 7861); an address typed without `http://` made every page fail silently; "Open web app" closed its own screen with no message when no address was set; a server that could not be reached showed a blank page; three buttons per row ran off the edge; the chat panel had weight 1 inside a scroll view, so it had **no height**; the web view granted camera and microphone to any origin. | `MainActivity.kt`, `WebActivity.kt`, `Settings.kt` fixed (address normalised, toast and an "unreachable" page with Try again, equal-width rows, a real chat height, permissions only for the chosen server). Opens the shared interface and Settings instead of the legacy dashboard. **These Kotlin edits were not compiled here (no Android SDK); the CI Android job compiles them.** |
+| **Android looked and behaved unlike every other platform, and was only a window onto the PC's website** | The main screen was a stock Material Light form (default teal/blue accents, square buttons); only the chat and Settings pages could be opened from it, and they were fetched from a PC that had to be running; the launcher icon, bubble and notification icon were indigo (`#4F46E5`); "Download chats" and other downloads did nothing (a WebView drops downloads unless the app handles them); prompt buttons showed as raw text in the phone's chat; the screens ignored system bars and the keyboard on Android 15. | The phone now runs the computer's own engine and web server (`mobile/server`: the real `interface/main.ts` and `web-server.ts` bundled with this project's own replacements for Node, started by `PhoneServer.kt`, served on `127.0.0.1` with a per-install secret), so every shared page is byte-for-byte the computer's (14 pages compared by `test/platform/phone-server.test.mjs`). The native screens use the house look (`Look.kt`, `Theme.NeuroClaw`, the generated ring), have a button for every shared page, open in the chat, save downloads to Downloads, draw prompt buttons, and handle insets. **Not compiled or run here (no Android SDK, no device): CI compiles it; speed on a real phone is unmeasured.** Still open: the launcher icon is a coral vector, not the rendered cord-and-sphere PNG (PNGs are Git LFS files); iOS still needs a server; the bubble and assistant sheet use the smaller phone brain. |
 | **iOS had the same address and blank-page faults** | `WebAppView` built `base + "/app"` from the raw text. | Address normalised, failures shown, the shared interface and Settings are reachable from a menu. Not compiled here (no Xcode); the CI iOS job compiles it. |
 | **The installable web app never installed** | `public/manifest.webmanifest` and `public/sw.js` were never copied into `dist/`, which is all the backend serves, so both answered 404; the manifest also used the old blue. | The backend generates the manifest, icons and an offline shell itself, in the house colours, served without a login (`interface/platform/pwa.ts`). |
 | **Slow rendering of the ring on weak devices** | 2304 beads were sorted and drawn every frame at up to 2x pixel density on every device. | The ring now measures its own frame time and draws a quarter as many beads (still one continuous cord) on devices that cannot keep up, starts reduced on touch and low-core devices, and respects the new Reduce motion setting. |
@@ -178,9 +183,18 @@ merged or published without you.
 
 - A Chrome extension cannot contain or start the engine. On a Chromebook the engine runs in the Linux container (one-time
   terminal step) or on another computer; there is no way around that on ChromeOS.
-- The desktop apps run the engine in the OS's own browser engine window: Edge on Windows (preinstalled), Chrome, Chromium,
-  Edge or Brave on Linux, WebKit in `NeuroClaw.app` on macOS. If no Chromium-based browser is found on Windows or Linux the
-  default browser is used and the engine keeps running until you stop it. The packaged apps have no tray icon, no
+- **The desktop window is the app's own, not a browser's, and opens no port (macOS and Linux).** The window is a small native
+  program (`NeuroClaw.app` on macOS, `native/host` on Linux) around the system's own web view (WebKit, WebKitGTK). It answers
+  the page's addresses (`nc://app/...`) by writing each request as one line to the launcher and reading the engine's answer
+  back (`interface/platform/embedded-transport.ts`), so every route, login gate, body limit and CSRF rule applies exactly as
+  over HTTP and no TCP port is listening (`test/platform/embedded.test.mjs` checks that with a control). The Linux package
+  depends on `libwebkit2gtk-4.1-0` (not on any browser); without it the app says so and stops, it does not open a browser.
+  Things that must call the engine from another program, like an OS button or a visual-app launcher, open a loopback port
+  only when you place one. A web server you start yourself (`node dist/interface/main.js web`, AI OS mode) is still there for the
+  Chrome extension, phones and other devices, and the window uses a running one instead of starting a second engine.
+  `neuroclaw --browser` (or `NEUROCLAW_WINDOW=browser`) still shows the app in a Chromium-based browser's app window if you want that.
+  **Windows has no native window yet** and keeps the previous behaviour: Edge or Chrome's app window over the loopback server
+  (Edge ships with Windows). The packaged apps have no tray icon, no
   Accessibility or screen-capture permission on macOS, and no Windows UI-automation tools (those exist only in the
   unmaintained Electron project).
 - Closing the app window stops the engine the app started (so nothing lingers). If you want your phone to sync with your PC,
@@ -203,6 +217,7 @@ missing browser fails there instead.
 | `settings.test.mjs` | validation; atomic saves; persistence across a server restart; a failed save is reported and not shown as saved; **the Linux regression** (unwritable working directory); safety settings persist; the page serves at both URLs |
 | `mobile-ui.test.mjs` | 11 pages at 360, 390, 768 and 1280px: no sideways scroll, no console errors, tap targets at least 44px on phones; send a chat message and get the engine's reply; navigation by real clicks; tabs by tap and keyboard; a toggle saves, applies and survives reload; a failed save is shown and the switch reverts; update status shows available, current and failed; the manifest, PNG icons and service worker are real |
 | `extension.test.mjs` | manifest permissions are the minimum; icons are real PNGs equal to the renderer's output; address handling; the zip is exact and reproducible; **loaded in Chromium**: the service worker runs, the action opens one launcher tab (a second click returns to it), the launcher connects to a live server and opens the real interface, explains an unreachable one, validates a bad address, saves a good one |
+| `embedded.test.mjs`, `launcher-window.test.mjs` | the engine served through a pipe (pages, JSON posts, the CSRF rule, binary bodies, a redirect, no listening port with a control, closing the window ends the engine); the launcher starting the engine and a stand-in window together, using a running server, and refusing to open a browser when there is no web view |
 | `packaging.test.mjs` | the payload needs no packages; the per-user app copy installs, updates and never touches your files; the packaged engine starts from `/` like a desktop entry, saves, restarts and stops; the launcher reuses a running server, avoids a port held by another program and reports a broken install; **a real `.deb`** (metadata, permissions, no setuid, no service, install script, extracted layout started for real) and `.tar.gz`; the Windows zip and installer scripts (per-user, no elevation, reversible); the macOS bundle and its minimal-privilege host |
 | `adapters.test.mjs` | capability claims are checked against the tree (Android voice, overlay and bridge exist; iOS cannot background; the extension has no native messaging); every promised artifact kind has a producer; the feature contract matches files, routes and tests; this document's matrices are current |
 | `update.test.mjs`, `release-manifest.test.mjs`, `version.test.mjs` | available, current, ahead, beta not offered to stable, no build for this machine, and nine failure modes; strict manifest schema and real checksums; one version everywhere and drift is named and repaired |
@@ -250,6 +265,14 @@ so its exact rendering logic was re-run standalone against the real `adapters.ts
   may need small fixes (runner images and tool paths are the usual suspects).
 
 ## Unfinished, and decisions that are yours
+
+0. **A native Windows window needs your decision.** The only Microsoft web view that needs no browser is WebView2, and a
+   program reaches it through `WebView2Loader.dll`, which ships in Microsoft's SDK and not with the runtime installed on the
+   computer. Bundling that DLL would be vendoring someone else's binary code, and reimplementing the loader means depending on
+   undocumented parts of the runtime that cannot be tested here. Until you choose, Windows keeps the Edge/Chrome app window.
+   The Linux window (`native/host`, written to GTK 3 and WebKitGTK through `dlopen`) and the macOS window were **not run
+   against a real web view here**: this machine has no WebKitGTK and no macOS, so what was proven is the engine side of
+   the pipe, the launcher, the line protocol and the no-web-view error path; CI and a real desktop must show the window itself.
 
 1. **Third-party code that was in the repo**: the React/Vite/three/Electron stack, the Gradle wrapper jar, and the tracked
    `node_modules/` have all been removed; `mobile/brain`'s Vite build was replaced with this project's own bundler
