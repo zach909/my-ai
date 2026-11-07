@@ -296,8 +296,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 <title>Neuroclaw Terminal</title>
 <style>
   :root {
-    --primary: #ff9a84;
-    --primary-light: #ffc4b4;
+    --primary: #e3a99d;
+    --primary-light: #efd0c8;
     --secondary: #f8ede9;
     --bg-dark: #110c0e;
     --bg-light: #1b1216;
@@ -445,7 +445,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   .edit-actions button:hover {
     background: var(--primary-light);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 154, 132, 0.3);
+    box-shadow: 0 4px 12px rgba(227,169,157, 0.3);
   }
 
   .edited-tag {
@@ -459,7 +459,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     margin-top: 10px;
     border-left: 3px solid var(--primary);
     padding: 8px 12px;
-    background: rgba(255, 154, 132, 0.05);
+    background: rgba(227,169,157, 0.05);
     border-radius: 0 8px 8px 0;
     font-size: 12px;
     color: var(--text);
@@ -505,8 +505,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 
   .message.user {
     align-self: flex-end;
-    background: rgba(255, 154, 132, 0.1);
-    border-color: rgba(255, 154, 132, 0.3);
+    background: rgba(227,169,157, 0.1);
+    border-color: rgba(227,169,157, 0.3);
   }
 
   .message.ai {
@@ -516,8 +516,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 
   .message.system {
     align-self: center;
-    background: rgba(255, 154, 132, 0.05);
-    border-color: rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.05);
+    border-color: rgba(227,169,157, 0.2);
     color: var(--text);
     opacity: 0.8;
     font-style: italic;
@@ -566,8 +566,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   #input:focus {
     border-color: var(--primary);
     background: rgba(11, 13, 16, 0.7);
-    box-shadow: 0 0 0 3px rgba(255, 154, 132, 0.1),
-                0 2px 8px rgba(255, 154, 132, 0.15);
+    box-shadow: 0 0 0 3px rgba(227,169,157, 0.1),
+                0 2px 8px rgba(227,169,157, 0.15);
   }
 
   #input:disabled {
@@ -588,18 +588,18 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   #send-btn {
-    background: rgba(255, 154, 132, 0.16);
+    background: rgba(227,169,157, 0.16);
     color: var(--primary-light);
-    border: 1px solid rgba(255, 154, 132, 0.5);
+    border: 1px solid rgba(227,169,157, 0.5);
     padding: 12px 26px;
-    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.3) inset, 0 8px 22px rgba(255, 120, 95, 0.18);
+    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.3) inset, 0 8px 22px rgba(214,150,138, 0.18);
   }
 
   #send-btn:hover {
-    background: rgba(255, 154, 132, 0.28);
-    border-color: rgba(255, 154, 132, 0.8);
+    background: rgba(227,169,157, 0.28);
+    border-color: rgba(227,169,157, 0.8);
     transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.4) inset, 0 10px 28px rgba(255, 120, 95, 0.3);
+    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.4) inset, 0 10px 28px rgba(214,150,138, 0.3);
   }
 
   #send-btn:active {
@@ -632,7 +632,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   #settings-link:hover {
-    background: rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.2);
     border-color: var(--primary);
     color: var(--primary);
     transform: translateY(-1px);
@@ -661,7 +661,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   #clear-btn:hover {
-    background: rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.2);
     border-color: var(--primary);
     color: var(--primary);
     opacity: 1;
@@ -723,12 +723,12 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 154, 132, 0.3);
+    background: rgba(227,169,157, 0.3);
     border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 154, 132, 0.5);
+    background: rgba(227,169,157, 0.5);
   }
 
   #header, #chat-container, #input-area {
@@ -1910,18 +1910,18 @@ export class WebServer {
   form { box-sizing:border-box; width:min(360px,90vw); padding:30px; background:rgba(255,240,232,.08);
          border:1px solid rgba(255,228,218,.2); border-radius:32px;
          backdrop-filter:blur(26px) saturate(1.5); -webkit-backdrop-filter:blur(26px) saturate(1.5);
-         box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 30px 80px rgba(0,0,0,.5), 0 0 90px rgba(255,140,110,.12); }
+         box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 30px 80px rgba(0,0,0,.5), 0 0 90px rgba(214,150,138,.12); }
   h1 { margin:0 0 4px; font-size:19px; }
   p.sub { margin:0 0 20px; color:rgba(248,237,233,.62); font-size:13px; }
   label { display:block; margin:14px 0 6px; font-size:13px; color:rgba(248,237,233,.8); }
   input { width:100%; box-sizing:border-box; padding:11px 18px; font-size:15px;
           background:rgba(20,12,14,.4); color:#f8ede9; border:1px solid rgba(255,228,218,.2); border-radius:999px; }
-  input:focus { outline:none; border-color:rgba(255,154,132,.7); box-shadow:0 0 0 4px rgba(255,154,132,.14); }
+  input:focus { outline:none; border-color:rgba(227,169,157,.7); box-shadow:0 0 0 4px rgba(227,169,157,.14); }
   button { width:100%; margin-top:20px; padding:12px; font-size:15px; font-weight:700;
-           background:rgba(255,154,132,.16); color:#ffc4b4; border:1px solid rgba(255,154,132,.5); border-radius:999px; cursor:pointer;
-           box-shadow:0 1px 0 rgba(255,220,208,.3) inset, 0 8px 22px rgba(255,120,95,.18);
+           background:rgba(227,169,157,.16); color:#efd0c8; border:1px solid rgba(227,169,157,.5); border-radius:999px; cursor:pointer;
+           box-shadow:0 1px 0 rgba(255,220,208,.3) inset, 0 8px 22px rgba(214,150,138,.18);
            transition:transform .3s cubic-bezier(.34,1.56,.64,1), background .2s, border-color .2s; }
-  button:hover { background:rgba(255,154,132,.28); border-color:rgba(255,154,132,.8); transform:translateY(-2px); }
+  button:hover { background:rgba(227,169,157,.28); border-color:rgba(227,169,157,.8); transform:translateY(-2px); }
   button:active { transform:scale(.97); }
   button[disabled] { opacity:.6; cursor:default; }
   .msg { margin-top:14px; font-size:13px; min-height:1.2em; }

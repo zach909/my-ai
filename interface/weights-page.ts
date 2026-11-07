@@ -22,7 +22,7 @@ export const WEIGHTS_PAGE = `<!DOCTYPE html>
   h2 { font-size:17px; margin:0 0 4px; }
   section { padding:24px 26px; }
   p { margin:6px 0 12px; font-size:14px; line-height:1.5; }
-  a { color:#ffc4b4; }
+  a { color:#efd0c8; }
   .links { margin:0 8px; font-size:14px; }
   .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:10px 0; }
   .row > .grow { flex:1 1 140px; min-width:0; }
@@ -30,11 +30,11 @@ export const WEIGHTS_PAGE = `<!DOCTYPE html>
   pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0 0; font:13px/1.5 ui-monospace, Menlo, Consolas, monospace; color:rgba(248,237,233,.85); }
   .chip { display:inline-block; padding:2px 10px; margin:2px 4px 2px 0; border-radius:999px; font-size:12px;
           border:1px solid rgba(255,228,218,.2); background:rgba(255,238,230,.07); color:rgba(248,237,233,.62); }
-  .chip.frozen { color:#ffc4b4; border-color:rgba(255,154,132,.5); }
+  .chip.frozen { color:#efd0c8; border-color:rgba(227,169,157,.5); }
   .chip.io { color:#8fe3a8; border-color:rgba(143,227,168,.4); }
   .line { padding:8px 14px; margin:6px 0; border-radius:24px; font-size:13px; line-height:1.45;
           background:rgba(255,240,232,.06); border:1px solid rgba(255,228,218,.14); }
-  .line.hot { border-color:rgba(255,154,132,.5); background:rgba(255,154,132,.1); }
+  .line.hot { border-color:rgba(227,169,157,.5); background:rgba(227,169,157,.1); }
   .line.ro { opacity:.6; }
   #msg { min-height:20px; margin:0 8px; font-size:14px; }
   .err { color:#ff9aa8; } .on { color:#8fe3a8; }
