@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { neuronsText } from "./core/neurons.js";
 import { graftNetSkill } from "./core/net-skill-graft.js";
 import { ONEBRAIN_ID, ONEBRAIN_NAME, parseSelfExtension, emptyOneBrain, foldEdges, readOneBrain, writeOneBrain } from "./onebrain-memory.js";
 // Registry versions of OneBrain kept for rollback; older ones are removed so
@@ -344,6 +345,11 @@ export class NeuroclawLLM {
             const text = `${skill.title ?? name}: ${skill.description ?? ""}`.slice(0, ONE_BRAIN_PROMPTING_SKILL_CHAR_CAP);
             zipFiles[`${ZIP_FOLDERS.promptingSkills}${name}/SKILL.txt`] = text;
         }
+        // Neurons (how confident to act, core/neurons.ts) is its own input in
+        // the same archive: a one-line file in neurons/, absent unless set.
+        const neuronsLine = neuronsText(options.neurons);
+        if (neuronsLine)
+            zipFiles[`${ZIP_FOLDERS.neurons}confidence.txt`] = neuronsLine;
         this.lastZipLoopFiles = Object.keys(zipFiles);
         const oneBrainRun = await runUntilStoppedAsync(zip, { files: zipFiles }, {
             quietTicks: 32,
