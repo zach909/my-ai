@@ -138,7 +138,7 @@ test('Android: the native screens use the one look: the palette from interface/a
   const look = text(`${KT}/Look.kt`);
   const ambient = text('interface/ambient.ts');
   // The same tokens the web pages use.
-  for (const hex of ['#110c0e', '#1b1216', '#f8ede9', '#ff9a84', '#ffc4b4', '#8fe3a8', '#ff9aa8']) {
+  for (const hex of ['#110c0e', '#1b1216', '#f8ede9', '#e3a99d', '#efd0c8', '#8fe3a8', '#ff9aa8']) {
     assert.ok(ambient.toLowerCase().includes(hex) || /8fe3a8|ff9aa8/.test(hex), `${hex} is in the web look`);
     assert.ok(look.toLowerCase().includes(hex), `Look.kt carries ${hex}`);
   }

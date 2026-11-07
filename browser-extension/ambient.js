@@ -257,7 +257,7 @@
     if (agent.mode === 'gone') {
       ctx.fillStyle = 'rgba(26,13,16,.55)';
       ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,154,132,.16)'; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(227,169,157,.16)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.stroke();
       return;
     }
@@ -301,8 +301,8 @@
     /* Glow behind the sphere */
     ctx.globalAlpha = ringAlpha * coreAlpha;
     var halo = ctx.createRadialGradient(cx, cy, sr * 0.8, cx, cy, sr * 1.5);
-    halo.addColorStop(0, 'rgba(255,138,112,' + (0.2 + energy * 0.12).toFixed(3) + ')');
-    halo.addColorStop(1, 'rgba(255,138,112,0)');
+    halo.addColorStop(0, 'rgba(214,150,138,' + (0.2 + energy * 0.12).toFixed(3) + ')');
+    halo.addColorStop(1, 'rgba(214,150,138,0)');
     ctx.fillStyle = halo;
     ctx.beginPath(); ctx.arc(cx, cy, sr * 1.5, 0, Math.PI * 2); ctx.fill();
 
@@ -335,7 +335,7 @@
     if (flash > 0.01) {
       var fl = ctx.createRadialGradient(cx + off, cy, 0, cx + off, cy, sr * 1.3);
       fl.addColorStop(0, 'rgba(255,226,214,' + (flash * 0.55).toFixed(3) + ')');
-      fl.addColorStop(1, 'rgba(255,154,132,0)');
+      fl.addColorStop(1, 'rgba(227,169,157,0)');
       ctx.fillStyle = fl;
       ctx.beginPath(); ctx.arc(cx + off, cy, sr * 1.3, 0, Math.PI * 2); ctx.fill();
       flash *= Math.exp(-dt * 5);

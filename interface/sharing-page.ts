@@ -28,9 +28,9 @@ export const SHARING_PAGE = `<!DOCTYPE html>
   .item small { display:block; color:rgba(248,237,233,.62); }
   .on { color:#8fe3a8; } .err { color:#ff9aa8; }
   .tok { word-break:break-all; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; padding:12px 16px;
-         background:rgba(20,12,14,.5); border:1px solid rgba(255,154,132,.5); border-radius:24px; margin:10px 0; }
+         background:rgba(20,12,14,.5); border:1px solid rgba(227,169,157,.5); border-radius:24px; margin:10px 0; }
   label.chk { display:inline-flex; gap:6px; align-items:center; font-size:14px; margin-right:12px; }
-  input[type=checkbox] { accent-color:#ff9a84; }
+  input[type=checkbox] { accent-color:#e3a99d; }
   #msg { min-height:20px; margin:0 8px; font-size:14px; }
   textarea.nc-input { border-radius:24px; width:100%; box-sizing:border-box; min-height:70px; resize:vertical; }
 </style>
@@ -38,7 +38,7 @@ export const SHARING_PAGE = `<!DOCTYPE html>
 <body class="nc-soft">
 <main>
   <h1>Sharing</h1>
-  <div class="nc-dim" style="margin:0 8px;font-size:14px">Earn points for working together, set what your compute is worth, and run projects: <a href="/commons" style="color:#ffc4b4">Commons</a></div>
+  <div class="nc-dim" style="margin:0 8px;font-size:14px">Earn points for working together, set what your compute is worth, and run projects: <a href="/commons" style="color:#efd0c8">Commons</a></div>
   <div id="msg" class="nc-dim"></div>
 
   <section class="nc-glass">

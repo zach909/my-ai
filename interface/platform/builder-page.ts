@@ -26,13 +26,13 @@ export function builderPage(): string {
   h1 {
     font-size: 1.5rem;
     margin: 0 0 24px;
-    color: #ffc4b4;
+    color: #efd0c8;
   }
   .tabs {
     display: flex;
     gap: 8px;
     margin-bottom: 24px;
-    border-bottom: 1px solid rgba(255, 154, 132, 0.2);
+    border-bottom: 1px solid rgba(227,169,157, 0.2);
     flex-wrap: wrap;
   }
   .tab-button {
@@ -46,8 +46,8 @@ export function builderPage(): string {
     border-bottom: 2px solid transparent;
   }
   .tab-button.active {
-    color: #ffc4b4;
-    border-bottom-color: #ff9a84;
+    color: #efd0c8;
+    border-bottom-color: #e3a99d;
   }
   .tab-content {
     display: none;
@@ -66,15 +66,15 @@ export function builderPage(): string {
     }
   }
   .card {
-    background: rgba(255, 154, 132, 0.08);
-    border: 1px solid rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.08);
+    border: 1px solid rgba(227,169,157, 0.2);
     border-radius: 12px;
     padding: 20px;
   }
   .card h2 {
     margin: 0 0 12px;
     font-size: 1.1rem;
-    color: #ffc4b4;
+    color: #efd0c8;
   }
   .card p {
     margin: 0 0 16px;
@@ -87,14 +87,14 @@ export function builderPage(): string {
   label {
     display: block;
     margin-bottom: 8px;
-    color: #ffc4b4;
+    color: #efd0c8;
     font-size: 0.95rem;
   }
   input, textarea {
     width: 100%;
     padding: 10px 12px;
     background: rgba(248, 237, 233, 0.05);
-    border: 1px solid rgba(255, 154, 132, 0.3);
+    border: 1px solid rgba(227,169,157, 0.3);
     color: #f8ede9;
     border-radius: 8px;
     font-family: inherit;
@@ -106,9 +106,9 @@ export function builderPage(): string {
     font-family: 'Courier New', monospace;
   }
   button {
-    background: rgba(255, 154, 132, 0.16);
-    border: 1px solid rgba(255, 154, 132, 0.5);
-    color: #ffc4b4;
+    background: rgba(227,169,157, 0.16);
+    border: 1px solid rgba(227,169,157, 0.5);
+    color: #efd0c8;
     padding: 10px 20px;
     border-radius: 999px;
     font-family: inherit;
@@ -118,11 +118,11 @@ export function builderPage(): string {
     margin-right: 8px;
   }
   button:hover {
-    background: rgba(255, 154, 132, 0.24);
+    background: rgba(227,169,157, 0.24);
   }
   .info {
-    background: rgba(255, 154, 132, 0.04);
-    border-left: 3px solid #ff9a84;
+    background: rgba(227,169,157, 0.04);
+    border-left: 3px solid #e3a99d;
     padding: 16px;
     border-radius: 4px;
     margin-bottom: 24px;
@@ -218,7 +218,7 @@ export function builderPage(): string {
   function setResult(text, isError) {
     var box = document.getElementById('build-result');
     box.textContent = text;
-    box.style.color = isError ? '#ff9a84' : '';
+    box.style.color = isError ? '#e3a99d' : '';
   }
 
   async function saveExtension() {
@@ -264,7 +264,7 @@ export function builderPage(): string {
       }));
     } catch (e) {
       var err = h('div', 'Could not load extensions: ' + e.message);
-      err.style.color = '#ff9a84';
+      err.style.color = '#e3a99d';
       list.replaceChildren(err);
     }
   }

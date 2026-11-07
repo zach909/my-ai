@@ -84,7 +84,7 @@ test('the pages carry the house look and nothing on them reaches for Node (no Co
   }
   const css = (await get(phone.url, '/ambient.css')).body.toString();
   assert.match(css, /#110c0e/);
-  assert.match(css, /#ff9a84/);
+  assert.match(css, /#e3a99d/);
   assert.doesNotMatch(css, /#4a7dff/i);
 });
 
