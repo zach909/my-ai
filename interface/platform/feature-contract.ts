@@ -153,9 +153,9 @@ export const FEATURES: Feature[] = [
   {
     id: 'weights', title: 'Net maker, net skill maker and weight editor',
     description: 'Write a program that makes a network or a skill, see what each weight does, change it a little, and compile code into weights.',
-    implementation: ['models && skills/core/neuro-build.ts', 'models && skills/core/weight-editor.ts', 'interface/weights-routes.ts', 'interface/weights-page.ts'],
+    implementation: ['models && skills/core/neuro-build.ts', 'models && skills/core/weight-editor.ts', 'models && skills/core/task-training.ts', 'interface/weights-routes.ts', 'interface/weights-page.ts'],
     routes: ['GET /weights'],
-    needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts')],
+    needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts'), v('test/core/task-training.test.ts')],
   },
   {
     id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',

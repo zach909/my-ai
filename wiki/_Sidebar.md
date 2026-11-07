@@ -28,6 +28,7 @@
 - [[Skills|Skills]]
 - [[Code-to-Net|Code-to-Net]]
 - [[Net Maker|Net-Maker]]
+- [[Task Training|Task-Training]]
 - [[Net Search|Net-Search]]
 
 ## Reference

@@ -20,6 +20,8 @@
  *   POST /api/nets/:id/improve            {text, goal, steps?, size?}
  *   POST /api/nets/:id/freeze             {neuron, frozen}
  *   POST /api/compile                     {code, inputs?}              the compiler: code -> weights
+ *   POST /api/task-training               {mode, agents?, rounds?, epochs?, tasks? | generate?}
+ *                                          train AIs on tasks: single, hive, separate or silent
  */
 
 import type http from "node:http";
@@ -28,6 +30,7 @@ import type { HyperDimensionalEngine } from "../models && skills/core/onebrain.j
 import { makeFromSource, type BuiltNet, type MakerResult } from "../models && skills/core/neuro-build.js";
 import { EditRefused, WeightEditor, compileView } from "../models && skills/core/weight-editor.js";
 import { NeuroLangInterpreter } from "../models && skills/core/neuro-lang.js";
+import { MAX_TASKS, TASK_MODES, arithmeticTasks, trainTasks, type Task, type TaskMode } from "../models && skills/core/task-training.js";
 
 export interface WeightsContext {
   req: http.IncomingMessage;
@@ -58,7 +61,7 @@ const nets = new Map<string, Made>();
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 export const isWeightsRoute = (pathname: string): boolean =>
-  pathname === "/api/nets" || pathname.startsWith("/api/nets/") || pathname === "/api/compile";
+  pathname === "/api/nets" || pathname.startsWith("/api/nets/") || pathname === "/api/compile" || pathname === "/api/task-training";
 
 class BadRequest extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -121,6 +124,31 @@ async function route(ctx: WeightsContext): Promise<boolean> {
     if (code.length > 4000) throw new BadRequest("That code is too long to compile here (4000 characters).");
     const inputs = Array.isArray(b.inputs) ? b.inputs.filter((x): x is number => typeof x === "number" && Number.isFinite(x)).slice(0, 16) : undefined;
     return send(compileView(code, inputs));
+  }
+
+  if (pathname === "/api/task-training" && method === "POST") {
+    const b = await body(32 * 1024);
+    const mode = b.mode;
+    if (typeof mode !== "string" || !TASK_MODES.includes(mode as TaskMode)) throw new BadRequest(`"mode" must be one of ${TASK_MODES.join(", ")}.`);
+    let tasks: Task[];
+    if (Array.isArray(b.tasks)) {
+      if (b.tasks.length > MAX_TASKS) throw new BadRequest(`At most ${MAX_TASKS} tasks.`);
+      tasks = b.tasks.map((t, i) => {
+        if (!isObj(t) || typeof t.input !== "string") throw new BadRequest(`Task ${i + 1}: expected {"input": "...", "parts": ["..."]}.`);
+        const parts = Array.isArray(t.parts) ? t.parts.filter((p): p is string => typeof p === "string") : typeof t.answer === "string" ? [t.answer] : [];
+        return { id: typeof t.id === "string" && t.id ? t.id : `t${i + 1}`, input: t.input, parts };
+      });
+    } else if (isObj(b.generate)) {
+      const g = b.generate;
+      tasks = arithmeticTasks(Math.min(MAX_TASKS, Math.max(1, optNum(g, "count") ?? 6)), optNum(g, "seed") ?? 1, g.composite === true);
+    } else {
+      throw new BadRequest('Send "tasks" or "generate": {"count": 6, "composite": false}.');
+    }
+    try {
+      return send(await trainTasks(tasks, { mode: mode as TaskMode, agents: optNum(b, "agents"), rounds: optNum(b, "rounds"), epochs: optNum(b, "epochs"), seed: optNum(b, "seed") }));
+    } catch (err) {
+      throw new BadRequest(err instanceof Error ? err.message : String(err), 422);
+    }
   }
 
   if (pathname === "/api/nets" && method === "GET") {

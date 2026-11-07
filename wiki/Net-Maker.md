@@ -88,6 +88,7 @@ All behind the server's normal gate; every POST needs a JSON body.
 | `POST /api/nets/:id/step`, `/improve` | `{text, goal, ...}` |
 | `POST /api/nets/:id/freeze` | `{neuron, frozen}` |
 | `POST /api/compile` | `{code, inputs?}` |
+| `POST /api/task-training` | train AIs on tasks in four modes: see [[Task-Training]] |
 
 Nets are kept in memory (eight at a time) and forgotten on restart. A skill made this way joins the live mesh but is not registered with the net-skill router.
 
