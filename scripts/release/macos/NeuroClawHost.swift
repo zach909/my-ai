@@ -1,9 +1,11 @@
 // The macOS app window for NeuroClaw.
 //
-// What it does, and all it does: runs the bundled engine through the launcher
-// script (Contents/Resources/runtime/node ... desktop-launcher.mjs --no-window),
-// waits for the line "READY <url>", and shows that page in a window using the
-// system's own WebKit. Quitting the app or closing the window stops the engine.
+// What it does, and all it does: runs the bundled engine through the launcher script
+// (Contents/Resources/runtime/node ... desktop-launcher.mjs --embedded) and shows the app in a window using
+// the system's own WebKit. There is no network port and no browser: the page's addresses are nc://app/...,
+// and every request WebKit makes for one is written as a line to the launcher's stdin and answered from its
+// stdout (the format is documented in interface/platform/embedded-transport.ts). Quitting the app or closing
+// the window stops the engine.
 //
 // Only Apple frameworks are used (SwiftUI, WebKit, Foundation). It asks for no
 // permissions: no camera, microphone, accessibility or screen recording. Features
@@ -12,51 +14,156 @@ import SwiftUI
 import WebKit
 import Foundation
 
-/// Runs the engine and reports when its address is known.
+private func encodeField(_ data: Data) -> String { data.isEmpty ? "-" : data.base64EncodedString() }
+private func decodeField(_ text: Substring) -> Data { text == "-" ? Data() : (Data(base64Encoded: String(text)) ?? Data()) }
+private func headerBlock(_ text: Substring) -> [String: String] {
+    var out: [String: String] = [:]
+    let block = String(data: decodeField(text), encoding: .utf8) ?? ""
+    for line in block.split(separator: "\n") {
+        guard let colon = line.firstIndex(of: ":") else { continue }
+        let key = line[line.startIndex..<colon].trimmingCharacters(in: .whitespaces)
+        let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        out[key] = out[key].map { $0 + ", " + value } ?? value
+    }
+    return out
+}
+
+/// Runs the engine and carries requests to it and answers back.
 final class Engine: ObservableObject {
     static let shared = Engine()
-    @Published var url: URL?
+    @Published var ready = false
     @Published var failure: String?
     private var process: Process?
-    private var buffer = ""
+    private var toEngine: FileHandle?
+    private var buffer = Data()
+    private var nextID = 1
+    private var waiting: [Int: (Int, [String: String], Data) -> Void] = [:]  // main thread only; status -1 means failed
 
     func start() {
         guard process == nil else { return }
         let resources = Bundle.main.resourceURL!
         let p = Process()
         p.executableURL = resources.appendingPathComponent("runtime/node")
-        p.arguments = [resources.appendingPathComponent("app/scripts/desktop-launcher.mjs").path, "--no-window"]
+        p.arguments = [resources.appendingPathComponent("app/scripts/desktop-launcher.mjs").path, "--embedded"]
         p.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
-        let pipe = Pipe()
-        p.standardOutput = pipe
+        let input = Pipe()
+        let output = Pipe()
+        p.standardInput = input
+        p.standardOutput = output
         p.standardError = FileHandle.nullDevice
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+        toEngine = input.fileHandleForWriting
+        output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            DispatchQueue.main.async { self?.consume(text) }
+            if data.isEmpty { handle.readabilityHandler = nil; return }
+            DispatchQueue.main.async { self?.consume(data) }
         }
         p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
-                if self?.url == nil && self?.failure == nil {
-                    self?.failure = "The engine stopped before it was ready (exit code \(proc.terminationStatus))."
+                if self?.failure == nil {
+                    self?.failure = "The engine stopped (exit code \(proc.terminationStatus))."
                 }
+                self?.failAll()
             }
         }
         do { try p.run(); process = p } catch { failure = "Could not start the engine: \(error.localizedDescription)" }
     }
 
-    private func consume(_ text: String) {
-        buffer += text
-        while let nl = buffer.firstIndex(of: "\n") {
-            let line = String(buffer[buffer.startIndex..<nl]).trimmingCharacters(in: .whitespaces)
+    private func consume(_ data: Data) {
+        buffer.append(data)
+        while let nl = buffer.firstIndex(of: 0x0A) {
+            let lineData = buffer[buffer.startIndex..<nl]
             buffer.removeSubrange(buffer.startIndex...nl)
-            if line.hasPrefix("READY "), let u = URL(string: String(line.dropFirst(6))) { url = u }
-            else if line.hasPrefix("FAILED ") { failure = String(line.dropFirst(7)) }
+            if let line = String(data: lineData, encoding: .utf8) { handle(line) }
         }
     }
 
+    private func handle(_ line: String) {
+        let t = line.split(separator: " ", omittingEmptySubsequences: false)
+        guard let kind = t.first else { return }
+        switch kind {
+        case "READY": ready = true
+        case "FAILED": failure = String(data: decodeField(t.count > 1 ? t[1] : "-"), encoding: .utf8) ?? "The engine failed."
+        case "R" where t.count == 5:
+            if let id = Int(t[1]), let status = Int(t[2]) { finish(id, status, headerBlock(t[3]), decodeField(t[4])) }
+        case "E" where t.count >= 2:
+            if let id = Int(t[1]) { finish(id, -1, [:], Data()) }
+        default: break
+        }
+    }
+
+    private func finish(_ id: Int, _ status: Int, _ headers: [String: String], _ body: Data) {
+        if let done = waiting.removeValue(forKey: id) { done(status, headers, body) }
+    }
+
+    private func failAll() {
+        let all = waiting
+        waiting.removeAll()
+        for (_, done) in all { done(-1, [:], Data()) }
+    }
+
+    /// Ask the engine for one request. Call and answer on the main thread. Returns an id that `cancel` accepts.
+    @discardableResult
+    func send(method: String, target: String, headers: [String: String], body: Data, done: @escaping (Int, [String: String], Data) -> Void) -> Int {
+        let id = nextID
+        nextID += 1
+        waiting[id] = done
+        let block = headers.map { "\($0.key): \($0.value)" }.joined(separator: "\n")
+        let line = "Q \(id) \(method) \(encodeField(Data(target.utf8))) \(encodeField(Data(block.utf8))) \(encodeField(body))\n"
+        if let h = toEngine { try? h.write(contentsOf: Data(line.utf8)) }
+        return id
+    }
+
+    func cancel(_ id: Int) { waiting.removeValue(forKey: id) }
+
     /// SIGTERM: the launcher stops the engine it started, and leaves one that was already running alone.
     func stop() { if let p = process, p.isRunning { p.terminate() } }
+}
+
+/// Serves nc://app/... to WebKit by asking the engine. Nothing goes over the network.
+final class NCSchemeHandler: NSObject, WKURLSchemeHandler {
+    private var tasks: [ObjectIdentifier: Int] = [:]  // task -> request id, so a cancelled page does not get an answer
+
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        let request = urlSchemeTask.request
+        guard let url = request.url, url.host == "app",
+              let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            urlSchemeTask.didFailWithError(URLError(.unsupportedURL))
+            return
+        }
+        var target = parts.percentEncodedPath.isEmpty ? "/" : parts.percentEncodedPath
+        if let q = parts.percentEncodedQuery { target += "?" + q }
+        var headers: [String: String] = [:]
+        for name in ["Content-Type", "Accept"] {
+            if let v = request.value(forHTTPHeaderField: name) { headers[name] = v }
+        }
+        var body = request.httpBody ?? Data()
+        if body.isEmpty, let stream = request.httpBodyStream {
+            stream.open()
+            var buf = [UInt8](repeating: 0, count: 65536)
+            while stream.hasBytesAvailable {
+                let n = stream.read(&buf, maxLength: buf.count)
+                if n <= 0 { break }
+                body.append(buf, count: n)
+            }
+            stream.close()
+        }
+        let key = ObjectIdentifier(urlSchemeTask as AnyObject)
+        let id = Engine.shared.send(method: request.httpMethod ?? "GET", target: target, headers: headers, body: body) { [weak self] status, responseHeaders, data in
+            guard self?.tasks.removeValue(forKey: key) != nil else { return }
+            guard status > 0, let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: responseHeaders) else {
+                urlSchemeTask.didFailWithError(URLError(.cannotConnectToHost))
+                return
+            }
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didReceive(data)
+            urlSchemeTask.didFinish()
+        }
+        tasks[key] = id
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+        if let id = tasks.removeValue(forKey: ObjectIdentifier(urlSchemeTask as AnyObject)) { Engine.shared.cancel(id) }
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -70,16 +177,18 @@ extension Notification.Name {
 }
 
 struct WebView: NSViewRepresentable {
-    let origin: URL
+    static let origin = URL(string: "nc://app/")!
 
-    func makeCoordinator() -> Coordinator { Coordinator(origin: origin) }
+    func makeCoordinator() -> Coordinator { Coordinator(origin: WebView.origin) }
 
     func makeNSView(context: Context) -> WKWebView {
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(NCSchemeHandler(), forURLScheme: "nc")
+        let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         context.coordinator.web = web
-        web.load(URLRequest(url: origin))
+        web.load(URLRequest(url: WebView.origin))
         return web
     }
 
@@ -102,7 +211,7 @@ struct WebView: NSViewRepresentable {
         // Links stay inside the app only when they are NeuroClaw's own; everything else opens in the browser.
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let url = action.request.url else { decisionHandler(.cancel); return }
-            if url.scheme == "about" || url.scheme == "data" || url.scheme == "blob" || (url.host == origin.host && url.port == origin.port) {
+            if url.scheme == "about" || url.scheme == "data" || url.scheme == "blob" || (url.scheme == "nc" && url.host == origin.host) {
                 decisionHandler(.allow)
             } else {
                 NSWorkspace.shared.open(url)
@@ -123,10 +232,31 @@ struct WebView: NSViewRepresentable {
             panel.begin { result in completionHandler(result == .OK ? panel.urls : nil) }
         }
 
-        // Exporting chats: attachments become downloads that ask where to save.
+        // Exporting chats: attachments ask where to save. A file from this app's own address is fetched from the
+        // engine and written here, because a download is a network request and this address has no network behind it.
         func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
             let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition") ?? ""
-            decisionHandler(disposition.lowercased().hasPrefix("attachment") || !response.canShowMIMEType ? .download : .allow)
+            let isFile = disposition.lowercased().hasPrefix("attachment") || !response.canShowMIMEType
+            if isFile, let url = response.response.url, url.scheme == "nc" {
+                saveFile(from: url, suggestedName: response.response.suggestedFilename ?? "download")
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(isFile ? .download : .allow)
+        }
+
+        private func saveFile(from url: URL, suggestedName: String) {
+            guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+            var target = parts.percentEncodedPath.isEmpty ? "/" : parts.percentEncodedPath
+            if let q = parts.percentEncodedQuery { target += "?" + q }
+            Engine.shared.send(method: "GET", target: target, headers: [:], body: Data()) { status, _, data in
+                guard status == 200 else { return }
+                let panel = NSSavePanel()
+                panel.nameFieldStringValue = suggestedName
+                panel.begin { result in
+                    if result == .OK, let dest = panel.url { try? data.write(to: dest) }
+                }
+            }
         }
 
         func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }
@@ -146,9 +276,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Color(red: 0.067, green: 0.047, blue: 0.055).ignoresSafeArea()
-            if let url = engine.url {
-                WebView(origin: url)
-            } else if let failure = engine.failure {
+            if let failure = engine.failure {
                 VStack(spacing: 12) {
                     Text("NeuroClaw could not start").font(.title2).bold()
                     Text(failure).multilineTextAlignment(.center)
@@ -157,6 +285,8 @@ struct ContentView: View {
                 }
                 .foregroundColor(Color(red: 0.97, green: 0.93, blue: 0.91))
                 .padding(32)
+            } else if engine.ready {
+                WebView()
             } else {
                 Text("Starting NeuroClaw...").foregroundColor(Color(red: 0.97, green: 0.93, blue: 0.91))
             }

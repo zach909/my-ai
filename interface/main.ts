@@ -132,7 +132,7 @@ export async function bootstrap(): Promise<CLI> {
  * server.py delegates /api/chat and /api/status here instead of falling back
  * to its own canned responses.
  */
-export async function startWeb(port: number): Promise<WebServer> {
+export async function startWeb(port: number, options: { listen?: boolean } = {}): Promise<WebServer> {
   const { llm, pipeline, pluginRegistry, systemAccess } = await buildCore();
   const runner = new NeuroclawRunner(llm, pipeline, pluginRegistry, systemAccess, systemAccess.getMultiDesktop());
   const web = new WebServer(runner);
@@ -143,8 +143,32 @@ export async function startWeb(port: number): Promise<WebServer> {
   // Loopback-only unless NEUROCLAW_WEB_HOST opts into remote access, in
   // which case NEUROCLAW_WEB_PASSWORD is required -- see WebServer.start()'s
   // doc comment for why an unauthenticated remote bind is refused outright.
-  const host = process.env.NEUROCLAW_WEB_HOST || '127.0.0.1';
-  await web.start(port, host, process.env.NEUROCLAW_WEB_PASSWORD);
+  const host = options.listen === false ? '127.0.0.1' : process.env.NEUROCLAW_WEB_HOST || '127.0.0.1';
+  await web.start(port, host, options.listen === false ? undefined : process.env.NEUROCLAW_WEB_PASSWORD, options);
+  return web;
+}
+
+/**
+ * The desktop app's engine: the same server, with no port. The app window's requests arrive as lines on stdin and
+ * the answers go out on stdout (interface/platform/embedded-transport.ts). Everything else that would print to
+ * stdout is sent to stderr first, so nothing can get into the protocol by accident. Closing stdin ends the engine.
+ */
+export async function startEmbedded(input: NodeJS.ReadableStream = process.stdin, output: NodeJS.WritableStream = process.stdout): Promise<WebServer> {
+  // Keep the real stdout write for the protocol before anything else can be pointed away from it.
+  const realWrite = output.write.bind(output) as (chunk: string, cb?: (e?: Error | null) => void) => boolean;
+  const { Writable } = await import('node:stream');
+  const protocol = new Writable({ write(chunk, _enc, cb) { realWrite(chunk.toString('utf8'), cb); } });
+  const toStderr = (...a: unknown[]): void => { process.stderr.write(`${a.map(String).join(' ')}\n`); };
+  console.log = toStderr; console.info = toStderr; console.debug = toStderr;
+  if (output === process.stdout) process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
+  const web = await startWeb(0, { listen: false });
+  const { attachEmbedded } = await import('./platform/embedded-transport.js');
+  attachEmbedded({
+    serve: (c) => web.serveEmbedded(c),
+    input: input as import('node:stream').Readable,
+    output: protocol,
+    onClose: () => { web.stop().catch(() => undefined).finally(() => process.exit(0)); },
+  });
   return web;
 }
 
@@ -161,7 +185,9 @@ function isEntryPoint(): boolean {
 
 if (isEntryPoint()) {
   const [mode, portArg] = process.argv.slice(2);
-  if (mode === 'web') {
+  if (mode === 'embedded') {
+    startEmbedded().catch(err => { console.error('Failed to start the engine:', err); process.exit(1); });
+  } else if (mode === 'web') {
     const port = Number(portArg) || 7861;
     const host = process.env.NEUROCLAW_WEB_HOST || '127.0.0.1';
     startWeb(port)
