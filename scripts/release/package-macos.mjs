@@ -48,8 +48,8 @@ ${[
     kv('LSApplicationCategoryType', '<string>public.app-category.productivity</string>'),
     kv('NSHighResolutionCapable', '<true/>'),
     kv('NSSupportsAutomaticGraphicsSwitching', '<true/>'),
-    // The engine and the window talk over this computer's loopback address only.
-    kv('NSAppTransportSecurity', '<dict><key>NSAllowsLocalNetworking</key><true/></dict>'),
+    // The engine and the window talk through a pipe (nc://app/ is answered by the engine, not fetched), so there is
+    // no loopback exception to declare and the app opens no network connection of its own.
   ].join('\n')}
 </dict>
 </plist>

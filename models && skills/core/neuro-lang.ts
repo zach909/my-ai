@@ -17,6 +17,17 @@
  *   "netsearch"@net="location"                 — attach its search location
  *   print "name"                               — print neuron info
  *
+ * Net maker / net skill maker (see neuro-build.ts):
+ *   kind="network"|"skill"                     — a network of its own, or a skill grafted into the base AI
+ *   neurons="64"                               — make 64 neurons (n1..n64), each connected to every other
+ *   neurons@value="0.5" / @vale="0.9" / @frozen="after"  — defaults for those neurons
+ *   "name"@frozen="now"|"after"                — never trained, or frozen once training is done
+ *   "name"@input="text"                        — typing this drives that neuron as hard as it can be driven
+ *   "name"@response="text"                     — with only that neuron driven, the output must say this
+ *   "name"@reads="other"                       — which neuron says the response (default: the output neuron)
+ *   train="responses"|"predict"|"random"       — train the responses, learn to predict given text, or predict generated content
+ *   train@epochs / @rounds / @seed / @text     — how long, how many rounds, the random seed, the text to predict
+ *
  * @role tags a neuron as belonging to a skill's dedicated input or output
  * layer. It changes nothing about wiring — a tagged neuron is still an
  * ordinary neuron with ordinary default all-to-all connections into the
@@ -71,12 +82,48 @@ export interface NeuriNeuron {
    * cannot express and the Zip Loop's two bit neurons depend on.
    */
   wave?: { frequency: number; phase: number };
+  /**
+   * Net/skill maker fields (see neuro-build.ts).
+   *
+   * frozen: 'now' = its weights are never trained or edited from the start;
+   * 'after' = it is trained like any other and frozen once training is done.
+   * input: the text that, when typed, drives THIS neuron as hard as it can be
+   * driven (the "highlight"). response / reads: when this neuron is the only
+   * one driven, the neuron named by `reads` (default: the output neuron)
+   * must say `response`. generated: made by `neurons="N"` rather than named.
+   */
+  frozen?: NeuriFrozen;
+  input?: string;
+  response?: string;
+  reads?: string;
+  generated?: boolean;
+}
+
+/** `kind="skill"` grafts into the base AI; `kind="network"` is a network of its own. */
+export type NeuriKind = 'skill' | 'network';
+/** responses = train the declared responses; predict = learn to predict given text; random = learn to predict generated content. */
+export type NeuriTrainMode = 'responses' | 'predict' | 'random';
+export type NeuriFrozen = 'now' | 'after';
+
+/** Most neurons `neurons="N"` may ask for: the mesh is all-to-all, so cost grows with the square. */
+export const MAX_DECLARED_NEURONS = 1024;
+
+/** The program-level statements: what is being made, how big, and how it is trained. */
+export interface NeuriProgram {
+  kind?: NeuriKind;
+  /** From `neurons="N"`: how many neurons to make and connect to each other. */
+  neuronCount?: number;
+  /** Defaults for neurons made by `neurons="N"` (`neurons@value=`, `@vale=`, `@frozen=`). */
+  defaults: { value?: number; vale?: number; frozen?: NeuriFrozen };
+  train?: { mode: NeuriTrainMode; epochs?: number; rounds?: number; text?: string; seed?: number };
 }
 
 export interface ParseResult {
   neurons: Map<string, NeuriNeuron>;
   errors: string[];
   printOutputs: string[];
+  /** Present only when the source used kind / neurons / train statements. */
+  program?: NeuriProgram;
 }
 
 // ── JSON serialisation helpers ────────────────────────────────────────────────
@@ -93,6 +140,11 @@ interface SerializedNeuron {
   query: string;
   isCodeNet: boolean;
   role?: 'input' | 'output';
+  frozen?: NeuriFrozen;
+  input?: string;
+  response?: string;
+  reads?: string;
+  generated?: boolean;
 }
 
 /**
@@ -140,6 +192,11 @@ export class NeuroLangInterpreter {
    */
   private compileCallCount = 0;
 
+  /** Parse-scoped: the kind / neurons / train statements seen so far, and which neurons set their own value, vale or frozen. */
+  private program: NeuriProgram = { defaults: {} };
+  private programTouched = false;
+  private explicit = { value: new Set<string>(), vale: new Set<string>(), frozen: new Set<string>() };
+
   // ── Public API ──────────────────────────────────────────────────────────────
 
   /**
@@ -155,6 +212,9 @@ export class NeuroLangInterpreter {
     // parse order rather than by Map iteration order.
     this.pendingNetSearch = null;
     this.codeNets.clear();
+    this.program = { defaults: {} };
+    this.programTouched = false;
+    this.explicit = { value: new Set(), vale: new Set(), frozen: new Set() };
 
     const lines = source.split(/\r?\n/);
 
@@ -187,8 +247,32 @@ export class NeuroLangInterpreter {
       if (this.compileCallCount !== compilesBefore) await yieldToEventLoop();
     }
 
+    this.finalizeProgram(neurons);
     this.lastNeurons = neurons;
-    return { neurons, errors, printOutputs };
+    const result: ParseResult = { neurons, errors, printOutputs };
+    if (this.programTouched) result.program = this.program;
+    return result;
+  }
+
+  /**
+   * After the last line: give the neurons `neurons="N"` made their defaults
+   * (a default declared after the count still applies), and tag a first and
+   * last one as input and output when nothing else said which are which.
+   */
+  private finalizeProgram(neurons: Map<string, NeuriNeuron>): void {
+    if (!this.programTouched) return;
+    const generated = Array.from(neurons.values()).filter(n => n.generated);
+    for (const n of generated) {
+      const d = this.program.defaults;
+      if (d.value !== undefined && !this.explicit.value.has(n.name)) n.value = d.value;
+      if (d.vale !== undefined && !this.explicit.vale.has(n.name)) n.vale = d.vale;
+      if (d.frozen !== undefined && !this.explicit.frozen.has(n.name)) n.frozen = d.frozen;
+    }
+    const anyRole = Array.from(neurons.values()).some(n => n.role);
+    if (!anyRole && generated.length >= 2) {
+      generated[0].role = 'input';
+      generated[generated.length - 1].role = 'output';
+    }
   }
 
   /**
@@ -343,6 +427,11 @@ export class NeuroLangInterpreter {
         query: n.query,
         isCodeNet: n.isCodeNet,
         role: n.role,
+        frozen: n.frozen,
+        input: n.input,
+        response: n.response,
+        reads: n.reads,
+        generated: n.generated,
       });
     }
     return JSON.stringify(serialized, null, 2);
@@ -387,6 +476,11 @@ export class NeuroLangInterpreter {
         query: typeof sn.query === 'string' ? sn.query : '',
         isCodeNet: Boolean(sn.isCodeNet),
         role: sn.role === 'input' || sn.role === 'output' ? sn.role : undefined,
+        frozen: sn.frozen === 'now' || sn.frozen === 'after' ? sn.frozen : undefined,
+        input: typeof sn.input === 'string' ? sn.input : undefined,
+        response: typeof sn.response === 'string' ? sn.response : undefined,
+        reads: typeof sn.reads === 'string' ? sn.reads : undefined,
+        generated: sn.generated ? true : undefined,
       };
       neurons.set(neuron.name, neuron);
     }
@@ -495,6 +589,7 @@ export class NeuroLangInterpreter {
         if (isNaN(val)) throw new Error(`Invalid value "${m[2]}" for neuron "${name}"`);
         const neuron = neurons.get(name) ?? this.defaultNeuron(name);
         neuron.value = val;
+        this.explicit.value.add(name);
         neurons.set(name, neuron);
         return;
       }
@@ -509,6 +604,7 @@ export class NeuroLangInterpreter {
         if (isNaN(val)) throw new Error(`Invalid vale "${m[2]}" for neuron "${name}"`);
         const neuron = neurons.get(name) ?? this.defaultNeuron(name);
         neuron.vale = Math.max(0, Math.min(1, val));
+        this.explicit.vale.add(name);
         neurons.set(name, neuron);
         return;
       }
@@ -603,6 +699,110 @@ export class NeuroLangInterpreter {
       }
     }
 
+    // ── kind="skill"|"network" — what is being made ────────────────────────
+    {
+      const m = line.match(/^kind\s*=\s*"(skill|network)"$/i);
+      if (m) {
+        this.program.kind = m[1].toLowerCase() as NeuriKind;
+        this.programTouched = true;
+        return;
+      }
+    }
+
+    // ── neurons="N" — make N neurons and connect each one to the others ────
+    {
+      const m = line.match(/^neurons\s*=\s*"?(\d+)"?$/);
+      if (m) {
+        const count = parseInt(m[1], 10);
+        if (count < 1) throw new Error(`neurons="${m[1]}": need at least 1`);
+        if (count > MAX_DECLARED_NEURONS) {
+          throw new Error(`neurons="${count}": the most one program may make is ${MAX_DECLARED_NEURONS} (the mesh is all-to-all, so cost grows with the square)`);
+        }
+        for (let i = 1; i <= count; i++) {
+          const name = `n${i}`;
+          if (neurons.has(name)) continue;
+          const neuron = this.defaultNeuron(name);
+          neuron.generated = true;
+          neurons.set(name, neuron);
+        }
+        this.program.neuronCount = count;
+        this.programTouched = true;
+        return;
+      }
+    }
+
+    // ── neurons@value|vale|frozen="…" — defaults for the neurons just made ─
+    {
+      const m = line.match(/^neurons\s*@\s*(value|vale|frozen)\s*=\s*"([^"]*)"$/);
+      if (m) {
+        if (m[1] === 'frozen') {
+          this.program.defaults.frozen = this.parseFrozen(m[2], 'neurons');
+        } else {
+          const val = parseFloat(m[2]);
+          if (isNaN(val)) throw new Error(`Invalid ${m[1]} "${m[2]}" for neurons`);
+          if (m[1] === 'value') this.program.defaults.value = val;
+          else this.program.defaults.vale = Math.max(0, Math.min(1, val));
+        }
+        this.programTouched = true;
+        return;
+      }
+    }
+
+    // ── "X"@frozen="now"|"after"|"no" ───────────────────────────────────────
+    {
+      const m = line.match(/^"([^"]+)"\s*@\s*frozen\s*=\s*"([^"]*)"$/);
+      if (m) {
+        const neuron = neurons.get(m[1]) ?? this.defaultNeuron(m[1]);
+        neuron.frozen = this.parseFrozen(m[2], m[1]);
+        this.explicit.frozen.add(m[1]);
+        neurons.set(m[1], neuron);
+        return;
+      }
+    }
+
+    // ── "X"@input="text" — typing this drives X as hard as it can be driven ─
+    // ── "X"@response="text" — with only X driven, the output must say this ─
+    // ── "X"@reads="Y" — which neuron says the response (default: output) ───
+    {
+      const m = line.match(/^"([^"]+)"\s*@\s*(input|response|reads)\s*=\s*"([^"]*)"$/);
+      if (m) {
+        const neuron = neurons.get(m[1]) ?? this.defaultNeuron(m[1]);
+        if (m[2] === 'input') neuron.input = m[3];
+        else if (m[2] === 'response') neuron.response = m[3];
+        else neuron.reads = m[3];
+        neurons.set(m[1], neuron);
+        return;
+      }
+    }
+
+    // ── train / train="responses"|"predict"|"random" ───────────────────────
+    {
+      const m = line.match(/^train(?:\s*=\s*"(responses|predict|random)")?$/i);
+      if (m) {
+        const mode = (m[1] ?? 'responses').toLowerCase() as NeuriTrainMode;
+        this.program.train = { ...(this.program.train ?? {}), mode };
+        this.programTouched = true;
+        return;
+      }
+    }
+
+    // ── train@epochs|rounds|seed|text="…" ───────────────────────────────────
+    {
+      const m = line.match(/^train\s*@\s*(epochs|rounds|seed|text)\s*=\s*"([^"]*)"$/);
+      if (m) {
+        const train = this.program.train ?? { mode: 'responses' as NeuriTrainMode };
+        if (m[1] === 'text') train.text = m[2];
+        else {
+          const n = parseInt(m[2], 10);
+          if (!Number.isFinite(n) || n < 0) throw new Error(`Invalid ${m[1]} "${m[2]}" for train`);
+          train[m[1] as 'epochs' | 'rounds' | 'seed'] = n;
+        }
+        this.program.train = train;
+        this.programTouched = true;
+        return;
+      }
+    }
+
     // Unknown syntax — record as error via throw so caller can log line number
     throw new Error(`Unrecognised NeuriLang statement: "${line}"`);
   }
@@ -686,6 +886,15 @@ export class NeuroLangInterpreter {
     }
 
     return connections;
+  }
+
+  /** 'now' | 'true' → frozen from the start; 'after' → frozen once trained; 'no' | 'false' → not frozen. */
+  private parseFrozen(text: string, who: string): NeuriFrozen | undefined {
+    const t = text.trim().toLowerCase();
+    if (t === 'now' || t === 'true' || t === 'yes') return 'now';
+    if (t === 'after') return 'after';
+    if (t === 'no' || t === 'false' || t === 'off' || t === '') return undefined;
+    throw new Error(`Invalid frozen "${text}" for ${who} -- use "now", "after" or "no"`);
   }
 
   // ── Build a default neuron with all fields at zero/empty ───────────────────

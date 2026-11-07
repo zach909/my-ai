@@ -59,6 +59,29 @@ On Linux, **KOS** (the kernal-os repo) carries requests to them, with no passwor
 
 Limits: KOS does not autostart anything, so the engine must be running (see the switch above). KOS needs Linux; on macOS and Windows the layers route exists but only the `gui`, `app` and `skill` layers are offered and nothing calls it for you.
 
+## KOS apps: open an app like a browser opens a website
+
+`kos://firefox` opens Firefox the way a browser opens a web address. `kos:firefox` and plain `firefox` mean the same. A name nobody registered is taken to be an app already on the computer and is opened with the button clicker. An app you install is a small manifest (id, name, scope, and the requests that open it); KOS's own layers have front ends in the same list: `kos://buttons`, `kos://commands`, `kos://kernel`, `kos://skills`. Everything is an app; there is no second kind of thing.
+
+Three rules, enforced in `interface/platform/kos-apps.ts` and checked by `test/platform/kos-apps.test.mjs`:
+
+1. **Everything goes through the layers.** An app is only a list of requests, each aimed at one layer (`gui`, `app`, `kernel`, `skill`). Opening it calls `runLayer()` for each request, and the module imports nothing else that could act on the computer (a test fails if it does). So the same tool gate as chat, with approvals and the Computer Access switches, applies to every app. A request that is held or refused stops the app and says why.
+2. **Everything is an app.** See above.
+3. **Two versions of the system, chosen per computer:**
+
+| Version | What it is | Kernel layer | Apps it opens |
+|---|---|---|---|
+| `extension` (default) | KOS sits on top of the system like a browser extension: it drives what is already there through the button clicker and app commands. Nothing system-wide is touched; remove it and the computer is as it was. | closed (also on the raw `/api/ai-os/layer` door) | scope `extension` |
+| `system` | KOS may also use kernel commands, so an app can change system apps and services. | open, Linux only | scope `extension` and `system` |
+
+An app's `scope` says which version it needs. A `system` app is refused in the extension version, and a manifest cannot use the kernel layer unless its scope is `system`.
+
+Routes (admin, from this computer): `GET /api/ai-os/apps` lists the apps and which ones this version lets open; `POST /api/ai-os/apps` takes `{action: "open", address}`, `{action: "install", app}`, `{action: "remove", id}` or `{action: "edition", edition}`. The choice and the installed apps are saved in `kos-apps.json` in the config folder, written atomically; a save that fails is reported and changes nothing.
+
+**Changed default:** before this, the kernel layer was open on Linux. It is now closed until the computer is switched to the system version.
+
+Not done here: the `kos` command in the separate `kernal-os` repo does not call these routes yet, so `kos://` addresses work through the HTTP route and tests, not from the `kos` command line, until that repo adds an `open` command.
+
 ## What it does not do
 
 - **It gives the agent no extra access.** Computer access, tool safety and approvals behave exactly as before. This only decides *when the engine starts*.
