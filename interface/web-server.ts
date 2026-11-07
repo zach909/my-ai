@@ -32,6 +32,7 @@ import { pullStoreCatalog } from '../models && skills/core/store-fetch.js';
 import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
+import { parseNeurons } from '../models && skills/core/neurons.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
@@ -605,6 +606,10 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     transform: translateY(0) scale(0.95);
   }
 
+  #neurons-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
+  #neurons { width: 96px; accent-color: #ff9a84; }
+  #neurons-out { min-width: 2.2em; opacity: 0.8; }
+  @media (max-width: 600px) { #neurons-wrap { display: none; } }
   #send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -747,6 +752,11 @@ ${PROMPT_BUTTON_CSS}
 <div id="input-area">
   <label for="input" class="sr-only">Message</label>
   <input type="text" id="input" placeholder="Type a message..." autofocus>
+  <label id="neurons-wrap" for="neurons" title="Neurons: how confident it acts. Low asks more questions. High assumes. Very high does it both ways.">
+    <span class="nc-dim">Neurons</span>
+    <input type="range" id="neurons" min="0" max="100" step="5" value="50" aria-label="Neurons, how confident the AI acts, 0 to 100" aria-valuetext="50, balanced">
+    <output id="neurons-out" for="neurons">50</output>
+  </label>
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
@@ -755,6 +765,19 @@ ${PROMPT_BUTTON_CSS}
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
   const sendBtn = document.getElementById('send-btn');
+  // Neurons: how confident the AI acts (0-100), its own input beside the message. Kept in this browser only.
+  const neuronsEl = document.getElementById('neurons');
+  const neuronsOut = document.getElementById('neurons-out');
+  const NEURONS_WORDS = [[90, 'certain'], [75, 'assured'], [50, 'balanced'], [25, 'cautious'], [0, 'unsure']];
+  function showNeurons() {
+    const v = Number(neuronsEl.value);
+    const w = NEURONS_WORDS.find(function (x) { return v >= x[0]; })[1];
+    neuronsOut.textContent = String(v);
+    neuronsEl.setAttribute('aria-valuetext', v + ', ' + w);
+  }
+  try { const saved = localStorage.getItem('nc-neurons'); if (saved !== null && saved !== '') neuronsEl.value = saved; } catch (e) { /* storage may be blocked */ }
+  showNeurons();
+  neuronsEl.addEventListener('input', function () { showNeurons(); try { localStorage.setItem('nc-neurons', neuronsEl.value); } catch (e) { /* not saved */ } });
   const clearBtn = document.getElementById('clear-btn');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
@@ -1074,6 +1097,7 @@ ${PROMPT_BUTTON_CSS}
           message: ncVisuals.plain(msg),
           visuals: ncVisuals.enabled(),
           buttons: true,
+          neurons: Number(neuronsEl.value),
           visualEvent,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
@@ -4496,7 +4520,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4534,7 +4558,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)]);
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons));
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;

@@ -75,6 +75,7 @@ export class NeuroclawRunner extends EventEmitter {
     prompt: string,
     memoryContext?: string[],
     promptingSkills?: Array<{ name: string; title?: string; description?: string }>,
+    neurons?: number | null,
   ): Promise<string> {
     if (!this.running) await this.start();
 
@@ -106,6 +107,8 @@ export class NeuroclawRunner extends EventEmitter {
       ...(memoryContext && memoryContext.length ? { memoryContext } : {}),
       // Prompting skills go into the Zip Loop with the prompt (llm.generate).
       ...(promptingSkills && promptingSkills.length ? { promptingSkills } : {}),
+      // Neurons (how confident to act) is its own Zip Loop input beside the prompt.
+      ...(typeof neurons === 'number' ? { neurons } : {}),
     });
     // The loop only ever saw one side of the conversation: prompts went in and
     // the agent's own answers did not, so it could never learn that an answer
