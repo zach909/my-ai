@@ -29,7 +29,8 @@ const RULES = [
   [/^(interface|models && skills|plugins|plugin_manager|extension_system|extension-builder|tsconfig\.backend\.json)(\/|$)/, [...DESKTOP, 'android']],
   [/^(mobile\/server\/|scripts\/release\/(phone-bundle|build-mobile-server)\.mjs$)/, ['android']],
   [/^(src\/(index\.ts|lib\/error-log\.ts|server\/)|config\/|wiki\/|generated\/)/, [...DESKTOP]],
-  [/^scripts\/(desktop-launcher\.mjs|build-backend\.mjs|learning-loader\.mjs|release\/(stage-app|app-home|icons|package-(linux|windows|macos))\.mjs|release\/macos\/)/, [...DESKTOP]],
+  [/^native\/host\//, ['linux']],
+  [/^scripts\/(desktop-launcher\.mjs|build-window-host\.mjs|build-backend\.mjs|learning-loader\.mjs|release\/(stage-app|app-home|icons|package-(linux|windows|macos))\.mjs|release\/macos\/)/, [...DESKTOP]],
   [/^scripts\/[^/]+\.mjs$/, [...DESKTOP]],
   // The extension embeds the shared look and the icon renderer's output.
   [/^(browser-extension\/|interface\/ambient\.ts$|interface\/platform\/icon\.ts$|scripts\/release\/(build-extension|make-icons)\.mjs$)/, ['extension']],

@@ -6,7 +6,7 @@
  *                    extension-builder/, models && skills/onebrain/   (same layout as the repo)
  *   <out>/runtime/   the Node runtime the engine runs on (copied from the build machine's own node)
  *
- *   node scripts/release/stage-app.mjs <outDir> [--channel stable|beta|dev] [--commit <sha>] [--no-runtime]
+ *   node scripts/release/stage-app.mjs <outDir> [--channel stable|beta|dev] [--commit <sha>] [--no-runtime] [--no-window-host]
  *
  * Needs `node scripts/build-backend.mjs` first. The payload holds no node_modules:
  * the backend uses only Node built-ins, which this checks by scanning the compiled
@@ -23,6 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { builtinModules } from 'node:module';
 import { authority, drift } from './version.mjs';
+import { buildWindowHost } from '../build-window-host.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -86,7 +87,7 @@ export function assertSelfContainedRuntime(file) {
   }
 }
 
-export function stageApp({ out, channel = 'dev', commit = null, runtime = true }) {
+export function stageApp({ out, channel = 'dev', commit = null, runtime = true, windowHost = runtime && process.platform === 'linux' }) {
   const bad = drift();
   if (bad.length) throw new Error(`version drift, run scripts/release/version.mjs sync: ${bad.map((b) => b.name).join(', ')}`);
   if (!existsSync(path.join(ROOT, 'dist', 'interface', 'main.js'))) throw new Error('dist/ is not built: run node scripts/build-backend.mjs first');
@@ -125,6 +126,10 @@ export function stageApp({ out, channel = 'dev', commit = null, runtime = true }
     copyFileSync(process.execPath, dest);
     if (process.platform !== 'win32') chmodSync(dest, 0o755);
   }
+  // The window program (native/host): the app's own window around the system's web view. It is built here, from this
+  // repository's source with rustc, and sits next to the runtime where the launcher looks for it. A package without it
+  // could not open a window, so a missing compiler stops the build instead of producing one.
+  if (windowHost) buildWindowHost(path.join(out, 'runtime'));
   return { out, app, info };
 }
 
@@ -132,9 +137,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const a = process.argv.slice(2);
   const opt = (n) => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : undefined; };
   const out = a.find((x) => !x.startsWith('--') && a[a.indexOf(x) - 1] !== '--channel' && a[a.indexOf(x) - 1] !== '--commit');
-  if (!out) { console.error('usage: stage-app.mjs <outDir> [--channel stable|beta|dev] [--commit sha] [--no-runtime]'); process.exit(2); }
+  if (!out) { console.error('usage: stage-app.mjs <outDir> [--channel stable|beta|dev] [--commit sha] [--no-runtime] [--no-window-host]'); process.exit(2); }
   try {
-    const r = stageApp({ out: path.resolve(out), channel: opt('--channel') || 'dev', commit: opt('--commit'), runtime: !a.includes('--no-runtime') });
+    const r = stageApp({ out: path.resolve(out), channel: opt('--channel') || 'dev', commit: opt('--commit'), runtime: !a.includes('--no-runtime'), windowHost: a.includes('--no-window-host') ? false : undefined });
     console.log(`staged ${r.info.version} (${r.info.commit.slice(0, 8)}, ${r.info.platform}/${r.info.arch}) in ${r.out}`);
   } catch (e) { console.error(`stage failed: ${e.message}`); process.exit(1); }
 }

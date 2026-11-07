@@ -1451,6 +1451,9 @@ export class WebServer {
   private decoyTimer: ReturnType<typeof setInterval> | null = null;
   private healTimer: ReturnType<typeof setInterval> | null = null;
   private port = 0;
+  /** True when the app window talks to this server through a pipe (interface/platform/embedded-transport.ts) and no port is open. */
+  private embedded = false;
+  private loopbackStart: Promise<number> | null = null;
   /** Apps made from visuals (models && skills/core/visual-apps.ts). Saved on this device; a launcher is written only after a preview is approved. */
   private visualApps = new VisualAppStore();
   /** Prompt buttons kept on this computer (app menu, desktop). Saved here; a launcher is written only after the owner approves the exact file. */
@@ -1559,9 +1562,10 @@ export class WebServer {
    * every request behind HTTP Basic Auth. Binding remotely with no password
    * is refused outright rather than silently serving unauthenticated.
    */
-  async start(port: number = 3000, host: string = '127.0.0.1', password?: string): Promise<void> {
+  async start(port: number = 3000, host: string = '127.0.0.1', password?: string, options: { listen?: boolean } = {}): Promise<void> {
     if (this.server) throw new Error('Web server already running');
     this.port = port;
+    this.embedded = options.listen === false;
     const isLocal = LOCAL_HOSTS.has(host);
     if (!isLocal) {
       if (password) {
@@ -1752,9 +1756,38 @@ export class WebServer {
     this.loadedExtensions = await this.loadSavedExtensions();
     return new Promise<void>((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      // The desktop app's own window: requests arrive through serveEmbedded(), so no port is opened.
+      if (options.listen === false) { resolve(); return; }
       this.server.listen(port, host, () => resolve());
       this.server.on('error', (err: Error) => { this.server = null; reject(err); });
     });
+  }
+
+  /**
+   * Hand one connection to the HTTP server without a network socket. The desktop app's window sends each request
+   * through a pipe (interface/platform/embedded-transport.ts) and the server parses and answers it exactly as it
+   * would on a port, so every route, gate and limit applies unchanged.
+   */
+  serveEmbedded(connection: import('node:stream').Duplex): void {
+    if (!this.server) throw new Error('Server not running');
+    this.server.emit('connection', connection);
+  }
+
+  /**
+   * The loopback port other programs on this computer can call. Normally the app window needs none. It is opened
+   * only when the person places something that calls back into NeuroClaw from outside the window (an OS button or
+   * a launcher for a visual app), because that program is a separate process and cannot use the pipe.
+   */
+  async ensureListening(): Promise<number> {
+    if (!this.embedded) return this.port;
+    const server = this.server;
+    if (!server) throw new Error('Server not running');
+    if (server.listening) return (server.address() as { port: number }).port;
+    this.loopbackStart ??= new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => { this.port = (server.address() as { port: number }).port; resolve(this.port); });
+    }).finally(() => { this.loopbackStart = null; });
+    return this.loopbackStart;
   }
 
   /**
@@ -2760,7 +2793,7 @@ export class WebServer {
         this.sendJson(res, { error: 'Putting an app on a computer has to be done from that computer. Open this page there.' }, 403);
         return;
       }
-      const host = String(req.headers.host ?? '');
+      const host = this.embedded ? `127.0.0.1:${await this.ensureListening()}` : String(req.headers.host ?? '');
       const baseUrl = `http://${/^[A-Za-z0-9.:\[\]-]{1,100}$/.test(host) ? host : `127.0.0.1:${this.port}`}`;
       try {
         if (!id && method === 'POST') {
@@ -2848,7 +2881,7 @@ export class WebServer {
         this.sendJson(res, { error: 'Putting a button on a computer has to be done from that computer. Open this page there.' }, 403);
         return;
       }
-      const host = String(req.headers.host ?? '');
+      const host = this.embedded ? `127.0.0.1:${await this.ensureListening()}` : String(req.headers.host ?? '');
       const baseUrl = `http://${/^[A-Za-z0-9.:\[\]-]{1,100}$/.test(host) ? host : `127.0.0.1:${this.port}`}`;
       try {
         if (!id && method === 'POST') {

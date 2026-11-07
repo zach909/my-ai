@@ -14,7 +14,7 @@
  * tools exist). The app starts from the menu entry with no terminal.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, readFileSync, rmSync, statSync, readdirSync, symlinkSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, readdirSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { APP_ID, APP_NAME, APP_SUMMARY, DEB_ARCH, artifactName, copyTree, desktopEntry, normalizeModes, writeFile } from './packaging.mjs';
@@ -57,6 +57,7 @@ export async function packageLinux({ stageDir, outDir }) {
     copyTree(path.join(stageDir, 'runtime'), path.join(opt, 'runtime'));
     normalizeModes(opt);
     chmodSync(path.join(opt, 'runtime', 'node'), 0o755);
+    if (existsSync(path.join(opt, 'runtime', 'neuroclaw-window'))) chmodSync(path.join(opt, 'runtime', 'neuroclaw-window'), 0o755);
     writeFile(path.join(root, 'usr', 'bin', APP_ID), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/desktop-launcher.mjs "$@"\n`, 0o755);
     writeFile(path.join(root, 'usr', 'share', 'applications', `${APP_ID}.desktop`), desktopEntry({ exec: APP_ID }));
     for (const { size, png } of pngs) {
@@ -73,12 +74,13 @@ export async function packageLinux({ stageDir, outDir }) {
       `Architecture: ${DEB_ARCH[arch]}`,
       `Installed-Size: ${dirSizeKb(root)}`,
       'Maintainer: zach909 <zach909@users.noreply.github.com>',
-      'Recommends: chromium | chromium-browser | google-chrome-stable | microsoft-edge-stable',
+      'Depends: libgtk-3-0 | libgtk-3-0t64, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37',
       'Homepage: https://github.com/zach909/.my-ai',
       `Description: ${APP_SUMMARY}`,
-      ` Runs the NeuroClaw engine on this computer and opens it in its own window.`,
-      ` Bundles its own Node runtime; nothing else needs to be installed. Open it from`,
-      ` the application menu. Source commit ${info.commit}.`,
+      ` Runs the NeuroClaw engine on this computer and opens it in its own window, like any`,
+      ` other application: no browser and no network port. The window uses the system's`,
+      ` WebKitGTK. Bundles its own Node runtime. Open it from the application menu.`,
+      ` Source commit ${info.commit}.`,
       '',
     ].join('\n');
     writeFile(path.join(root, 'DEBIAN', 'control'), control);
@@ -99,9 +101,10 @@ export async function packageLinux({ stageDir, outDir }) {
     copyTree(path.join(stageDir, 'runtime'), path.join(root, 'runtime'));
     normalizeModes(root);
     chmodSync(path.join(root, 'runtime', 'node'), 0o755);
+    if (existsSync(path.join(root, 'runtime', 'neuroclaw-window'))) chmodSync(path.join(root, 'runtime', 'neuroclaw-window'), 0o755);
     writeFile(path.join(root, APP_ID), '#!/bin/sh\nhere=$(dirname "$(readlink -f "$0")")\nexec "$here/runtime/node" "$here/app/scripts/desktop-launcher.mjs" "$@"\n', 0o755);
     writeFile(path.join(root, `${APP_ID}.desktop`), desktopEntry({ exec: '/path/to/neuroclaw' }));
-    writeFile(path.join(root, 'README.txt'), `${APP_NAME} ${info.version}\n\nRun ./neuroclaw (double-click it in your file manager). To add it to your application menu, copy\nneuroclaw.desktop to ~/.local/share/applications/, then change the Exec= line to the full path of ./neuroclaw.\nIt installs nothing and needs no root. Remove it by deleting this folder (your data stays in ~/.neuroclaw).\n`);
+    writeFile(path.join(root, 'README.txt'), `${APP_NAME} ${info.version}\n\nRun ./neuroclaw (double-click it in your file manager). To add it to your application menu, copy\nneuroclaw.desktop to ~/.local/share/applications/, then change the Exec= line to the full path of ./neuroclaw.\nIt opens its own window using your system's WebKitGTK (package libwebkit2gtk-4.1-0 on Debian and Ubuntu); no browser is needed.\nIt installs nothing and needs no root. Remove it by deleting this folder (your data stays in ~/.neuroclaw).\n`);
     for (const { size, png } of pngs.filter((p) => p.size === 256)) writeFile(path.join(root, `${APP_ID}.png`), png);
     const out = path.join(outDir, artifactName({ version: info.version, platform: 'linux', arch, ext: 'tar.gz' }));
     const epoch = process.env.SOURCE_DATE_EPOCH ? `@${process.env.SOURCE_DATE_EPOCH}` : '1980-01-01';
