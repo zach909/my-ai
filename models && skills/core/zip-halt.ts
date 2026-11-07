@@ -69,6 +69,12 @@ export const ZIP_FOLDERS = {
    */
   promptingSkills: "prompting-skills/",
   /**
+   * Neurons: how confident to act, a dial from 0 to 100 (core/neurons.ts). Its own input beside the prompt, not
+   * part of it and not a skill: it tells the network how many questions to ask (more when unsure, none when
+   * sure) and, when very sure, to do a two-way request both ways. Absent unless the dial was set.
+   */
+  neurons: "neurons/",
+  /**
    * Chat history from other conversations -- the network's past across
    * sessions, not just the exchange it is in the middle of. A folder like any
    * other, so being handed your own history comes through the same doorway as
