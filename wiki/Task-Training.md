@@ -40,9 +40,23 @@ Six arithmetic tasks, three agents, three rounds of 120 epochs, 16-dimension net
 
 ## Limits
 
-- At most 12 tasks, 6 agents, 6 rounds and 300 epochs per round. The nets are all-to-all, so cost grows fast.
-- Text in tasks cannot contain `"`, line breaks or `--`, because tasks are carried by [[NeuroLang]] statements.
+There are **no caps** on the number of tasks, agents, rounds or epochs, or on the length or content of the text. Task text is held on the neurons directly and never goes through the program parser, so quotes, line breaks and `--` are fine.
+
+What is still true, because it is how the nets work and not a rule:
+
+- **Cost grows fast.** The nets are all-to-all, so training cost grows roughly with the square of the tasks, times the agents, rounds and epochs.
+- **One training step runs to the end before anything else in the process can run.** The loop yields between agents, not inside one. A very large run holds up whatever else the server is serving until each step finishes.
+- **A big task set does not get done well by one net.** Measured with the caps lifted (all four modes, 60 epochs per round):
+
+| Run | single | hive | separate | silent |
+|---|---|---|---|---|
+| 20 tasks, 8 agents, 2 rounds | 0.45 | 0.35 | 0.50 | 0.90 |
+| 14 tasks, 3 agents, 10 rounds | 0.43 | 0.43 | 0.43 | 0.71 |
+
+  Past about six tasks a single net drops to roughly half right, and ten rounds does not fix it. Hive was **worse** than a single agent at 20 tasks: every agent ends up holding most of the tasks, so each net hits the same capacity wall, and a trust-weighted vote does not repair that. Silent scores highest again for the same reason as before (each agent holds few answers), not because working silently is smarter.
+- The task-training agents are made with the neuron cap lifted (`maxNeurons: Infinity`). The net maker and the program parser keep their default cap of 1024 for everyone else, since those also parse source from other callers; pass `maxNeurons` to change it.
 - Silent mode's "who is responsible" rule is fixed, not learned. Agents do not learn to coordinate; they are given a way to.
+- A task needs an id nobody else has, a non-empty input no other task shares, and at least one non-empty answer part. Without those there is no single answer to grade.
 
 ## Route
 
@@ -52,4 +66,4 @@ POST /api/task-training
   "generate": { "count": 6, "composite": false, "seed": 1 } }
 ```
 
-or pass `"tasks": [{"id": "t1", "input": "7 + 5", "parts": ["12"]}]` instead of `generate`. The reply has the team score after each round, each agent's score, the messages, the tasks still missed, and notes.
+or pass `"tasks": [{"id": "t1", "input": "7 + 5", "parts": ["12"]}]` instead of `generate`. The request body has no size cap. The reply has the team score after each round, each agent's score, the messages, the tasks still missed, and notes.

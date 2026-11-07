@@ -169,6 +169,13 @@ const EVALUATE_YIELD_EVERY_PAIRS = 200_000;
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 export class NeuroLangInterpreter {
+  /** Most neurons `neurons="N"` may make. The default protects the routes that parse a stranger's source; a caller that trusts its own source can pass Infinity. */
+  private readonly maxNeurons: number;
+
+  constructor(opts: { maxNeurons?: number } = {}) {
+    this.maxNeurons = opts.maxNeurons ?? MAX_DECLARED_NEURONS;
+  }
+
   /** Parse-scoped: the pending `"netsearch"@name=` awaiting a `@net=`. */
   private pendingNetSearch: string | null = null;
 
@@ -715,8 +722,8 @@ export class NeuroLangInterpreter {
       if (m) {
         const count = parseInt(m[1], 10);
         if (count < 1) throw new Error(`neurons="${m[1]}": need at least 1`);
-        if (count > MAX_DECLARED_NEURONS) {
-          throw new Error(`neurons="${count}": the most one program may make is ${MAX_DECLARED_NEURONS} (the mesh is all-to-all, so cost grows with the square)`);
+        if (count > this.maxNeurons) {
+          throw new Error(`neurons="${count}": the most one program may make is ${this.maxNeurons} (the mesh is all-to-all, so cost grows with the square)`);
         }
         for (let i = 1; i <= count; i++) {
           const name = `n${i}`;

@@ -61,6 +61,12 @@ export interface MakerOptions {
   dimensions?: number;
   /** Seed for the network's starting weights and for random mode. Default 1. */
   seed?: number;
+  /**
+   * Most neurons a program may make and a network may have. Default 1024: the
+   * mesh is all-to-all, so cost grows with the square. Pass Infinity to lift it
+   * (a caller that trusts its own source and accepts the cost).
+   */
+  maxNeurons?: number;
   /** A response counts as met when its mean squared error is under this. Default 0.2. */
   tolerance?: number;
   /** Overrides for the program's own train statements. */
@@ -504,7 +510,7 @@ function fail(kind: NeuriKind, errors: string[], warnings: string[] = []): Maker
 
 /** Reads the program's own kind, then builds a net or a net skill. */
 export async function makeFromSource(source: string, opts: MakerOptions = {}): Promise<MakerResult> {
-  const interpreter = new NeuroLangInterpreter();
+  const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
   const kind: NeuriKind = parsed.program?.kind ?? "network";
   return build(parsed.neurons, parsed.errors, parsed.program, kind, opts);
@@ -512,7 +518,7 @@ export async function makeFromSource(source: string, opts: MakerOptions = {}): P
 
 /** NET MAKER: a network of its own, whatever the program says its kind is. */
 export async function netMaker(source: string, opts: MakerOptions = {}): Promise<MakerResult> {
-  const interpreter = new NeuroLangInterpreter();
+  const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
   const result = await build(parsed.neurons, parsed.errors, parsed.program, "network", opts);
   if (parsed.program?.kind === "skill") result.warnings.push('the program says kind="skill" but this is the net maker, so it was made as a network of its own');
@@ -521,7 +527,7 @@ export async function netMaker(source: string, opts: MakerOptions = {}): Promise
 
 /** NET SKILL MAKER: the program's neurons joined into `base`, the AI they change. */
 export async function netSkillMaker(source: string, base: HyperDimensionalEngine, opts: MakerOptions = {}): Promise<MakerResult> {
-  const interpreter = new NeuroLangInterpreter();
+  const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
   const result = await build(parsed.neurons, parsed.errors, parsed.program, "skill", { ...opts, base });
   if (parsed.program?.kind === "network") result.warnings.push('the program says kind="network" but this is the net skill maker, so it was grafted into the base AI as a skill');
@@ -571,7 +577,8 @@ async function build(
     }
     for (const n of names) ids.set(n, grafted.ids[n]);
   } else {
-    if (names.length > MAX_MESH_NEURONS) return fail(kind, [`${names.length} neurons is more than the ${MAX_MESH_NEURONS} one network may have`]);
+    const cap = opts.maxNeurons ?? MAX_MESH_NEURONS;
+    if (names.length > cap) return fail(kind, [`${names.length} neurons is more than the ${cap} one network may have`]);
     engine = new HyperDimensionalEngine({
       neuronCount: names.length,
       dimensions: opts.dimensions ?? 32,

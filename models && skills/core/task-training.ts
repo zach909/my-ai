@@ -33,6 +33,12 @@
  *    tasks. It does NOT measure doing a task nobody taught them.
  *  - The grader is exact string equality with the stored answer. No model
  *    judges anything.
+ *  - Nothing here caps the number of tasks, agents, rounds, epochs or the
+ *    length of the text. Cost still grows (the nets are all-to-all, roughly
+ *    with the square of the tasks), and one training step runs to the end
+ *    before anything else in the process can run, so a very large run holds
+ *    up whatever else this process is serving. The loop yields between agents,
+ *    not inside one.
  *  - One agent has a limited capacity. Measured here: 5 of 6 arithmetic tasks
  *    in one 16-dimension net, 3 of 3 for three tasks. Splitting the tasks
  *    across agents (hive, silent) gets more of them right mostly because each
@@ -44,7 +50,7 @@
 
 import { netMaker, type BuiltNet } from "./neuro-build.js";
 import { HiveMind } from "./hive-mind.js";
-import type { NeuriNeuron } from "./neuro-lang.js";
+import { yieldToEventLoop, type NeuriNeuron } from "./neuro-lang.js";
 
 export type TaskMode = "single" | "hive" | "separate" | "silent";
 export const TASK_MODES: readonly TaskMode[] = ["single", "hive", "separate", "silent"];
@@ -96,27 +102,25 @@ export interface TaskTrainingReport {
   notes: string[];
 }
 
-export const MAX_TASKS = 12;
-export const MAX_AGENTS = 6;
-export const MAX_ROUNDS = 6;
-export const MAX_EPOCHS = 300;
-const MAX_TEXT = 200;
-
 // ── Tasks ────────────────────────────────────────────────────────────────────
 
-/** Texts the net language can carry: no quotes, no line breaks, no `--` (a comment), and a sane length. */
+/**
+ * What a task needs to mean anything: an id nobody else has, an input, at
+ * least one answer part, and an input no other task shares (two tasks with one
+ * input would have no single answer to it). There is no cap on how many tasks
+ * there are or how long the text is, and no character is forbidden: task text
+ * is held on the neurons directly and never passes through the program parser.
+ */
 export function validateTasks(tasks: Task[]): string[] {
   const problems: string[] = [];
   const seen = new Set<string>();
   if (tasks.length === 0) problems.push("no tasks");
-  if (tasks.length > MAX_TASKS) problems.push(`at most ${MAX_TASKS} tasks (the nets are all-to-all, so cost grows fast)`);
-  const bad = (s: string) => /["\r\n]|--/.test(s) || s.length === 0 || s.length > MAX_TEXT;
   for (const t of tasks) {
     if (!t.id || seen.has(t.id)) problems.push(`task id "${t.id}" is missing or repeated`);
     seen.add(t.id);
-    if (bad(t.input)) problems.push(`task "${t.id}": the input must be 1 to ${MAX_TEXT} characters with no quotes, line breaks or "--"`);
-    if (t.parts.length === 0) problems.push(`task "${t.id}": needs at least one answer part`);
-    for (const p of t.parts) if (bad(p)) problems.push(`task "${t.id}": every answer part must be 1 to ${MAX_TEXT} characters with no quotes, line breaks or "--"`);
+    if (typeof t.input !== "string" || t.input.length === 0) problems.push(`task "${t.id}": the input is empty`);
+    if (!Array.isArray(t.parts) || t.parts.length === 0) problems.push(`task "${t.id}": needs at least one answer part`);
+    else for (const p of t.parts) if (typeof p !== "string" || p.length === 0) problems.push(`task "${t.id}": an answer part is empty`);
   }
   const inputs = tasks.map(t => t.input);
   if (new Set(inputs).size !== inputs.length) problems.push("two tasks have the same input, so the answer to it is not defined");
@@ -142,9 +146,12 @@ export function arithmeticTasks(count: number, seed = 1, composite = false): Tas
   const rand = rng(seed);
   const tasks: Task[] = [];
   const used = new Set<string>();
-  while (tasks.length < count && used.size < 10000) {
-    const a = 2 + Math.floor(rand() * 18);
-    const b = 2 + Math.floor(rand() * 18);
+  // The operands widen with the count, so there are always more distinct
+  // problems than asked for (a fixed range would run out and never return).
+  const span = Math.max(18, Math.ceil(Math.sqrt(count * 2)) + 1);
+  while (tasks.length < count) {
+    const a = 2 + Math.floor(rand() * span);
+    const b = 2 + Math.floor(rand() * span);
     const input = composite ? `${a} and ${b}` : `${a} + ${b}`;
     if (used.has(input)) continue;
     used.add(input);
@@ -196,7 +203,7 @@ class TaskAgent {
 
 async function makeAgent(id: string, tasks: number, dimensions: number, seed: number): Promise<TaskAgent> {
   const neurons = Math.max(4, tasks + 1); // one drive neuron per task, then the output
-  const made = await netMaker(`neurons="${neurons}"`, { dimensions, seed, name: id });
+  const made = await netMaker(`neurons="${neurons}"`, { dimensions, seed, name: id, maxNeurons: Infinity });
   if (!made.ok || !made.net) throw new Error(`could not make agent ${id}: ${made.errors.join("; ")}`);
   return new TaskAgent(id, made.net, neurons - 1);
 }
@@ -208,9 +215,10 @@ export async function trainTasks(tasks: Task[], options: TaskTrainingOptions): P
   if (problems.length) throw new Error(problems.join("; "));
   if (!TASK_MODES.includes(options.mode)) throw new Error(`mode must be one of ${TASK_MODES.join(", ")}`);
   const mode = options.mode;
-  const count = mode === "single" ? 1 : Math.max(2, Math.min(options.agents ?? 3, MAX_AGENTS));
-  const rounds = Math.max(1, Math.min(options.rounds ?? 3, MAX_ROUNDS));
-  const epochs = Math.max(1, Math.min(options.epochs ?? 120, MAX_EPOCHS));
+  // No upper bound on agents, rounds or epochs: the caller decides, and pays the cost.
+  const count = mode === "single" ? 1 : Math.max(2, Math.floor(options.agents ?? 3));
+  const rounds = Math.max(1, Math.floor(options.rounds ?? 3));
+  const epochs = Math.max(1, Math.floor(options.epochs ?? 120));
   const dims = options.dimensions ?? 16;
   const seed = options.seed ?? 1;
   const widest = Math.max(...tasks.map(t => t.parts.length));
@@ -281,11 +289,12 @@ export async function trainTasks(tasks: Task[], options: TaskTrainingOptions): P
       for (const a of agents) {
         tasks.forEach(t => a.hold(t.id, t.input, full(t)));
         a.train(epochs);
+        await yieldToEventLoop();
       }
     } else if (mode === "hive") {
       // 1. Each agent learns its own share.
       tasks.forEach((t, i) => agents[i % count].hold(t.id, t.input, full(t)));
-      agents.forEach(a => a.train(epochs));
+      for (const a of agents) { a.train(epochs); await yieldToEventLoop(); }
       // 2. They talk: each posts what it can verifiably do.
       for (const a of agents) {
         for (const [i, t] of tasks.entries()) {
@@ -308,6 +317,7 @@ export async function trainTasks(tasks: Task[], options: TaskTrainingOptions): P
           if (posted) a.hold(t.id, posted.input, posted.answer);
         }
         a.train(epochs);
+        await yieldToEventLoop();
       }
     } else {
       // Silent: nothing is shared. Each agent learns only what the prior agreement makes it responsible for.
@@ -315,7 +325,7 @@ export async function trainTasks(tasks: Task[], options: TaskTrainingOptions): P
         const a = agents[owner(i, p)];
         a.hold(`${t.id}#${p + 1}`, t.input, part);
       }));
-      agents.forEach(a => a.train(epochs));
+      for (const a of agents) { a.train(epochs); await yieldToEventLoop(); }
     }
     teamScores.push(1 - teamCorrect().length / tasks.length);
   }
