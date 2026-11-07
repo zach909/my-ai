@@ -8,7 +8,8 @@ and what is still unfinished. The two matrices below are generated from `interfa
 
 > **House rule that shaped every decision here:** no third-party code (`AGENTS.md`). So there is no Electron,
 > Capacitor, React Native or Flutter in the new path. The desktop apps use the engine's own Node runtime plus the
-> operating system's own browser engine (Edge/Chrome/Chromium app window, or WebKit on macOS); the phones use
+> operating system's own web view in the app's own window (WebKit on macOS, WebKitGTK on Linux; Windows still uses an
+> Edge/Chrome app window, see "Unfinished"), with no browser needed and no network port on macOS and Linux; the phones use
 > their own system web views; installers are built with tools each OS ships (`dpkg-deb`, IExpress, `hdiutil`).
 
 ## The layers
@@ -34,7 +35,7 @@ and what is still unfinished. The two matrices below are generated from `interfa
 ```
 
 Everything a person sees is the **same two web pages**, served by the engine: the home chat (`/`) and Settings
-(`/settings`). The desktop app shows them in an app window, the Chrome extension opens them, and the phone apps show
+(`/settings`). The desktop app shows them in its own window, the Chrome extension opens them, and the phone apps show
 them in a web view (on Android the engine and server run inside the app itself, `mobile/server`; on iOS they come from a
 server on your network for now). Change a page once and every platform shows it the next time it connects; no per-platform copy
 exists to edit. Platform code is only the part that has to differ: starting the engine, the window, installation,
@@ -182,9 +183,18 @@ merged or published without you.
 
 - A Chrome extension cannot contain or start the engine. On a Chromebook the engine runs in the Linux container (one-time
   terminal step) or on another computer; there is no way around that on ChromeOS.
-- The desktop apps run the engine in the OS's own browser engine window: Edge on Windows (preinstalled), Chrome, Chromium,
-  Edge or Brave on Linux, WebKit in `NeuroClaw.app` on macOS. If no Chromium-based browser is found on Windows or Linux the
-  default browser is used and the engine keeps running until you stop it. The packaged apps have no tray icon, no
+- **The desktop window is the app's own, not a browser's, and opens no port (macOS and Linux).** The window is a small native
+  program (`NeuroClaw.app` on macOS, `native/host` on Linux) around the system's own web view (WebKit, WebKitGTK). It answers
+  the page's addresses (`nc://app/...`) by writing each request as one line to the launcher and reading the engine's answer
+  back (`interface/platform/embedded-transport.ts`), so every route, login gate, body limit and CSRF rule applies exactly as
+  over HTTP and no TCP port is listening (`test/platform/embedded.test.mjs` checks that with a control). The Linux package
+  depends on `libwebkit2gtk-4.1-0` (not on any browser); without it the app says so and stops, it does not open a browser.
+  Things that must call the engine from another program, like an OS button or a visual-app launcher, open a loopback port
+  only when you place one. A web server you start yourself (`node dist/interface/main.js web`, AI OS mode) is still there for the
+  Chrome extension, phones and other devices, and the window uses a running one instead of starting a second engine.
+  `neuroclaw --browser` (or `NEUROCLAW_WINDOW=browser`) still shows the app in a Chromium-based browser's app window if you want that.
+  **Windows has no native window yet** and keeps the previous behaviour: Edge or Chrome's app window over the loopback server
+  (Edge ships with Windows). The packaged apps have no tray icon, no
   Accessibility or screen-capture permission on macOS, and no Windows UI-automation tools (those exist only in the
   unmaintained Electron project).
 - Closing the app window stops the engine the app started (so nothing lingers). If you want your phone to sync with your PC,
@@ -207,6 +217,7 @@ missing browser fails there instead.
 | `settings.test.mjs` | validation; atomic saves; persistence across a server restart; a failed save is reported and not shown as saved; **the Linux regression** (unwritable working directory); safety settings persist; the page serves at both URLs |
 | `mobile-ui.test.mjs` | 11 pages at 360, 390, 768 and 1280px: no sideways scroll, no console errors, tap targets at least 44px on phones; send a chat message and get the engine's reply; navigation by real clicks; tabs by tap and keyboard; a toggle saves, applies and survives reload; a failed save is shown and the switch reverts; update status shows available, current and failed; the manifest, PNG icons and service worker are real |
 | `extension.test.mjs` | manifest permissions are the minimum; icons are real PNGs equal to the renderer's output; address handling; the zip is exact and reproducible; **loaded in Chromium**: the service worker runs, the action opens one launcher tab (a second click returns to it), the launcher connects to a live server and opens the real interface, explains an unreachable one, validates a bad address, saves a good one |
+| `embedded.test.mjs`, `launcher-window.test.mjs` | the engine served through a pipe (pages, JSON posts, the CSRF rule, binary bodies, a redirect, no listening port with a control, closing the window ends the engine); the launcher starting the engine and a stand-in window together, using a running server, and refusing to open a browser when there is no web view |
 | `packaging.test.mjs` | the payload needs no packages; the per-user app copy installs, updates and never touches your files; the packaged engine starts from `/` like a desktop entry, saves, restarts and stops; the launcher reuses a running server, avoids a port held by another program and reports a broken install; **a real `.deb`** (metadata, permissions, no setuid, no service, install script, extracted layout started for real) and `.tar.gz`; the Windows zip and installer scripts (per-user, no elevation, reversible); the macOS bundle and its minimal-privilege host |
 | `adapters.test.mjs` | capability claims are checked against the tree (Android voice, overlay and bridge exist; iOS cannot background; the extension has no native messaging); every promised artifact kind has a producer; the feature contract matches files, routes and tests; this document's matrices are current |
 | `update.test.mjs`, `release-manifest.test.mjs`, `version.test.mjs` | available, current, ahead, beta not offered to stable, no build for this machine, and nine failure modes; strict manifest schema and real checksums; one version everywhere and drift is named and repaired |
@@ -254,6 +265,14 @@ so its exact rendering logic was re-run standalone against the real `adapters.ts
   may need small fixes (runner images and tool paths are the usual suspects).
 
 ## Unfinished, and decisions that are yours
+
+0. **A native Windows window needs your decision.** The only Microsoft web view that needs no browser is WebView2, and a
+   program reaches it through `WebView2Loader.dll`, which ships in Microsoft's SDK and not with the runtime installed on the
+   computer. Bundling that DLL would be vendoring someone else's binary code, and reimplementing the loader means depending on
+   undocumented parts of the runtime that cannot be tested here. Until you choose, Windows keeps the Edge/Chrome app window.
+   The Linux window (`native/host`, written to GTK 3 and WebKitGTK through `dlopen`) and the macOS window were **not run
+   against a real web view here**: this machine has no WebKitGTK and no macOS, so what was proven is the engine side of
+   the pipe, the launcher, the line protocol and the no-web-view error path; CI and a real desktop must show the window itself.
 
 1. **Third-party code that was in the repo**: the React/Vite/three/Electron stack, the Gradle wrapper jar, and the tracked
    `node_modules/` have all been removed; `mobile/brain`'s Vite build was replaced with this project's own bundler
