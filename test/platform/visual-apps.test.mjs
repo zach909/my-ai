@@ -121,6 +121,31 @@ test('an app can be allowed only the listed tools, only with an approval a previ
   } finally { removeDir(dir); }
 });
 
+test('preview answers with exactly one of two shapes, which is what the preview route sends on: { plan, approval } or { unavailable }', () => {
+  const dir = tempDir('nc-apps-'); const home = mkHome();
+  const store = new A.VisualAppStore(dir, () => 1_000);
+  try {
+    store.save('Dice', '<button>Roll</button>');
+
+    // A system with a launcher folder: the plan and the approval travel together, and it is not "unavailable".
+    const ok = store.preview('dice', 'http://127.0.0.1:7861', sys('linux', home));
+    assert.deepEqual(Object.keys(ok).sort(), ['approval', 'plan']);
+    assert.equal(typeof ok.approval, 'string');
+    assert.ok(ok.approval.length > 0);
+    assert.equal(A.isUnavailable(ok), false, 'a successful preview was taken for "unavailable"');
+    assert.ok(A.isUnavailable({ unavailable: 'no' }));
+    assert.equal(A.isUnavailable(ok.plan), false, 'the bare plan is still told apart');
+
+    // A system with none: only the reason comes back, no plan, and no approval is left to spend.
+    const no = store.preview('dice', 'http://127.0.0.1:7861', sys('android', home));
+    assert.ok(A.isUnavailable(no));
+    assert.deepEqual(Object.keys(no), ['unavailable']);
+    assert.match(no.unavailable, /android/);
+    assert.throws(() => store.install('dice', ok.approval, 'http://127.0.0.1:7861', sys('android', home)), /\(android\) has no launcher folder/);
+    assert.ok(!existsSync(ok.plan.path), 'nothing was written');
+  } finally { removeDir(dir); removeDir(home); }
+});
+
 const skip = browserSkip();
 let srv, home, apps, browser;
 before(async () => {
@@ -144,6 +169,9 @@ test('on the real server: save, preview, approve, open the page, remove', async 
   const shown = await api(srv.url, '/api/visual-apps/dice/preview', { method: 'POST', body: {} });
   assert.equal(shown.status, 200);
   assert.equal(shown.json.plan.path, launcher);
+  assert.deepEqual(Object.keys(shown.json).sort(), ['approval', 'plan'], 'the preview body is { plan, approval } and nothing else');
+  assert.equal(shown.json.unavailable, undefined);
+  assert.equal(typeof shown.json.approval, 'string');
   assert.ok(!existsSync(launcher), 'a preview wrote the launcher');
 
   const ok = await api(srv.url, '/api/visual-apps/dice/install', { method: 'POST', body: { approval: shown.json.approval } });
