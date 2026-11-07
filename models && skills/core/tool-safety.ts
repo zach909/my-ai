@@ -74,6 +74,7 @@ export const RISKY_TOOLS: readonly RiskyTool[] = [
   { id: "multi-input", label: "Mouse and keyboard", why: "Drives your mouse and keyboard.", level: "high" },
   { id: "computer-access", label: "Computer access", why: "Changes what the agent is allowed to reach.", level: "high" },
   { id: "file-system", label: "File system", why: "Reads, writes and deletes your files.", level: "high" },
+  { id: "os-commands", label: "OS commands", why: "Starts, stops and ends services and processes on your computer.", level: "high" },
   { id: "linux-permission-tools", label: "Linux permissions", why: "Changes system permissions, services and security policy.", level: "high" },
   { id: "email", label: "Email", why: "Sends email in your name.", level: "high" },
   { id: "messaging", label: "Messaging", why: "Sends messages in your name.", level: "high" },

@@ -35,6 +35,7 @@ import { ComputerAccessPlugin } from "./computer-access.js";
 import { HivePlugin } from "./hive.js";
 import { SchedulePlugin } from "./schedule.js";
 import { LinuxPermissionToolsPlugin } from "./linux-permission-plugin.js";
+import { OsCommandsPlugin } from "./os-commands.js";
 import type { BasePlugin } from "../plugin_manager/sdk.js";
 
 export { LocationPlugin } from "./location.js";
@@ -72,6 +73,7 @@ export { ComputerAccessPlugin } from "./computer-access.js";
 export { HivePlugin } from "./hive.js";
 export { SchedulePlugin } from "./schedule.js";
 export { LinuxPermissionToolsPlugin } from "./linux-permission-plugin.js";
+export { OsCommandsPlugin } from "./os-commands.js";
 
 export function createPluginInstance(
   name: string,
@@ -125,6 +127,7 @@ export function createPluginInstance(
   if (lower === "hive") return new HivePlugin(definition);
   if (lower === "schedule") return new SchedulePlugin(definition);
   if (lower === "linux permission tools" || lower === "linux-permission-tools") return new LinuxPermissionToolsPlugin(definition);
+  if (lower === "os commands" || lower === "os-commands") return new OsCommandsPlugin(definition);
   throw new Error(`Unknown plugin: ${name}`);
 }
 
@@ -190,6 +193,8 @@ const pluginExtensions: Record<string, PluginDefinition> = {
   // (models && skills/core/scheduler.ts). It only records the schedule; the
   // action runs later by the normal path, so risky tools still ask first.
   schedule: { id: "schedule", name: "Schedule", type: "api-connection", capabilities: ["schedule", "timer"] },
+  // The deepest AI OS layer, native on Linux, Windows and macOS (interface/platform/os-commands.ts).
+  "os-commands": { id: "os-commands", name: "OS Commands", type: "api-connection", capabilities: ["os-commands", "services", "processes", "system-info"] },
   "linux-permission-tools": { id: "linux-permission-tools", name: "Linux Permission Tools", type: "api-connection", capabilities: ["linux-permissions", "linux-file-read", "linux-file-write", "linux-chmod", "linux-acl-read", "linux-acl-write", "linux-service-control", "linux-selinux-context-read", "linux-apparmor-status-read", "lennox-admin-controls", "lennox-ordering", "lennox-inventory", "lennox-pricing-visibility", "lennox-warranty-returns"] },
 };
 

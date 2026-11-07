@@ -77,9 +77,13 @@ test('Android claims match the app: voice, overlay, accessibility bridge, camera
   assert.match(text('mobile/android/app/src/main/AndroidManifest.xml'), /android\.permission\.CAMERA/);
 });
 
-test('desktop platforms: no tray and no macOS desktop control are claimed, because the packaged apps contain neither', () => {
+test('desktop platforms: no tray is claimed; Windows and macOS desktop control is limited (never run on real hardware here), and the macOS entitlements did not grow', () => {
   for (const id of ['windows', 'linux', 'macos']) assert.equal(A.adapterFor(id).capabilities.systemTray.status, 'unavailable', id);
-  assert.equal(A.adapterFor('macos').capabilities.desktopControl.status, 'unavailable');
+  for (const id of ['windows', 'macos']) {
+    const c = A.adapterFor(id).capabilities.desktopControl;
+    assert.equal(c.status, 'limited', id);
+    assert.match(c.note, /NOT yet run on a real/, `${id} must say it has not been run on real hardware`);
+  }
   const keys = [...text('scripts/release/macos/entitlements.plist').matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]).sort();
   assert.deepEqual(keys, ['com.apple.security.cs.allow-jit', 'com.apple.security.cs.allow-unsigned-executable-memory'], 'only what the Node runtime needs; no camera, microphone, automation or accessibility entitlement');
 });
@@ -122,7 +126,7 @@ test('support is derived from capabilities, so the parity matrix cannot overclai
   // Things that need the engine on this device are unavailable in a browser and on iOS.
   assert.equal(s('computer-access', 'chromeos').status, 'unavailable');
   assert.equal(s('self-improvement', 'ios').status, 'unavailable');
-  assert.equal(s('desktop-control', 'macos').status, 'unavailable');
+  assert.equal(s('desktop-control', 'macos').status, 'limited');
   assert.equal(s('desktop-control', 'linux').status, 'limited');
   // Features that belong to one kind of platform are "not applicable" elsewhere, never quietly "supported".
   assert.equal(s('desktop-app', 'android').status, 'unavailable');

@@ -308,7 +308,7 @@ test('macOS: the bundle is laid out as a standard .app with a valid Info.plist, 
     assert.equal(plist, infoPlist({ version: V.replace(/-.*/, ''), build: String(Number(V.split('.')[0]) * 10000 + Number(V.split('.')[1]) * 100 + Number(V.split('.')[2].replace(/-.*/, ''))) }));
     for (const [k, v] of [['CFBundleIdentifier', BUNDLE_ID], ['CFBundleExecutable', 'NeuroClaw'], ['CFBundleIconFile', 'AppIcon'], ['CFBundlePackageType', 'APPL'], ['CFBundleShortVersionString', V.replace(/-.*/, '')]]) assert.match(plist, new RegExp(`<key>${k}</key>\\s*<string>${v.replace(/\./g, '\\.')}</string>`), k);
     assert.match(plist, /<key>NSHighResolutionCapable<\/key>\s*<true\/>/);
-    assert.doesNotMatch(plist, /UsageDescription/, 'no permission prompts are declared: none are used');
+    assert.deepEqual([...plist.matchAll(/<key>(\w*UsageDescription)<\/key>/g)].map((m) => m[1]), ['NSAppleEventsUsageDescription'], 'the only prompt text is the one for the AI OS button clicker (System Events); no camera, microphone, location or contacts text');
     if (spawnSync('python3', ['--version']).status === 0) {
       assert.equal(spawnSync('python3', ['-c', 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))', path.join(app, 'Contents/Info.plist')]).status, 0, 'Info.plist parses as a property list');
     }

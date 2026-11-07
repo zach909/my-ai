@@ -157,10 +157,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts')],
   },
   {
-    id: 'desktop-control', title: 'Desktop control', description: 'See and drive windows through the OS (X11, Windows automation).',
-    implementation: ['models && skills/core/desktop-control.ts', 'plugins/desktop.ts'],
+    id: 'desktop-control', title: 'Desktop control', description: 'See and drive windows through the OS, natively on each: X11 and Wayland on Linux, PowerShell with user32 on Windows, osascript and screencapture on macOS. Only windows of programs the agent started itself can be driven.',
+    implementation: ['models && skills/core/desktop-control.ts', 'models && skills/core/desktop/native.ts', 'plugins/desktop.ts'],
     routes: ['GET /api/apps/list'],
-    needs: [['localEngine', 'desktopControl']], tests: [v('test/core/desktop-control.test.ts')],
+    needs: [['localEngine', 'desktopControl']], tests: [v('test/core/desktop-control.test.ts'), n('test/platform/native-desktop.test.mjs')],
   },
   {
     id: 'phone-sync', title: 'Phone sync', description: 'Phone apps sync conversations, photos and learned examples with the server.',
@@ -182,9 +182,9 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'ai-os', title: 'AI OS mode (start with the computer)', description: 'Makes the engine part of the computer\'s sign-in, so the AI is running before any window is opened: a systemd user service or autostart entry on Linux, a LaunchAgent on macOS, a hidden per-user startup script on Windows. Per-user, undone with one switch, and it grants the agent no extra access. Also adds an assistant entry point where the OS has one to offer: a Start menu shortcut with a Ctrl+Alt+N hotkey on Windows, an application-menu entry and a GNOME Ctrl+Alt+N shortcut on Debian and other Linux. It cannot replace Copilot or Siri, which those systems do not allow.',
-    implementation: ['interface/platform/ai-os.ts', 'interface/platform/ai-os-layers.ts', 'interface/platform/routes.ts', 'interface/platform/settings-page.ts', 'scripts/ai-os.mjs'],
+    implementation: ['interface/platform/ai-os.ts', 'interface/platform/ai-os-layers.ts', 'interface/platform/os-commands.ts', 'plugins/os-commands.ts', 'interface/platform/routes.ts', 'interface/platform/settings-page.ts', 'scripts/ai-os.mjs', 'scripts/osai.mjs'],
     routes: ['GET /api/ai-os', 'POST /api/ai-os', 'GET /api/ai-os/layer', 'POST /api/ai-os/layer'],
-    needs: [['localEngine', 'backgroundService']], tests: [n('test/platform/ai-os.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+    needs: [['localEngine', 'backgroundService']], tests: [n('test/platform/ai-os.test.mjs'), n('test/platform/ai-os-layers.test.mjs'), n('test/platform/os-commands.test.mjs'), n('test/platform/osai.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
   },
   {
     id: 'system-assistant', title: 'Default digital assistant (Android)', description: 'NeuroClaw can be chosen under Settings > Default apps > Digital assistant app, the role Gemini holds, and then opens as a chat sheet from the power-button long press and the home gesture. Only the person can make the choice; there is no "Hey ..." wake word, which Android reserves for the phone\'s maker.',

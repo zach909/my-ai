@@ -5,8 +5,8 @@
  *   node scripts/ai-os.mjs status     is it on, how, and which files it uses
  *   node scripts/ai-os.mjs enable     start the engine at every sign-in (and now, if nothing is running)
  *   node scripts/ai-os.mjs disable    stop doing that and remove what enable wrote
- *   node scripts/ai-os.mjs layers     the four AI OS layers (button clicker, app commands, kernel commands, skill maker)
- *                                     and how KOS (`kos aios`) reaches them
+ *   node scripts/ai-os.mjs layers     the four AI OS layers (OS commands, app commands, button clicker, skill maker),
+ *                                     native on this system, and how `osai` reaches them (KOS still can too)
  *   add --json for machine-readable output
  *
  * Needs the backend built (node scripts/build-backend.mjs). No administrator rights: it only writes into
@@ -54,10 +54,9 @@ async function main() {
     const kosFound = !kos.error;
     if (json) console.log(JSON.stringify({ layers, kos: kosFound, engineUrl: `http://127.0.0.1:${PORT}` }, null, 2));
     else {
-      for (const l of layers) console.log(`${l.available ? 'ok  ' : 'no  '} ${l.id.padEnd(7)} ${l.label}${l.reason ? ` (${l.reason})` : ''}`);
-      console.log(kosFound
-        ? 'KOS found. Use: kos aios status   /   kos aios gui|app|kernel|skill WORDS...'
-        : 'KOS (kernal-os) is not on PATH. Install it, then use: kos aios status');
+      for (const l of layers) console.log(`${l.available ? 'ok  ' : 'no  '} ${l.id.padEnd(7)} ${l.label}${l.native ? ` (${l.native})` : ''}${l.reason ? ` (${l.reason})` : ''}`);
+      console.log('Use: osai status   /   osai os|app|gui|skill WORDS...');
+      if (kosFound) console.log('KOS found too: kos aios status   /   kos aios gui|app|kernel|skill WORDS...');
     }
     return;
   }

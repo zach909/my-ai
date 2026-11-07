@@ -146,25 +146,58 @@ export class DesktopPlugin extends ToolPlugin {
   }
 
   /**
-   * Strict, like the terminal: null unless the text names one of this
-   * plugin's argument-free tools, so a message routed here that it cannot
-   * answer falls through to the next candidate. The tools that need
-   * arguments are reached by name (callTool) or by the network firing them,
-   * not by guessing coordinates out of a sentence.
+   * Strict, like the terminal: null unless the text is one of the forms below, so a message routed here that
+   * it cannot answer falls through to the next candidate. Every form that does something is also a form that
+   * wouldAct() reports, so the tool gate sees all of them and none can slip past it.
+   *
+   *   desktop probe | windows | list windows | screenshot
+   *   desktop launch COMMAND [ARGS...]
+   *   desktop click ID X Y [BUTTON]
+   *   desktop type ID TEXT...
+   *   desktop move ID X Y WIDTH HEIGHT
+   *   desktop close ID
+   *
+   * ID is a window id from "desktop windows". Whether the window may be touched at all is still decided by
+   * DesktopControl: only windows the agent opened itself, on every operating system.
    */
-  override wouldAct(message: unknown): boolean {
+  static parse(message: unknown): { tool: string; args: Record<string, unknown> } | null {
     const input = (typeof message === "string" ? message : String(message ?? "")).trim();
-    return /^desktop\s*:?\s+(probe|windows|list windows|screenshot)$/i.test(input);
+    const m = input.match(/^desktop\s*:?\s+([\s\S]+)$/i);
+    if (!m) return null;
+    const body = m[1].trim();
+    const word = body.toLowerCase();
+    if (word === "probe") return { tool: "probe", args: {} };
+    if (word === "screenshot") return { tool: "screenshot", args: {} };
+    if (word === "windows" || word === "list windows") return { tool: "list_windows", args: {} };
+    const ID = "([0-9A-Za-z:._-]{1,64})";
+    const NUM = "(-?\\d{1,6})";
+    let r: RegExpMatchArray | null;
+    if ((r = body.match(/^launch\s+(\S[\s\S]*)$/i))) {
+      const parts = r[1].trim().split(/\s+/);
+      return { tool: "launch_app", args: { command: parts[0], args: parts.slice(1) } };
+    }
+    if ((r = body.match(new RegExp(`^click\\s+${ID}\\s+${NUM}\\s+${NUM}(?:\\s+([123]))?$`, "i")))) {
+      return { tool: "click", args: { windowId: r[1], x: Number(r[2]), y: Number(r[3]), button: r[4] ? Number(r[4]) : 1 } };
+    }
+    if ((r = body.match(new RegExp(`^type\\s+${ID}\\s+([\\s\\S]+)$`, "i")))) {
+      return { tool: "type_text", args: { windowId: r[1], text: r[2] } };
+    }
+    if ((r = body.match(new RegExp(`^move\\s+${ID}\\s+${NUM}\\s+${NUM}\\s+(\\d{1,6})\\s+(\\d{1,6})$`, "i")))) {
+      return { tool: "move_window", args: { windowId: r[1], x: Number(r[2]), y: Number(r[3]), width: Number(r[4]), height: Number(r[5]) } };
+    }
+    if ((r = body.match(new RegExp(`^close\\s+${ID}$`, "i")))) return { tool: "close_window", args: { windowId: r[1] } };
+    return null;
+  }
+
+  override wouldAct(message: unknown): boolean {
+    return DesktopPlugin.parse(message) !== null;
   }
 
   override async onMessage(message: unknown): Promise<unknown> {
-    const input = (typeof message === "string" ? message : String(message ?? "")).trim();
-    const m = input.match(/^desktop\s*:?\s+(probe|windows|list windows|screenshot)$/i);
-    if (!m) return null;
-    const word = m[1].toLowerCase();
-    const tool = word === "probe" ? "probe" : word === "screenshot" ? "screenshot" : "list_windows";
-    const event = await this.callTool(tool, {}, "message");
-    return { tool: `desktop.${tool}`, result: event.ok ? event.result : event.error };
+    const parsed = DesktopPlugin.parse(message);
+    if (!parsed) return null;
+    const event = await this.callTool(parsed.tool, parsed.args, "message");
+    return { tool: `desktop.${parsed.tool}`, result: event.ok ? event.result : event.error };
   }
 
   async onHealthCheck(): Promise<boolean> {
