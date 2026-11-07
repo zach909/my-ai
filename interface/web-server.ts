@@ -47,6 +47,8 @@ import { startScreenDonor } from '../models && skills/core/data-donor.js';
 import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
 import { COMMONS_PAGE } from './commons-page.js';
+import { WEIGHTS_PAGE } from './weights-page.js';
+import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
 import { handleCommonsRoutes, withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
 import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
@@ -2965,6 +2967,12 @@ export class WebServer {
       return;
     }
 
+    // The net maker, net skill maker, weight editor and compiler: one page, same gate.
+    if (pathname === '/weights' && method === 'GET') {
+      this.sendHtml(res, WEIGHTS_PAGE);
+      return;
+    }
+
     if (pathname === '/login' && method === 'GET') {
       // Once there is an admin, everyone logs in with an account.
       this.sendHtml(res, getAccounts().hasAdmin() ? ACCOUNTS_PAGE : this.loginPage());
@@ -3159,6 +3167,21 @@ export class WebServer {
         runApproved: async (toolId, request) => {
           const { getNeuroclawSystem } = await import('../src/index.js');
           return (await getNeuroclawSystem()).pluginRegistry.runApproved(toolId, request);
+        },
+      });
+      if (handled) return;
+    }
+
+    // ── Net maker, net skill maker, weight editor, compiler ─────────────
+    // See weights-routes.ts: owner routes behind the normal gate.
+    if (isWeightsRoute(pathname)) {
+      const handled = await handleWeightsRoutes({
+        req, res, pathname, method,
+        parseBody: (r, max) => this.parseBody(r, max),
+        sendJson: (r, data, status) => this.sendJson(r, data, status),
+        base: async () => {
+          const { getNeuroclawSystem } = await import('../src/index.js');
+          return (await getNeuroclawSystem()).pipeline.ensureBrain() ?? null;
         },
       });
       if (handled) return;

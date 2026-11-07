@@ -61,6 +61,7 @@ and the permissions each OS prompts for.
 | Remote access password | yes | yes | yes | no | partly | partly |
 | Accounts | yes | yes | yes | no | partly | partly |
 | Commons | yes | yes | yes | no | partly | partly |
+| Net maker, net skill maker and weight editor | yes | yes | yes | no | partly | partly |
 | Self-improvement | partly | partly | partly | no | partly | no |
 | Desktop control | no | partly | no | no | partly | no |
 | Phone sync | no | no | no | no | yes | yes |
