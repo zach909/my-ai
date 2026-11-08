@@ -188,10 +188,8 @@ class TaskAgent {
   }
 
   train(epochs: number): void {
-    // A tight tolerance on purpose. At the net maker's default (0.2) training
-    // stops after a few milliseconds, once every output is merely near the
-    // average of the answers, and similar answers are then not told apart:
-    // measured, 1 of 6 tasks right at 0.2 and 5 of 6 at 0.01.
+    // The tolerance is tight on purpose: "met" should mean the output is close
+    // to the answer, not merely near the average of all the answers.
     this.net.trainResponses({ epochs, rounds: 1, tolerance: 0.01 });
   }
 
@@ -202,10 +200,12 @@ class TaskAgent {
 }
 
 async function makeAgent(id: string, tasks: number, dimensions: number, seed: number): Promise<TaskAgent> {
-  const neurons = Math.max(4, tasks + 1); // one drive neuron per task, then the output
+  // One drive neuron per task, one extra hidden neuron per task (measured: 28 of
+  // 40 hard numeric answers right against 20 of 40 without), then the output.
+  const neurons = Math.max(4, 2 * tasks + 1);
   const made = await netMaker(`neurons="${neurons}"`, { dimensions, seed, name: id, maxNeurons: Infinity });
   if (!made.ok || !made.net) throw new Error(`could not make agent ${id}: ${made.errors.join("; ")}`);
-  return new TaskAgent(id, made.net, neurons - 1);
+  return new TaskAgent(id, made.net, tasks);
 }
 
 // ── The four modes ───────────────────────────────────────────────────────────

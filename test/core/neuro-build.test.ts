@@ -92,6 +92,36 @@ train="responses"`;
   });
 });
 
+describe('learning many responses', () => {
+  // Distinct, word-like answers made by code (a seeded draw of syllables).
+  function phrases(n: number): string[] {
+    let a = 9;
+    const rand = () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const syl = ['ba', 'ko', 'ri', 'mu', 'te', 'sa', 'vo', 'lin', 'dor', 'pex', 'qua', 'zen', 'hal', 'fro', 'nim', 'tuk'];
+    const out = new Set<string>();
+    const word = () => Array.from({ length: 2 + Math.floor(rand() * 2) }, () => syl[Math.floor(rand() * syl.length)]).join('');
+    while (out.size < n) out.add(`${word()} ${word()}`);
+    return [...out];
+  }
+  const program = (answers: string[]) => `neurons="${2 * answers.length + 1}"\n` +
+    answers.map((r, i) => `"n${i + 1}"@input="question number ${i + 1}"\n"n${i + 1}"@response="${r}"`).join('\n') + '\ntrain';
+
+  it('holds a dozen distinct answers in one net', async () => {
+    const r = await netMaker(program(phrases(12)), { dimensions: 16 });
+    expect(r.training!.recall!.correct).toBeGreaterThanOrEqual(11);
+  });
+
+  it('holds twenty, where the delta rule it replaced as the default did not', async () => {
+    const r = await netMaker(program(phrases(20)), { dimensions: 16 });
+    expect(r.training!.recall!.correct).toBeGreaterThanOrEqual(14);
+  });
+
+  it('counts two tasks with the same answer as right, not as a miss', async () => {
+    const r = await netMaker(`neurons="5"\n"n1"@input="first"\n"n1"@response="same answer"\n"n2"@input="second"\n"n2"@response="same answer"\ntrain`, { dimensions: 16 });
+    expect(r.training!.recall!.correct).toBe(2);
+  });
+});
+
 describe('net skill maker', () => {
   it('joins the base AI, trains only its own neurons, and leaves the base weights alone', async () => {
     const base = new HyperDimensionalEngine({ neuronCount: 12, dimensions: 32, seed: 5 });
