@@ -3,11 +3,12 @@
  *
  * Syntax summary:
  *   name="example"                             — create neuron named "example"
- *   "name"@value="1.0"                         — set neuron's value
- *   "name"@vale="0.9"                          — set neuron's vale (elasticity/resistance to change)
+ *   "name"@value="0.9"                         — what the neuron is worth: stored as written, and
+ *                                                 (clamped to 0..1) how much it resists change.
+ *                                                 Old spelling @vale= means exactly the same.
  *   "name"@wave="0.3,1.57"                     — set neuron's wave: frequency, then phase in radians
- *   "name"@connections=".other*0.5+.third*0.3"  — set connections (alias: @conections=)
- *   "name"@definition="text"                   — set definition (alias: @definishon=)
+ *   "name"@connections=".other*0.5+.third*0.3"  — set connections (old spelling: @conections=)
+ *   "name"@definition="text"                   — set definition (old spelling: @definishon=)
  *   "name"@code="code"                         — attach code
  *   "name"@role="input"                        — tag as this skill's input layer (alias: "output")
  *   code@name="calc"                           — create code-to-net neuron
@@ -37,10 +38,11 @@
  * reads it back after install() to hand a skill's caller its input/output
  * neurons without needing to know their names in advance.
  *
- * @conections= and @definishon= are the DSL's canonical (deliberately
- * non-standard) spellings from the original neurolang.py; @connections=/
- * @definition= are accepted as the same primitive under a conventional
- * spelling. Both parse to the same NeuriNeuron fields.
+ * @connections=, @definition= and @value= are the spellings to write. The
+ * original design notes spelled them @conections=, @definishon= and @vale=;
+ * those are still accepted and mean exactly the same, so older programs and
+ * wiki examples keep working. Both spellings parse to the same NeuriNeuron
+ * fields.
  *
  * All neurons are connected by default (weight 0.1) unless an explicit
  * connection is specified.
@@ -690,31 +692,20 @@ export class NeuroLangInterpreter {
       }
     }
 
-    // ── "X"@value="N" — set value ───────────────────────────────────────────
+    // ── "X"@value="N" (old spelling: @vale) — what a neuron is worth ───────
+    // One setting, two spellings. The number is stored as written (`value`) and
+    // also, clamped to 0..1, as how much the neuron resists change (`vale`, which
+    // the elastic value budget reads). Until now `@value` only stored the number
+    // and `@vale` only set the elasticity, so a program written with the correct
+    // spelling had no effect on the budget.
     {
-      const m = line.match(/^"([^"]+)"\s*@\s*value\s*=\s*"([^"]+)"$/);
+      const m = line.match(/^"([^"]+)"\s*@\s*(?:value|vale)\s*=\s*"?([^"\s]+)"?$/);
       if (m) {
         const name = m[1];
         const val = parseFloat(m[2]);
         if (isNaN(val)) throw new Error(`Invalid value "${m[2]}" for neuron "${name}"`);
         const neuron = neurons.get(name) ?? this.defaultNeuron(name);
-        neuron.value = val;
-        this.explicit.value.add(name);
-        neurons.set(name, neuron);
-        return;
-      }
-    }
-
-    // ── "X"@vale="0.9" — set elasticity/resistance to change ───────────────
-    {
-      const m = line.match(/^"([^"]+)"\s*@\s*vale\s*=\s*"?(-?[0-9.]+(?:[eE]-?[0-9]+)?)"?$/);
-      if (m) {
-        const name = m[1];
-        const val = parseFloat(m[2]);
-        if (isNaN(val)) throw new Error(`Invalid vale "${m[2]}" for neuron "${name}"`);
-        const neuron = neurons.get(name) ?? this.defaultNeuron(name);
-        neuron.vale = Math.max(0, Math.min(1, val));
-        this.explicit.vale.add(name);
+        this.setWorth(neuron, val);
         neurons.set(name, neuron);
         return;
       }
@@ -858,8 +849,9 @@ export class NeuroLangInterpreter {
         } else {
           const val = parseFloat(m[2]);
           if (isNaN(val)) throw new Error(`Invalid ${m[1]} "${m[2]}" for neurons`);
-          if (m[1] === 'value') this.program.defaults.value = val;
-          else this.program.defaults.vale = Math.max(0, Math.min(1, val));
+          // value and vale are one setting (see "X"@value above): either spelling sets both.
+          this.program.defaults.value = val;
+          this.program.defaults.vale = Math.max(0, Math.min(1, val));
         }
         this.programTouched = true;
         return;
@@ -1004,6 +996,14 @@ export class NeuroLangInterpreter {
     }
 
     return connections;
+  }
+
+  /** One setting, two stored forms: the number as written, and that number clamped to 0..1 as resistance to change. */
+  private setWorth(neuron: NeuriNeuron, val: number): void {
+    neuron.value = val;
+    neuron.vale = Math.max(0, Math.min(1, val));
+    this.explicit.value.add(neuron.name);
+    this.explicit.vale.add(neuron.name);
   }
 
   /** 'now' | 'true' → frozen from the start; 'after' → frozen once trained; 'no' | 'false' → not frozen. */

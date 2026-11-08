@@ -54,7 +54,7 @@ These came from running it, not from the design.
 - **Undriven connections keep the engine's seeded random weights.** They are not set to one shared value. Identical weights everywhere would make every undriven neuron compute the same thing, and a net like that cannot learn to tell inputs apart.
 - **"Frozen" means the neuron's incoming weights are never trained or edited.** Its state still moves when the net runs.
 - **Connections** (`"a"@connections=".b*0.5"`) mean what `a` feeds, as in the skill graft.
-- **`@vale` is recorded but not applied while running.**
+- **A net's value (`@value`, old spelling `@vale`) is recorded but not applied while the net runs.** It feeds the elastic value budget when a program is installed into the live AI; the net maker's own run and training steps ignore it. `@value` also sets a neuron's starting state level when the net is built.
 - **Predict mode feeds the raw bits straight in.** It does not stream them through `ZipLoopInterface` one tick at a time.
 
 ## The weight editor

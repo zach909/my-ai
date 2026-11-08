@@ -217,8 +217,8 @@ Skills can be extended through:
 Save learned capabilities as extensions:
 ```
 name="advanced-sorting"
-vale="15"
-conections=".sorting-basics"*"0.8"+"0.3"
+value="15"
+connections=".sorting-basics"*"0.8"+"0.3"
 ```
 
 ### Net maker and net skill maker

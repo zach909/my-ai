@@ -7,9 +7,9 @@ A condensed cheat-sheet for the [[NeuroLang]] directive grammar, plus the spec-l
 | Directive | Purpose |
 |---|---|
 | `name="x"` | Create and name a neuron |
-| `"x"@vale="n"` / `"x"@value="n"` | Set elastic-core value ([[Elastic-Value-Budget]]) |
+| `"x"@value="n"` (old: `@vale`) | What the neuron is worth, and (clamped to 0..1) how much it resists change ([[Elastic-Value-Budget]]) |
 | `"x"@connections=".y/var"*"bias"+"weight"` | Explicit connection (defaults to all-to-all if omitted) |
-| `"x"@definishon="d"` / `"x"@definition="d"` | Output when the neuron alone has input |
+| `"x"@definition="d"` (old: `@definishon`) | Output when the neuron alone has input |
 | `code@name="x"` | Name a [[Code-to-Net]] import |
 | `"x"@code="src"` | Attach the source/binary to import |
 | `"netsearch"@name="x"` | Name a [[Net-Search]] definition |
@@ -17,7 +17,7 @@ A condensed cheat-sheet for the [[NeuroLang]] directive grammar, plus the spec-l
 | `train` | Run training over the contracts defined so far |
 | `kind="network"` / `kind="skill"` | A network of its own, or a skill grafted into the live AI ([[Net-Maker]]) |
 | `neurons="64"` | Make 64 neurons (`n1`..`n64`), each connected to the others |
-| `neurons@value=` / `@vale=` / `@frozen=` | Defaults for those neurons |
+| `neurons@value=` / `@frozen=` | Defaults for those neurons |
 | `"x"@frozen="now"` / `"after"` | Never trained or edited, or frozen once training is done |
 | `"x"@input="text"` | Typing this drives `x` as hard as a neuron can be driven |
 | `"x"@response="text"` | With only `x` driven, the output must say this |
@@ -30,7 +30,7 @@ A condensed cheat-sheet for the [[NeuroLang]] directive grammar, plus the spec-l
 - A value goes in double quotes. Inside one, `\"` is a quote and `\\` is a backslash: `"a"@definition="he said \"hi\""`.
 - `--` starts a comment **outside** a value; inside a value it is just text. A whole line starting with `#` is a comment.
 - Not accepted: single quotes, and upper-case keywords (`NAME=`). Keywords are lower-case.
-- Numbers may be negative or scientific (`-2`, `1e-3`). `@vale` is clamped to 0..1. A connection weight may be negative (`".b*-0.5"`), which is how one neuron inhibits another.
+- Numbers may be negative or scientific (`-2`, `1e-3`). The value is clamped to 0..1 for how much it resists change. A connection weight may be negative (`".b*-0.5"`), which is how one neuron inhibits another.
 
 ## The bare form
 
@@ -38,24 +38,21 @@ An attribute on a line of its own applies to the neuron the last `name="x"` (or 
 
 ```
 name="hidden_layer"
-vale="5"
-conections=".input_layer"*"0.5"+"1.0"
+value="5"
+connections=".input_layer"*"0.5"+"1.0"
 ```
 
-is the same as `"hidden_layer"@vale="5"` and `"hidden_layer"@connections=".input_layer*0.5+1.0"`. A bare attribute before any `name=` is an error. In a connection, the numbers after `*` and `+` add: `*0.5+1.0` is a weight of 1.5.
+is the same as `"hidden_layer"@value="5"` and `"hidden_layer"@connections=".input_layer*0.5+1.0"`. A bare attribute before any `name=` is an error. In a connection, the numbers after `*` and `+` add: `*0.5+1.0` is a weight of 1.5.
 
 ## Warnings
 
 A program that parses can still carry `warnings`: a neuron mentioned but never declared when `neurons="N"` was used (usually a typo), a `kind` given twice, a `neurons` count given twice, and two neurons with the same `@input`. The net maker passes them on.
 
-## Spec-literal vs. dialect spelling
+## Spellings
 
-Two spellings exist for the same two directives, and both are accepted everywhere:
+Write the correct spellings: `@value`, `@connections`, `@definition`. The original design notes spelled them `@vale`, `@conections` and `@definishon`. Those older spellings are still accepted and mean **exactly** the same, so older programs and notes keep working.
 
-- `@vale=` (dialect) and `@value=` (spec-literal, matching the design notes' exact wording) are aliases for the same elastic-core value directive.
-- `@definishon=` (dialect) and `@definition=` (spec-literal) are aliases for the same output-definition directive.
-
-This isn't an accident of two competing implementations — `neurolang.py`'s parser explicitly accepts both spellings for the same field, added specifically so a program written against the design notes' literal wording and one written in the dialect the rest of the codebase (and `wiki/NeuroLang.md`'s examples) uses both parse identically. `test_core.py`'s `test_neurolang_spec_aliases` verifies both spellings produce the same neuron state.
+`@value` and `@vale` are one setting. The number is stored as written and also, clamped to 0..1, as how much the neuron resists change, which is what the [[Elastic-Value-Budget]] reads. (Until this was unified, the TypeScript parser stored `@value` and applied `@vale` as two separate things, so a program written with the correct spelling had no effect on the budget. The Python `asi_core` parser always treated them as one.)
 
 The `@connections=` bias/weight numbers follow the same rule: the design notes quote them (`*"bias"+"weight"`), so the parser accepts `*"0.5"+"0.3"`, `*0.5+0.3`, or a mix — all install the same weight.
 
@@ -77,4 +74,4 @@ The `@connections=` bias/weight numbers follow the same rule: the design notes q
 
 ---
 
-*Two spellings, one parser, one behaviour — write the design notes' literal syntax or the dialect, interchangeably.*
+*One setting, two spellings: write the correct one, and the older one still works.*

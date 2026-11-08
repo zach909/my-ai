@@ -250,3 +250,34 @@ definishon="final_output"`);
     expect(p.printOutputs[0]).toContain('input:"hi"');
   });
 });
+
+describe('@value and @vale are one setting', () => {
+  const parse = (src: string) => new NeuroLangInterpreter().parse(src);
+
+  it('either spelling stores the number and sets the elasticity', async () => {
+    for (const spelling of ['value', 'vale']) {
+      const n = (await parse(`name="a"\n"a"@${spelling}="0.8"`)).neurons.get('a')!;
+      expect(n.value).toBe(0.8);
+      expect(n.vale).toBe(0.8);
+    }
+  });
+
+  it('keeps the number as written but clamps the elasticity to 0..1', async () => {
+    const p = await parse('"a"@value="10"\n"b"@vale="-2"\n"c"@value="1e-2"');
+    expect([p.neurons.get('a')!.value, p.neurons.get('a')!.vale]).toEqual([10, 1]);
+    expect([p.neurons.get('b')!.value, p.neurons.get('b')!.vale]).toEqual([-2, 0]);
+    expect(p.neurons.get('c')!.vale).toBe(0.01);
+  });
+
+  it('still refuses a number that is not one', async () => {
+    const p = await parse('"a"@value="abc"');
+    expect(p.errors[0]).toMatch(/Invalid value/);
+  });
+
+  it('works in the bare form and as a default for made neurons, with an explicit one winning', async () => {
+    const bare = await parse('name="a"\nvale="0.4"\nname="b"\nvalue="0.6"');
+    expect([bare.neurons.get('a')!.vale, bare.neurons.get('b')!.vale]).toEqual([0.4, 0.6]);
+    const made = await parse('neurons="3"\nneurons@vale="0.5"\n"n2"@value="0.9"');
+    expect([made.neurons.get('n1')!.value, made.neurons.get('n1')!.vale, made.neurons.get('n2')!.vale]).toEqual([0.5, 0.5, 0.9]);
+  });
+});
