@@ -59,6 +59,7 @@ export async function packageLinux({ stageDir, outDir }) {
     chmodSync(path.join(opt, 'runtime', 'node'), 0o755);
     if (existsSync(path.join(opt, 'runtime', 'neuroclaw-window'))) chmodSync(path.join(opt, 'runtime', 'neuroclaw-window'), 0o755);
     writeFile(path.join(root, 'usr', 'bin', APP_ID), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/desktop-launcher.mjs "$@"\n`, 0o755);
+    writeFile(path.join(root, 'usr', 'bin', 'osai'), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/osai.mjs "$@"\n`, 0o755);
     writeFile(path.join(root, 'usr', 'share', 'applications', `${APP_ID}.desktop`), desktopEntry({ exec: APP_ID }));
     for (const { size, png } of pngs) {
       const f = path.join(root, 'usr', 'share', 'icons', 'hicolor', `${size}x${size}`, 'apps', `${APP_ID}.png`);
@@ -103,6 +104,7 @@ export async function packageLinux({ stageDir, outDir }) {
     chmodSync(path.join(root, 'runtime', 'node'), 0o755);
     if (existsSync(path.join(root, 'runtime', 'neuroclaw-window'))) chmodSync(path.join(root, 'runtime', 'neuroclaw-window'), 0o755);
     writeFile(path.join(root, APP_ID), '#!/bin/sh\nhere=$(dirname "$(readlink -f "$0")")\nexec "$here/runtime/node" "$here/app/scripts/desktop-launcher.mjs" "$@"\n', 0o755);
+    writeFile(path.join(root, 'osai'), '#!/bin/sh\nhere=$(dirname "$(readlink -f "$0")")\nexec "$here/runtime/node" "$here/app/scripts/osai.mjs" "$@"\n', 0o755);
     writeFile(path.join(root, `${APP_ID}.desktop`), desktopEntry({ exec: '/path/to/neuroclaw' }));
     writeFile(path.join(root, 'README.txt'), `${APP_NAME} ${info.version}\n\nRun ./neuroclaw (double-click it in your file manager). To add it to your application menu, copy\nneuroclaw.desktop to ~/.local/share/applications/, then change the Exec= line to the full path of ./neuroclaw.\nIt opens its own window using your system's WebKitGTK (package libwebkit2gtk-4.1-0 on Debian and Ubuntu); no browser is needed.\nIt installs nothing and needs no root. Remove it by deleting this folder (your data stays in ~/.neuroclaw).\n`);
     for (const { size, png } of pngs.filter((p) => p.size === 256)) writeFile(path.join(root, `${APP_ID}.png`), png);

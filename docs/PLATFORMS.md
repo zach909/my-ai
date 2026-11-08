@@ -64,7 +64,7 @@ and the permissions each OS prompts for.
 | Commons | yes | yes | yes | no | partly | partly |
 | Net maker, net skill maker and weight editor | yes | yes | yes | no | partly | partly |
 | Self-improvement | partly | partly | partly | no | partly | no |
-| Desktop control | no | partly | no | no | partly | no |
+| Desktop control | partly | partly | partly | no | partly | no |
 | Phone sync | no | no | no | no | yes | yes |
 | Phone apps | no | no | no | no | yes | yes |
 | Desktop app (launcher and installers) | yes | yes | yes | no | no | no |
@@ -97,7 +97,7 @@ and the permissions each OS prompts for.
 | offlineChat | yes | yes | yes | no | yes | yes |
 | backgroundService | partly | partly | partly | no | partly | no |
 | fileAccess | yes | yes | yes | no | partly | partly |
-| desktopControl | no | partly | no | no | partly | no |
+| desktopControl | partly | partly | partly | no | partly | no |
 | systemTray | no | no | no | no | partly | no |
 | notifications | yes | yes | yes | partly | yes | yes |
 | voiceInput | partly | partly | partly | partly | yes | yes |

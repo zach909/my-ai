@@ -308,6 +308,7 @@ test('macOS: the bundle is laid out as a standard .app with a valid Info.plist, 
     assert.equal(plist, infoPlist({ version: V.replace(/-.*/, ''), build: String(Number(V.split('.')[0]) * 10000 + Number(V.split('.')[1]) * 100 + Number(V.split('.')[2].replace(/-.*/, ''))) }));
     for (const [k, v] of [['CFBundleIdentifier', BUNDLE_ID], ['CFBundleExecutable', 'NeuroClaw'], ['CFBundleIconFile', 'AppIcon'], ['CFBundlePackageType', 'APPL'], ['CFBundleShortVersionString', V.replace(/-.*/, '')]]) assert.match(plist, new RegExp(`<key>${k}</key>\\s*<string>${v.replace(/\./g, '\\.')}</string>`), k);
     assert.match(plist, /<key>NSHighResolutionCapable<\/key>\s*<true\/>/);
+    assert.deepEqual([...plist.matchAll(/<key>(\w*UsageDescription)<\/key>/g)].map((m) => m[1]), ['NSAppleEventsUsageDescription'], 'the only prompt text is the one for the AI OS button clicker (System Events); no camera, microphone, location or contacts text');
     assert.doesNotMatch(plist, /NSAppTransportSecurity|NSAllowsLocalNetworking/, 'no loopback exception: the app opens no network connection of its own');
     assert.doesNotMatch(plist, /UsageDescription/, 'no permission prompts are declared: none are used');
     if (spawnSync('python3', ['--version']).status === 0) {

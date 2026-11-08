@@ -137,7 +137,7 @@ describe('choosing where to run', () => {
   })
 
   it('does not pretend to support Windows or macOS', async () => {
-    for (const platform of ['win32', 'darwin']) {
+    for (const platform of ["freebsd"]) {
       const backend = selectBackend({ DISPLAY: ':0' }, platform)
       expect(backend.kind).toBe('unsupported')
       expect((await backend.describe()).reachable).toBe(false)

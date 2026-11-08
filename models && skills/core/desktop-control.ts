@@ -37,6 +37,7 @@ import {
   type DesktopBackend,
   type DesktopFeature,
 } from "./desktop/backends.js";
+import { agentPids } from "./desktop/native.js";
 
 export { DesktopError, NoDisplay, DisplayUnreachable, Unsupported };
 export type { BackendKind, DesktopFeature };
@@ -202,7 +203,8 @@ export class DesktopControl {
     }
 
     const { spawn } = await import("node:child_process");
-    const terminalLike = /(terminal|xterm|konsole|alacritty|kitty)/.test(command);
+    // The --title marker is an X11 terminal flag; on Windows and macOS ownership is by process id instead.
+    const terminalLike = process.platform === "linux" && /(terminal|xterm|konsole|alacritty|kitty)/.test(command);
     const finalArgs = terminalLike ? ["--title", AGENT_WINDOW_MARKER, ...args] : args;
 
     const child = spawn(command, finalArgs, { detached: true, stdio: "ignore" });
@@ -213,6 +215,9 @@ export class DesktopControl {
     });
     if (failed || !child.pid) throw new DesktopError(`Could not launch "${command}"${failed ? `: ${failed.message}` : "."}`);
     child.unref();
+    // Windows and macOS decide which windows are the agent's by process id (desktop/native.ts).
+    agentPids.add(child.pid);
+    child.once("exit", () => agentPids.delete(child.pid));
     return { pid: child.pid, marked: terminalLike };
   }
 
