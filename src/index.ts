@@ -482,14 +482,11 @@ export class NeuroclawSystem {
     this.transfer = new KnowledgeTransfer();
     this.selfModel = new SelfModel();
     this.improvement = new SelfImprovement();
+    // The reasoner has no forced stages (see reasoning-engine.ts and train.md):
+    // it recalls what memory holds and hands the problem to the hive, with the
+    // neural runner as the fallback when no hive agent matches.
     this.reasoner = new ReasoningEngine({
       recall: (q) => this.memory.retrieve(q, { topK: 5 }).map(h => h.item.content),
-      lessons: (task) => this.mistakes.lessons(task),
-      // ASI §8 requires recursive intelligence to integrate with the existing
-      // Hive Mind, not just the single neural runner — each subproblem is
-      // delegated to whichever agent (planner/coder/reviewer) best matches its
-      // content; the runner is a fallback only when no agent matches at all
-      // (delegate() itself still runs each agent's mind through the runner).
       solveSub: async (sub) => {
         this.ensureDefaultTeam();
         // §16/§23 default-deny: only enforce a capability requirement for
@@ -499,40 +496,11 @@ export class NeuroclawSystem {
         const routed = await this.hive.delegate(sub, requireCapability ? { requireCapability } : undefined);
         if (routed) {
           this.lastDelegations.set(sub, routed.agent.id);
-          // ASI §8/§13: "combine information across the hive" — publish the
-          // result to the shared blackboard under the subproblem itself, so a
-          // later subproblem (in this or a future solve()) that revisits the
-          // same ground can see what another agent already produced, instead
-          // of every delegated result vanishing the moment it's returned.
+          // ASI §8/§13: publish the result to the shared blackboard so other
+          // agents can see what was already produced.
           routed.agent.share(sub, routed.output);
         }
         return routed ? routed.output : this.runner.generate(sub);
-      },
-      competence: (problem) => this.selfModel.competence(classifyDomain(problem)),
-      // ASI §1/§4: don't just report a knowledge gap — actively search the
-      // knowledge graph for it before giving up on a missing term, and
-      // "combine information from multiple memories" (§4) by following each
-      // direct hit's own outward relations one hop further, so a term that
-      // only has an indirect connection (e.g. found via a related concept,
-      // not a definition mentioning it verbatim) still resolves.
-      search: (term) => {
-        const hits = this.knowledge.search(term, 2);
-        const direct = hits.map(h => h.concept.definition || h.concept.name);
-        const combined = hits.flatMap(h => this.knowledge.follow(h.concept.name, [], 1).map(c => c.definition || c.name));
-        return Array.from(new Set([...direct, ...combined])).filter(Boolean);
-      },
-      // ASI §5/§12: bias approach scoring by discovered outcome regularities
-      // (refreshed after each solve() — see refreshApproachBias()).
-      approachBias: (strategy) => this.approachBiasMap.get(strategy) ?? 1,
-      // ASI §11: when search can't resolve a gap, try a creative combination
-      // of the still-missing terms instead of only ever reporting the gap.
-      combine: (a, b) => this.discovery.combine(a, b),
-      // ASI §2 step 6/§10: predict the consequence of each candidate approach
-      // through the real PredictionEngine, so a genuinely dangerous approach
-      // (not just a task-wide flat penalty) is demoted specifically.
-      predictConsequence: (approachAction) => {
-        const p = this.predictor.predict(approachAction);
-        return { dangerous: p.outcomes.some(o => o.dangerous), likelihood: p.mostLikely.likelihood, assumptions: p.assumptions };
       },
     });
     // Autonomous learning (ASI §3): decides store/update/conflict-preserve/
@@ -2474,26 +2442,10 @@ export class NeuroclawSystem {
     // ASI §7: structurally-similar past problems from other domains + their method.
     const transferHits = this.transfer.transfer(problem, { domain });
     const transfers = transferHits.map(t => `${t.source.domain}: ${t.source.method}`);
-    // ASI §1/§2/§8: reason (memory + mistakes + hive + self-model via injected
-    // deps). The strongest cross-domain transfer is offered as a real,
-    // choosable approach (not just the `transfers` metadata above), so the
-    // reasoner can genuinely combine knowledge from another field into the
-    // solution instead of only ever using a single specialized approach.
-    // ASI §7 explicitly asks for using knowledge from multiple domains
-    // *simultaneously*, not just the single best cross-domain match with the
-    // rest silently discarded. Take the best hit, then the next-best hit from
-    // a genuinely *different* domain (capped at two — combining more starts
-    // diluting coherence rather than adding real value).
-    const transferHints: Array<{ domain: string; method: string; similarity: number }> = [];
-    if (transferHits[0]) {
-      transferHints.push({ domain: transferHits[0].source.domain, method: transferHits[0].source.method, similarity: transferHits[0].similarity });
-      const secondDomainHit = transferHits.slice(1).find(t => t.source.domain !== transferHits[0].source.domain);
-      if (secondDomainHit) transferHints.push({ domain: secondDomainHit.source.domain, method: secondDomainHit.source.method, similarity: secondDomainHit.similarity });
-    }
-    const r = await this.reasoner.reason(problem, {
-      depth: opts?.depth ?? 1,
-      transferHints: transferHints.length > 0 ? transferHints : undefined,
-    });
+    // Reason: no forced stages (see reasoning-engine.ts and train.md). The
+    // cross-domain `transfers` above are reported as metadata only; they are
+    // not fed in as a scripted "approach".
+    const r = await this.reasoner.reason(problem, { depth: opts?.depth ?? 1 });
     // ASI §8/§12: "assign subproblems to specialized systems... re-evaluate
     // the complete solution" implies feeding the outcome back to whoever did
     // the work, not just to the reasoning approach as a whole. HiveMind.reward()
@@ -2577,26 +2529,6 @@ export class NeuroclawSystem {
       // A verified solution is a reusable method (§7) and semantic knowledge (§4).
       this.transfer.register(problem, domain, r.chosen);
       this.knowledge.integrate(r.objective, problem);
-      // §4: "connect new information to related existing information" was
-      // previously only ever applied at the coarsest level — the overall
-      // objective — even though a verified solve() often produces several
-      // genuinely distinct, individually reusable pieces of knowledge (one
-      // per subproblem). Each subproblem's own result is now integrated too,
-      // so it becomes a real, findable, auto-linked concept in its own
-      // right, not knowledge that only survives folded into the top-level
-      // summary.
-      // Skip ReasoningEngine's own synthetic fallback subproblems
-      // ("analyze: <full problem>" / "solve: <full problem>", used when the
-      // problem couldn't be split into 2+ genuine parts — see decompose()):
-      // each embeds the *entire* problem text verbatim, so integrating them
-      // as concepts would register a unique, near-duplicate, low-value
-      // concept per single-part query instead of real, reusable knowledge —
-      // graph bloat with no genuine "distinct reusable piece of knowledge"
-      // behind it (caught in review on the PR that introduced this loop).
-      for (const sub of r.subresults) {
-        if (/^(analyze|solve):/i.test(sub.subproblem)) continue;
-        this.knowledge.integrate(sub.subproblem, sub.result);
-      }
       // ASI §6: this exact task has now succeeded — any prior recorded failure
       // for it is resolved, not left counting toward repeated() forever (which
       // would otherwise keep demoting an approach that has since improved).
