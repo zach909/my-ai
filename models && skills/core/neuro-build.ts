@@ -651,14 +651,14 @@ export async function makeFromSource(source: string, opts: MakerOptions = {}): P
   const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
   const kind: NeuriKind = parsed.program?.kind ?? "network";
-  return build(parsed.neurons, parsed.errors, parsed.program, kind, opts);
+  return build(parsed.neurons, parsed.errors, parsed.program, kind, opts, parsed.warnings);
 }
 
 /** NET MAKER: a network of its own, whatever the program says its kind is. */
 export async function netMaker(source: string, opts: MakerOptions = {}): Promise<MakerResult> {
   const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
-  const result = await build(parsed.neurons, parsed.errors, parsed.program, "network", opts);
+  const result = await build(parsed.neurons, parsed.errors, parsed.program, "network", opts, parsed.warnings);
   if (parsed.program?.kind === "skill") result.warnings.push('the program says kind="skill" but this is the net maker, so it was made as a network of its own');
   return result;
 }
@@ -667,7 +667,7 @@ export async function netMaker(source: string, opts: MakerOptions = {}): Promise
 export async function netSkillMaker(source: string, base: HyperDimensionalEngine, opts: MakerOptions = {}): Promise<MakerResult> {
   const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
-  const result = await build(parsed.neurons, parsed.errors, parsed.program, "skill", { ...opts, base });
+  const result = await build(parsed.neurons, parsed.errors, parsed.program, "skill", { ...opts, base }, parsed.warnings);
   if (parsed.program?.kind === "network") result.warnings.push('the program says kind="network" but this is the net skill maker, so it was grafted into the base AI as a skill');
   return result;
 }
@@ -678,8 +678,9 @@ async function build(
   program: NeuriProgram | undefined,
   kind: NeuriKind,
   opts: MakerOptions,
+  parseWarnings: string[] = [],
 ): Promise<MakerResult> {
-  const warnings: string[] = [];
+  const warnings: string[] = [...parseWarnings];
   if (parseErrors.length > 0) return fail(kind, parseErrors);
   const names = Array.from(neurons.keys());
   if (names.length < 2) return fail(kind, ["need at least two neurons: one to be driven and one to answer"]);

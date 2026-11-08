@@ -99,7 +99,7 @@ definishon="final_output"
 ### Code-to-Net Example
 
 ```
-code@binary_import="my_function"
+code@name="binary_import"
 "binary_import"@code="0x89504E47..."
 ```
 

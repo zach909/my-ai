@@ -217,7 +217,6 @@ Skills can be extended through:
 Save learned capabilities as extensions:
 ```
 name="advanced-sorting"
-expert="coding"
 vale="15"
 conections=".sorting-basics"*"0.8"+"0.3"
 ```
@@ -230,7 +229,7 @@ A skill can be made from a short program (`kind="skill"`) and grafted into the l
 
 Import binary code as skill components:
 ```
-code@sortlib="sorting_library"
+code@name="sortlib"
 "sortlib"@code="0x7F454C46..."
 ```
 

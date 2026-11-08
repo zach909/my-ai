@@ -25,6 +25,29 @@ A condensed cheat-sheet for the [[NeuroLang]] directive grammar, plus the spec-l
 | `train="responses"` / `"predict"` / `"random"` | Train the responses, learn to predict given text, or predict generated content |
 | `train@epochs=` / `@rounds=` / `@seed=` / `@text=` | How long, how many rounds, the random seed, the text to predict |
 
+## Text, quotes and comments
+
+- A value goes in double quotes. Inside one, `\"` is a quote and `\\` is a backslash: `"a"@definition="he said \"hi\""`.
+- `--` starts a comment **outside** a value; inside a value it is just text. A whole line starting with `#` is a comment.
+- Not accepted: single quotes, and upper-case keywords (`NAME=`). Keywords are lower-case.
+- Numbers may be negative or scientific (`-2`, `1e-3`). `@vale` is clamped to 0..1. A connection weight may be negative (`".b*-0.5"`), which is how one neuron inhibits another.
+
+## The bare form
+
+An attribute on a line of its own applies to the neuron the last `name="x"` (or `code@name="x"`) opened, as in the older design notes:
+
+```
+name="hidden_layer"
+vale="5"
+conections=".input_layer"*"0.5"+"1.0"
+```
+
+is the same as `"hidden_layer"@vale="5"` and `"hidden_layer"@connections=".input_layer*0.5+1.0"`. A bare attribute before any `name=` is an error. In a connection, the numbers after `*` and `+` add: `*0.5+1.0` is a weight of 1.5.
+
+## Warnings
+
+A program that parses can still carry `warnings`: a neuron mentioned but never declared when `neurons="N"` was used (usually a typo), a `kind` given twice, a `neurons` count given twice, and two neurons with the same `@input`. The net maker passes them on.
+
 ## Spec-literal vs. dialect spelling
 
 Two spellings exist for the same two directives, and both are accepted everywhere:
