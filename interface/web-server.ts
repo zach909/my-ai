@@ -53,6 +53,8 @@ import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
 import { handleCommonsRoutes, withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
 import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
+import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
+import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
@@ -3179,6 +3181,17 @@ export class WebServer {
       if (handled) return;
     }
 
+    // ── Memory topics: the folder-tree memory the agent files into ──────
+    // See memory-topics-routes.ts: behind the normal gate, per person.
+    if (isMemoryTopicsRoute(pathname)) {
+      const handled = await handleMemoryTopicsRoutes({
+        req, res, pathname, method, url: parsedUrl,
+        parseBody: (r, max) => this.parseBody(r, max),
+        sendJson: (r, data, status) => this.sendJson(r, data, status),
+      });
+      if (handled) return;
+    }
+
     // ── Risky tools, approvals, complete access, auto-continue ──────────
     // See safety-routes.ts: owner routes behind the normal gate.
     if (isSafetyRoute(pathname)) {
@@ -4054,9 +4067,10 @@ export class WebServer {
         const { getNeuroclawSystem } = await import('../src/index.js');
         const system = await getNeuroclawSystem();
         const memories = system.memory.forgetAll();
+        const topicNotes = new MemoryFolders().forgetAll();
         const threads = this.chatHistory.deleteAllThreads();
         const rooms = getSharedChatStore().deleteAllRooms();
-        this.sendJson(res, { memories, threads, rooms });
+        this.sendJson(res, { memories, topicNotes, threads, rooms });
       } catch (err) {
         this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
       }

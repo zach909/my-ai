@@ -26,6 +26,7 @@ import { CodingExtension } from "./extensions/coding.js";
 import { ImageExtension, VideoExtension, GameExtension, SelfHealExtension, SkillMakerExtension, PluginMakerExtension, UniversalLanguageSkill } from "./extensions/index.js";
 import { ResearchPlugin } from "./research.js";
 import { WikiPlugin } from "./wiki.js";
+import { MemoryTopicsPlugin } from "./memory-topics.js";
 import { TerminalPlugin } from "./terminal.js";
 import { DesktopPlugin } from "./desktop.js";
 import { ToolsPlugin } from "./tools.js";
@@ -63,6 +64,7 @@ export { CodingExtension } from "./extensions/coding.js";
 export { ImageExtension, VideoExtension, GameExtension, SelfHealExtension, SkillMakerExtension, PluginMakerExtension, UniversalLanguageSkill } from "./extensions/index.js";
 export { ResearchPlugin } from "./research.js";
 export { WikiPlugin } from "./wiki.js";
+export { MemoryTopicsPlugin } from "./memory-topics.js";
 export { TerminalPlugin } from "./terminal.js";
 export { DesktopPlugin } from "./desktop.js";
 export { ToolsPlugin } from "./tools.js";
@@ -117,6 +119,7 @@ export function createPluginInstance(
   if (lower.includes("language") || lower.includes("universal-language")) return new UniversalLanguageSkill(definition, sharedMesh);
   if (lower === "research") return new ResearchPlugin(definition);
   if (lower === "wiki") return new WikiPlugin(definition);
+  if (lower === "memory-topics" || lower === "memory topics") return new MemoryTopicsPlugin(definition);
   if (lower === "terminal") return new TerminalPlugin(definition);
   if (lower === "tools") return new ToolsPlugin(definition);
   if (lower === "store") return new StorePlugin(definition);
@@ -161,6 +164,8 @@ const pluginExtensions: Record<string, PluginDefinition> = {
   "universal-language-skill": { id: "universal-language-skill", name: "Universal Language Skill", type: "skill-expert", capabilities: ["language-support", "code-detection", "neuron-clusters"] },
   research: { id: "research", name: "Research", type: "api-connection", capabilities: ["memory-search", "drive-search", "web-search"] },
   wiki: { id: "wiki", name: "Wiki", type: "api-connection", capabilities: ["wiki"] },
+  // Memory as a tree of topic folders with notes in them, which the agent files into, updates and searches itself.
+  "memory-topics": { id: "memory-topics", name: "Memory Topics", type: "api-connection", capabilities: ["memory-topics", "memory-search"] },
   // Already referenced as a dispatch candidate in plugin_manager/registry.ts's
   // intentToPlugins `command` bucket (['self-heal', 'terminal', 'file-system'])
   // but never actually implemented/registered on the TS side -- 'terminal'

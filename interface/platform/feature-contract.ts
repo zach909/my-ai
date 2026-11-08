@@ -67,6 +67,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/long-term-memory.test.ts'), v('test/core/delete-everything.test.ts')],
   },
   {
+    id: 'memory-topics', title: 'Memory topics', description: 'Memory as a folder tree of topic notes the agent files into, updates and searches itself.',
+    implementation: ['models && skills/core/memory-folders.ts', 'plugins/memory-topics.ts', 'interface/memory-topics-routes.ts'],
+    routes: ['GET /api/memory-topics', 'GET /api/memory-topics/search', 'GET /api/memory-topics/note', 'PUT /api/memory-topics/note', 'POST /api/memory-topics/append', 'POST /api/memory-topics/move', 'DELETE /api/memory-topics'],
+    needs: ENGINE, tests: [v('test/core/memory-folders.test.ts')],
+  },
+  {
     id: 'reasoning', title: 'Reasoning engine', description: 'OneBrain neural mesh, hyperdimensional memory, experts and the Zip Loop.',
     implementation: ['models && skills/llm.js', 'models && skills/core/unified-brain.ts', 'models && skills/onebrain/model.json'],
     routes: ['GET /api/neurons', 'POST /api/zip-loop/run', 'POST /api/zip-loop/file'],
@@ -338,7 +344,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))

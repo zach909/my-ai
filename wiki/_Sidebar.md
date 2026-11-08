@@ -25,6 +25,7 @@
 ## Extension System
 - [[Builder|Builder]]
 - [[Plugins|Plugins]]
+- [[Memory-Topics|Memory Topics]]
 - [[Skills|Skills]]
 - [[Code-to-Net|Code-to-Net]]
 - [[Net Maker|Net-Maker]]

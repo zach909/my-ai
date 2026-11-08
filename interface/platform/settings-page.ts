@@ -334,7 +334,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
     del.addEventListener('click', async function () {
       if (confirmBox.value !== 'delete everything') return say('Type "delete everything" exactly to confirm.', 'err');
       del.disabled = true;
-      try { var r = await api('/api/memory/all', { method: 'DELETE', body: { confirm: 'delete everything' } }); try { localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } confirmBox.value = ''; say('Forgot ' + r.memories + ' memories, ' + r.threads + ' chats and ' + r.rooms + ' rooms.', 'ok'); }
+      try { var r = await api('/api/memory/all', { method: 'DELETE', body: { confirm: 'delete everything' } }); try { localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } confirmBox.value = ''; say('Forgot ' + r.memories + ' memories, ' + (r.topicNotes || 0) + ' topic notes, ' + r.threads + ' chats and ' + r.rooms + ' rooms.', 'ok'); }
       catch (e) { say(e.message, 'err'); } finally { del.disabled = false; }
     });
     panel.replaceChildren(
