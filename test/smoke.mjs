@@ -3166,125 +3166,20 @@ async function testAGIModules() {
   check(predicted.some(t => t.to === 'fly'), 'KnowledgeGraph: predictProperties() carries a shared trait to a brand-new instance');
   check(kg.instancesOf('bird').some(c => c.name === 'finch'), 'KnowledgeGraph: predictProperties() registers the new instance as a category member');
 
-  // ReasoningEngine (ASI §2/§8): decompose, delegate, verify, recurse.
+  // ReasoningEngine: no forced stages (see train.md). It recalls what memory
+  // holds and hands the problem to the solver, nothing else.
   const { ReasoningEngine } = await load('models && skills/core/reasoning-engine.js');
-  const re = new ReasoningEngine({ recall: () => ['a relevant fact'], lessons: () => [], solveSub: (s) => `solved(${s})` });
-  const rr = await re.reason('analyze the data and build a model');
-  check(rr.subproblems.length >= 2, 'ReasoningEngine: decomposes a problem into subproblems');
-  check(rr.subresults.every(s => s.result.startsWith('solved(')), 'ReasoningEngine: delegates each subproblem to the solver');
-  check(rr.verified && rr.confidence > 0 && rr.confidence <= 1, 'ReasoningEngine: verifies and reports bounded confidence');
-  check(rr.trace.some(t => t.kind === 'objective') && rr.approaches.length >= 2, 'ReasoningEngine: records a trace and compares approaches');
-  const rr2 = await new ReasoningEngine({}).reason('foo and bar', { depth: 1 });
-  check(rr2.subresults.length >= 2, 'ReasoningEngine: recurses on subproblems when no external solver is given');
-
-  // ReasoningEngine (ASI §1): recognize incomplete knowledge, then actively seek it.
-  const noSearch = await new ReasoningEngine({ recall: () => [] }).reason('what is quixotic');
-  check(noSearch.missing.includes('quixotic'), 'ReasoningEngine: an unrecalled term is recognized as missing');
-  const withSearch = await new ReasoningEngine({
-    recall: () => [],
-    search: (term) => (term === 'quixotic' ? ['quixotic: idealistic and impractical'] : []),
-  }).reason('what is quixotic');
-  check(!withSearch.missing.includes('quixotic'), 'ReasoningEngine: a resolvable gap is actively searched for and no longer missing');
-  check(withSearch.soughtAndResolved.includes('quixotic'), 'ReasoningEngine: records which missing terms were successfully resolved');
-  check(withSearch.available.some(a => a.includes('idealistic')), 'ReasoningEngine: search results become available information');
-  const partialSearch = await new ReasoningEngine({
-    recall: () => [],
-    search: (term) => (term === 'quixotic' ? ['quixotic: idealistic'] : []),
-  }).reason('what is quixotic versus zorbnak');
-  check(partialSearch.missing.includes('zorbnak') && !partialSearch.missing.includes('quixotic'), 'ReasoningEngine: an unresolvable term stays genuinely missing while a resolvable one does not');
-
-  // ReasoningEngine (ASI §5/§12): a discovered bias against an approach changes which one is chosen.
-  const unbiased = await new ReasoningEngine({ recall: () => ['a fact'] }).reason('build and test the module');
-  check(unbiased.chosen === 'decompose', 'ReasoningEngine: decompose wins by default for a multi-part task');
-  const biasedAgainstDecompose = await new ReasoningEngine({
-    recall: () => ['a fact'],
-    approachBias: (s) => (s === 'decompose' ? 0.1 : 1),
-  }).reason('build and test the module');
-  check(biasedAgainstDecompose.chosen !== 'decompose', 'ReasoningEngine: a strong bias against an approach changes which one is chosen');
-
-  // ReasoningEngine (ASI §2 step 10): revise — a failed subproblem is
-  // re-decomposed and retried, not just reported as a mistake. Raw subproblems
-  // always fail here; only the "analyze:"/"solve:" fallback decomposition
-  // (which decompose() always produces for a connective-free subproblem)
-  // succeeds, so any pass requires the real revision path to run.
-  const flaky = (sub) => (/^(analyze|solve):/.test(sub) ? `solved(${sub})` : '[unsolved: needs more detail]');
-  const noRevision = await new ReasoningEngine({ solveSub: flaky }).reason('investigate the bug and fix the issue', { depth: 0 });
-  check(!noRevision.verified && noRevision.revised.length === 0, 'ReasoningEngine: without revision (depth 0), failed subproblems stay failed');
-  const withRevision = await new ReasoningEngine({ solveSub: flaky }).reason('investigate the bug and fix the issue', { depth: 1 });
-  check(withRevision.revised.length === 2, 'ReasoningEngine: revise() re-decomposes each failed subproblem and retries');
-  check(withRevision.verified, 'ReasoningEngine: a solution that would have failed is verified after successful revision');
-  check(withRevision.subresults.every(s => !/\[(error|unsolved|base):/i.test(s.result)), 'ReasoningEngine: the revised subresults replace the original failures');
-
-  // ReasoningEngine (ASI §1/§7): a cross-domain transfer is a real, choosable
-  // approach, not just reported metadata alongside the result.
-  const withTransfer = await new ReasoningEngine({}).reason('build and test the system', {
-    transferHints: [{ domain: 'engineering', method: 'modular pipeline design', similarity: 0.9 }],
-  });
-  check(withTransfer.approaches.some(a => a.strategy === 'transfer'), 'ReasoningEngine: a transfer hint becomes a real candidate approach');
-  check(withTransfer.chosen === 'transfer', 'ReasoningEngine: a strong cross-domain transfer can actually be chosen, not just reported');
-  check(withTransfer.result.includes('modular pipeline design') && withTransfer.result.includes('engineering'), 'ReasoningEngine: the result reflects which method was transferred and from where');
-  const withoutTransfer = await new ReasoningEngine({}).reason('build and test the system');
-  check(!withoutTransfer.approaches.some(a => a.strategy === 'transfer'), 'ReasoningEngine: no transfer candidate exists when no hint is given');
-
-  // ReasoningEngine (ASI §7): "use knowledge from multiple domains
-  // simultaneously" -- two hints from genuinely different domains combine
-  // into one real approach naming both methods, not just the single best
-  // match with the second silently discarded.
-  const withMultiTransfer = await new ReasoningEngine({}).reason('build and test the system', {
-    transferHints: [
-      { domain: 'engineering', method: 'modular pipeline design', similarity: 0.9 },
-      { domain: 'physics', method: 'thermal equilibrium modeling', similarity: 0.8 },
-    ],
-  });
-  const multiApproach = withMultiTransfer.approaches.find(a => a.strategy === 'transfer');
-  check(!!multiApproach && multiApproach.description.includes('modular pipeline design') && multiApproach.description.includes('thermal equilibrium modeling'),
-    'ReasoningEngine: a combined transfer approach names methods from both domains, not just the first');
-  check(multiApproach.description.includes('engineering') && multiApproach.description.includes('physics'),
-    'ReasoningEngine: the combined approach names both source domains');
-  check(withMultiTransfer.chosen === 'transfer' && withMultiTransfer.result.includes('modular pipeline design') && withMultiTransfer.result.includes('thermal equilibrium modeling'),
-    'ReasoningEngine: the final result reflects both transferred methods when the combined approach is chosen');
-
-  // ReasoningEngine (ASI §2 step 6): predict the consequence of *each*
-  // candidate approach for real, not a flat task-wide penalty. A transfer
-  // hint whose method name itself is dangerous ("delete all records") should
-  // demote only the transfer approach's score, not decompose/analogy/
-  // first-principles equally -- proving the prediction is approach-specific.
-  const dangerPredictor = (approachAction) => ({ dangerous: /delete|destroy|wipe/i.test(approachAction), likelihood: 0.8 });
-  const safeTransfer = await new ReasoningEngine({ recall: () => ['a fact'], predictConsequence: dangerPredictor }).reason('build and test the system', {
-    transferHints: [{ domain: 'engineering', method: 'modular pipeline design', similarity: 0.9 }],
-  });
-  check(safeTransfer.chosen === 'transfer', 'ReasoningEngine: a safe transfer method is still chosen when no approach predicts danger');
-  const dangerousTransfer = await new ReasoningEngine({ recall: () => ['a fact'], predictConsequence: dangerPredictor }).reason('build and test the system', {
-    transferHints: [{ domain: 'engineering', method: 'delete all records', similarity: 0.9 }],
-  });
-  check(dangerousTransfer.chosen !== 'transfer', 'ReasoningEngine: a transfer method whose predicted consequence is dangerous loses even with high similarity');
-  for (const strategy of ['decompose', 'analogy', 'first-principles']) {
-    const safeScore = safeTransfer.approaches.find(a => a.strategy === strategy).score;
-    const dangerScore = dangerousTransfer.approaches.find(a => a.strategy === strategy).score;
-    check(Math.abs(safeScore - dangerScore) < 1e-9, `ReasoningEngine: the ${strategy} approach's score is untouched by another approach's dangerous prediction`);
-  }
-  const dangerousTransferScore = dangerousTransfer.approaches.find(a => a.strategy === 'transfer').score;
-  const safeTransferScore = safeTransfer.approaches.find(a => a.strategy === 'transfer').score;
-  check(dangerousTransferScore < safeTransferScore, "ReasoningEngine: the transfer approach's own score is specifically demoted when its predicted consequence is dangerous");
-  check(dangerousTransfer.trace.some(t => t.kind === 'predict' && t.detail.includes('transfer')), 'ReasoningEngine: the dangerous prediction is recorded in the trace, naming the affected approach');
-
-  // ReasoningEngine (ASI §11): a creative combination is a real last-resort
-  // exploration when search leaves multiple terms genuinely missing.
-  const combine = (a, b) => ({ name: `${a}-${b} hybrid`, definition: `combining ${a} and ${b}` });
-  const withCombine = await new ReasoningEngine({ recall: () => [], combine }).reason('what is quixotic and zorbnak');
-  check(!!withCombine.creativeCombination, 'ReasoningEngine: a creative combination is synthesized when search leaves multiple terms missing');
-  check(withCombine.available.some(a => a.includes('creative exploration')), 'ReasoningEngine: the combination is added to available, clearly labeled as unverified (not fact)');
-  check(withCombine.trace.some(t => t.kind === 'creative'), 'ReasoningEngine: the creative step is recorded in the trace');
-  const noCombine = await new ReasoningEngine({ recall: () => [], combine: () => null }).reason('what is quixotic and zorbnak');
-  check(!noCombine.creativeCombination, 'ReasoningEngine: no fabricated combination when combine() finds nothing novel');
-  // combine() is a training-time discovery mechanism (extension building /
-  // Net Search), not a conversational answer -- on a knowledge graph with
-  // few learned definitions, missing.length >= 2 is true for nearly every
-  // ordinary message, so gluing the note onto every chat-facing result made
-  // solve()/collaborate() routinely reply with "X-Y hybrid: a combination of
-  // X (no definition) and Y (no definition)..." instead of an actual answer.
-  // It stays on the returned object for callers that want it explicitly.
-  check(!withCombine.result.includes('Creative exploration'), "ReasoningEngine: the creative note doesn't leak into the chat-facing result -- callers that want it read creativeCombination directly");
+  const rr = await new ReasoningEngine({ solveSub: (s) => `solved(${s})` }).reason('analyze the data and build a model');
+  check(rr.result === 'solved(analyze the data and build a model)', 'ReasoningEngine: the problem goes straight to the solver, undecomposed');
+  check(rr.subresults.length === 1 && rr.chosen === 'direct' && rr.approaches.length === 0, 'ReasoningEngine: no candidate approaches, scoring or chosen strategy are forced');
+  check(rr.missing.length === 0 && rr.revised.length === 0 && rr.lessons.length === 0 && !rr.creativeCombination, 'ReasoningEngine: no forced gap, revision, lesson or creative-combination stages');
+  check(rr.verified && rr.confidence > 0 && rr.confidence <= 1, 'ReasoningEngine: a non-empty answer is reported verified with bounded confidence');
+  const grounded = await new ReasoningEngine({ recall: () => ['a relevant fact'], solveSub: () => 'generated' }).reason('anything');
+  check(grounded.result === 'a relevant fact' && grounded.available.length === 1, 'ReasoningEngine: recalled memory is used as the answer when there is any');
+  const failedRun = await new ReasoningEngine({ solveSub: () => '[error: boom]' }).reason('anything');
+  check(!failedRun.verified, 'ReasoningEngine: an error-marked answer is not verified');
+  const emptyRun = await new ReasoningEngine({}).reason('anything');
+  check(!emptyRun.verified && emptyRun.result === '', 'ReasoningEngine: with no solver and no memory there is no answer and nothing is made up');
 
   // KnowledgeTransfer (ASI §7): structural cross-domain transfer.
   const { KnowledgeTransfer } = await load('models && skills/core/knowledge-transfer.js');
