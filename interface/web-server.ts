@@ -32,6 +32,7 @@ import { pullStoreCatalog } from '../models && skills/core/store-fetch.js';
 import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
+import { parseNeurons } from '../models && skills/core/neurons.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
@@ -47,9 +48,13 @@ import { startScreenDonor } from '../models && skills/core/data-donor.js';
 import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
 import { COMMONS_PAGE } from './commons-page.js';
+import { WEIGHTS_PAGE } from './weights-page.js';
+import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
 import { handleCommonsRoutes, withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
 import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
+import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
+import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
@@ -293,8 +298,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 <title>Neuroclaw Terminal</title>
 <style>
   :root {
-    --primary: #ff9a84;
-    --primary-light: #ffc4b4;
+    --primary: #e3a99d;
+    --primary-light: #efd0c8;
     --secondary: #f8ede9;
     --bg-dark: #110c0e;
     --bg-light: #1b1216;
@@ -442,7 +447,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   .edit-actions button:hover {
     background: var(--primary-light);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 154, 132, 0.3);
+    box-shadow: 0 4px 12px rgba(227,169,157, 0.3);
   }
 
   .edited-tag {
@@ -456,7 +461,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     margin-top: 10px;
     border-left: 3px solid var(--primary);
     padding: 8px 12px;
-    background: rgba(255, 154, 132, 0.05);
+    background: rgba(227,169,157, 0.05);
     border-radius: 0 8px 8px 0;
     font-size: 12px;
     color: var(--text);
@@ -502,8 +507,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 
   .message.user {
     align-self: flex-end;
-    background: rgba(255, 154, 132, 0.1);
-    border-color: rgba(255, 154, 132, 0.3);
+    background: rgba(227,169,157, 0.1);
+    border-color: rgba(227,169,157, 0.3);
   }
 
   .message.ai {
@@ -513,8 +518,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
 
   .message.system {
     align-self: center;
-    background: rgba(255, 154, 132, 0.05);
-    border-color: rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.05);
+    border-color: rgba(227,169,157, 0.2);
     color: var(--text);
     opacity: 0.8;
     font-style: italic;
@@ -563,8 +568,8 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   #input:focus {
     border-color: var(--primary);
     background: rgba(11, 13, 16, 0.7);
-    box-shadow: 0 0 0 3px rgba(255, 154, 132, 0.1),
-                0 2px 8px rgba(255, 154, 132, 0.15);
+    box-shadow: 0 0 0 3px rgba(227,169,157, 0.1),
+                0 2px 8px rgba(227,169,157, 0.15);
   }
 
   #input:disabled {
@@ -585,24 +590,28 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   #send-btn {
-    background: rgba(255, 154, 132, 0.16);
+    background: rgba(227,169,157, 0.16);
     color: var(--primary-light);
-    border: 1px solid rgba(255, 154, 132, 0.5);
+    border: 1px solid rgba(227,169,157, 0.5);
     padding: 12px 26px;
-    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.3) inset, 0 8px 22px rgba(255, 120, 95, 0.18);
+    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.3) inset, 0 8px 22px rgba(214,150,138, 0.18);
   }
 
   #send-btn:hover {
-    background: rgba(255, 154, 132, 0.28);
-    border-color: rgba(255, 154, 132, 0.8);
+    background: rgba(227,169,157, 0.28);
+    border-color: rgba(227,169,157, 0.8);
     transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.4) inset, 0 10px 28px rgba(255, 120, 95, 0.3);
+    box-shadow: 0 1px 0 rgba(255, 220, 208, 0.4) inset, 0 10px 28px rgba(214,150,138, 0.3);
   }
 
   #send-btn:active {
     transform: translateY(0) scale(0.95);
   }
 
+  #neurons-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
+  #neurons { width: 96px; accent-color: #ff9a84; }
+  #neurons-out { min-width: 2.2em; opacity: 0.8; }
+  @media (max-width: 600px) { #neurons-wrap { display: none; } }
   #send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -625,7 +634,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   #settings-link:hover {
-    background: rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.2);
     border-color: var(--primary);
     color: var(--primary);
     transform: translateY(-1px);
@@ -654,7 +663,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   #clear-btn:hover {
-    background: rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.2);
     border-color: var(--primary);
     color: var(--primary);
     opacity: 1;
@@ -716,12 +725,12 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 154, 132, 0.3);
+    background: rgba(227,169,157, 0.3);
     border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 154, 132, 0.5);
+    background: rgba(227,169,157, 0.5);
   }
 
   #header, #chat-container, #input-area {
@@ -745,6 +754,11 @@ ${PROMPT_BUTTON_CSS}
 <div id="input-area">
   <label for="input" class="sr-only">Message</label>
   <input type="text" id="input" placeholder="Type a message..." autofocus>
+  <label id="neurons-wrap" for="neurons" title="Neurons: how confident it acts. Low asks more questions. High assumes. Very high does it both ways.">
+    <span class="nc-dim">Neurons</span>
+    <input type="range" id="neurons" min="0" max="100" step="5" value="50" aria-label="Neurons, how confident the AI acts, 0 to 100" aria-valuetext="50, balanced">
+    <output id="neurons-out" for="neurons">50</output>
+  </label>
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
@@ -753,6 +767,19 @@ ${PROMPT_BUTTON_CSS}
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
   const sendBtn = document.getElementById('send-btn');
+  // Neurons: how confident the AI acts (0-100), its own input beside the message. Kept in this browser only.
+  const neuronsEl = document.getElementById('neurons');
+  const neuronsOut = document.getElementById('neurons-out');
+  const NEURONS_WORDS = [[90, 'certain'], [75, 'assured'], [50, 'balanced'], [25, 'cautious'], [0, 'unsure']];
+  function showNeurons() {
+    const v = Number(neuronsEl.value);
+    const w = NEURONS_WORDS.find(function (x) { return v >= x[0]; })[1];
+    neuronsOut.textContent = String(v);
+    neuronsEl.setAttribute('aria-valuetext', v + ', ' + w);
+  }
+  try { const saved = localStorage.getItem('nc-neurons'); if (saved !== null && saved !== '') neuronsEl.value = saved; } catch (e) { /* storage may be blocked */ }
+  showNeurons();
+  neuronsEl.addEventListener('input', function () { showNeurons(); try { localStorage.setItem('nc-neurons', neuronsEl.value); } catch (e) { /* not saved */ } });
   const clearBtn = document.getElementById('clear-btn');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
@@ -1072,6 +1099,7 @@ ${PROMPT_BUTTON_CSS}
           message: ncVisuals.plain(msg),
           visuals: ncVisuals.enabled(),
           buttons: true,
+          neurons: Number(neuronsEl.value),
           visualEvent,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
@@ -1451,6 +1479,9 @@ export class WebServer {
   private decoyTimer: ReturnType<typeof setInterval> | null = null;
   private healTimer: ReturnType<typeof setInterval> | null = null;
   private port = 0;
+  /** True when the app window talks to this server through a pipe (interface/platform/embedded-transport.ts) and no port is open. */
+  private embedded = false;
+  private loopbackStart: Promise<number> | null = null;
   /** Apps made from visuals (models && skills/core/visual-apps.ts). Saved on this device; a launcher is written only after a preview is approved. */
   private visualApps = new VisualAppStore();
   /** Prompt buttons kept on this computer (app menu, desktop). Saved here; a launcher is written only after the owner approves the exact file. */
@@ -1559,9 +1590,10 @@ export class WebServer {
    * every request behind HTTP Basic Auth. Binding remotely with no password
    * is refused outright rather than silently serving unauthenticated.
    */
-  async start(port: number = 3000, host: string = '127.0.0.1', password?: string): Promise<void> {
+  async start(port: number = 3000, host: string = '127.0.0.1', password?: string, options: { listen?: boolean } = {}): Promise<void> {
     if (this.server) throw new Error('Web server already running');
     this.port = port;
+    this.embedded = options.listen === false;
     const isLocal = LOCAL_HOSTS.has(host);
     if (!isLocal) {
       if (password) {
@@ -1752,9 +1784,38 @@ export class WebServer {
     this.loadedExtensions = await this.loadSavedExtensions();
     return new Promise<void>((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      // The desktop app's own window: requests arrive through serveEmbedded(), so no port is opened.
+      if (options.listen === false) { resolve(); return; }
       this.server.listen(port, host, () => resolve());
       this.server.on('error', (err: Error) => { this.server = null; reject(err); });
     });
+  }
+
+  /**
+   * Hand one connection to the HTTP server without a network socket. The desktop app's window sends each request
+   * through a pipe (interface/platform/embedded-transport.ts) and the server parses and answers it exactly as it
+   * would on a port, so every route, gate and limit applies unchanged.
+   */
+  serveEmbedded(connection: import('node:stream').Duplex): void {
+    if (!this.server) throw new Error('Server not running');
+    this.server.emit('connection', connection);
+  }
+
+  /**
+   * The loopback port other programs on this computer can call. Normally the app window needs none. It is opened
+   * only when the person places something that calls back into NeuroClaw from outside the window (an OS button or
+   * a launcher for a visual app), because that program is a separate process and cannot use the pipe.
+   */
+  async ensureListening(): Promise<number> {
+    if (!this.embedded) return this.port;
+    const server = this.server;
+    if (!server) throw new Error('Server not running');
+    if (server.listening) return (server.address() as { port: number }).port;
+    this.loopbackStart ??= new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => { this.port = (server.address() as { port: number }).port; resolve(this.port); });
+    }).finally(() => { this.loopbackStart = null; });
+    return this.loopbackStart;
   }
 
   /**
@@ -1851,18 +1912,18 @@ export class WebServer {
   form { box-sizing:border-box; width:min(360px,90vw); padding:30px; background:rgba(255,240,232,.08);
          border:1px solid rgba(255,228,218,.2); border-radius:32px;
          backdrop-filter:blur(26px) saturate(1.5); -webkit-backdrop-filter:blur(26px) saturate(1.5);
-         box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 30px 80px rgba(0,0,0,.5), 0 0 90px rgba(255,140,110,.12); }
+         box-shadow:0 1px 0 rgba(255,255,255,.18) inset, 0 30px 80px rgba(0,0,0,.5), 0 0 90px rgba(214,150,138,.12); }
   h1 { margin:0 0 4px; font-size:19px; }
   p.sub { margin:0 0 20px; color:rgba(248,237,233,.62); font-size:13px; }
   label { display:block; margin:14px 0 6px; font-size:13px; color:rgba(248,237,233,.8); }
   input { width:100%; box-sizing:border-box; padding:11px 18px; font-size:15px;
           background:rgba(20,12,14,.4); color:#f8ede9; border:1px solid rgba(255,228,218,.2); border-radius:999px; }
-  input:focus { outline:none; border-color:rgba(255,154,132,.7); box-shadow:0 0 0 4px rgba(255,154,132,.14); }
+  input:focus { outline:none; border-color:rgba(227,169,157,.7); box-shadow:0 0 0 4px rgba(227,169,157,.14); }
   button { width:100%; margin-top:20px; padding:12px; font-size:15px; font-weight:700;
-           background:rgba(255,154,132,.16); color:#ffc4b4; border:1px solid rgba(255,154,132,.5); border-radius:999px; cursor:pointer;
-           box-shadow:0 1px 0 rgba(255,220,208,.3) inset, 0 8px 22px rgba(255,120,95,.18);
+           background:rgba(227,169,157,.16); color:#efd0c8; border:1px solid rgba(227,169,157,.5); border-radius:999px; cursor:pointer;
+           box-shadow:0 1px 0 rgba(255,220,208,.3) inset, 0 8px 22px rgba(214,150,138,.18);
            transition:transform .3s cubic-bezier(.34,1.56,.64,1), background .2s, border-color .2s; }
-  button:hover { background:rgba(255,154,132,.28); border-color:rgba(255,154,132,.8); transform:translateY(-2px); }
+  button:hover { background:rgba(227,169,157,.28); border-color:rgba(227,169,157,.8); transform:translateY(-2px); }
   button:active { transform:scale(.97); }
   button[disabled] { opacity:.6; cursor:default; }
   .msg { margin-top:14px; font-size:13px; min-height:1.2em; }
@@ -2760,7 +2821,7 @@ export class WebServer {
         this.sendJson(res, { error: 'Putting an app on a computer has to be done from that computer. Open this page there.' }, 403);
         return;
       }
-      const host = String(req.headers.host ?? '');
+      const host = this.embedded ? `127.0.0.1:${await this.ensureListening()}` : String(req.headers.host ?? '');
       const baseUrl = `http://${/^[A-Za-z0-9.:\[\]-]{1,100}$/.test(host) ? host : `127.0.0.1:${this.port}`}`;
       try {
         if (!id && method === 'POST') {
@@ -2848,7 +2909,7 @@ export class WebServer {
         this.sendJson(res, { error: 'Putting a button on a computer has to be done from that computer. Open this page there.' }, 403);
         return;
       }
-      const host = String(req.headers.host ?? '');
+      const host = this.embedded ? `127.0.0.1:${await this.ensureListening()}` : String(req.headers.host ?? '');
       const baseUrl = `http://${/^[A-Za-z0-9.:\[\]-]{1,100}$/.test(host) ? host : `127.0.0.1:${this.port}`}`;
       try {
         if (!id && method === 'POST') {
@@ -2929,6 +2990,12 @@ export class WebServer {
     // Points, the leaderboard, projects and the hive: one page, same gate.
     if (pathname === '/commons' && method === 'GET') {
       this.sendHtml(res, COMMONS_PAGE);
+      return;
+    }
+
+    // The net maker, net skill maker, weight editor and compiler: one page, same gate.
+    if (pathname === '/weights' && method === 'GET') {
+      this.sendHtml(res, WEIGHTS_PAGE);
       return;
     }
 
@@ -3114,6 +3181,17 @@ export class WebServer {
       if (handled) return;
     }
 
+    // ── Memory topics: the folder-tree memory the agent files into ──────
+    // See memory-topics-routes.ts: behind the normal gate, per person.
+    if (isMemoryTopicsRoute(pathname)) {
+      const handled = await handleMemoryTopicsRoutes({
+        req, res, pathname, method, url: parsedUrl,
+        parseBody: (r, max) => this.parseBody(r, max),
+        sendJson: (r, data, status) => this.sendJson(r, data, status),
+      });
+      if (handled) return;
+    }
+
     // ── Risky tools, approvals, complete access, auto-continue ──────────
     // See safety-routes.ts: owner routes behind the normal gate.
     if (isSafetyRoute(pathname)) {
@@ -3126,6 +3204,21 @@ export class WebServer {
         runApproved: async (toolId, request) => {
           const { getNeuroclawSystem } = await import('../src/index.js');
           return (await getNeuroclawSystem()).pluginRegistry.runApproved(toolId, request);
+        },
+      });
+      if (handled) return;
+    }
+
+    // ── Net maker, net skill maker, weight editor, compiler ─────────────
+    // See weights-routes.ts: owner routes behind the normal gate.
+    if (isWeightsRoute(pathname)) {
+      const handled = await handleWeightsRoutes({
+        req, res, pathname, method,
+        parseBody: (r, max) => this.parseBody(r, max),
+        sendJson: (r, data, status) => this.sendJson(r, data, status),
+        base: async () => {
+          const { getNeuroclawSystem } = await import('../src/index.js');
+          return (await getNeuroclawSystem()).pipeline.ensureBrain() ?? null;
         },
       });
       if (handled) return;
@@ -3974,9 +4067,10 @@ export class WebServer {
         const { getNeuroclawSystem } = await import('../src/index.js');
         const system = await getNeuroclawSystem();
         const memories = system.memory.forgetAll();
+        const topicNotes = new MemoryFolders().forgetAll();
         const threads = this.chatHistory.deleteAllThreads();
         const rooms = getSharedChatStore().deleteAllRooms();
-        this.sendJson(res, { memories, threads, rooms });
+        this.sendJson(res, { memories, topicNotes, threads, rooms });
       } catch (err) {
         this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
       }
@@ -4440,7 +4534,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4478,7 +4572,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)]);
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons));
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;

@@ -53,6 +53,8 @@ ${[
     // permission: nothing is granted until the person says yes, and no entitlement is added for it.
     kv('NSAppleEventsUsageDescription', `<string>${APP_NAME} uses System Events to list, type into and click windows of programs it started itself, only when you ask the AI OS to.</string>`),
     kv('NSAppTransportSecurity', '<dict><key>NSAllowsLocalNetworking</key><true/></dict>'),
+    // The engine and the window talk through a pipe (nc://app/ is answered by the engine, not fetched), so there is
+    // no loopback exception to declare and the app opens no network connection of its own.
   ].join('\n')}
 </dict>
 </plist>

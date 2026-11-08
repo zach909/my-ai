@@ -156,7 +156,7 @@ export const VISUAL_STARTERS: Record<string, string> = {
     'var c = document.getElementById("c"), g = c.getContext("2d"), t = 0;',
     'function frame() {',
     '  t += 0.03; g.clearRect(0, 0, 320, 160);',
-    '  g.strokeStyle = "#ff9a84"; g.lineWidth = 5; g.lineCap = "round"; g.beginPath();',
+    '  g.strokeStyle = "#e3a99d"; g.lineWidth = 5; g.lineCap = "round"; g.beginPath();',
     '  for (var x = 0; x <= 320; x += 4) { var y = 80 + Math.sin(x / 28 + t) * 34; if (x) g.lineTo(x, y); else g.moveTo(x, y); }',
     '  g.stroke(); requestAnimationFrame(frame);',
     '}',
@@ -171,17 +171,17 @@ export const VISUAL_STARTERS: Record<string, string> = {
 
 /** Inside every panel, so plain HTML already looks like the rest of the page. Coral on warm dark, round, no blue. */
 const PANEL_CSS = [
-  ":root{color-scheme:dark;--coral:#ff9a84;--soft:#ffc4b4;--deep:#e8705a;--text:#f8ede9;--dim:rgba(248,237,233,.62);--line:rgba(255,228,218,.2);--glass:rgba(255,240,232,.08)}",
+  ":root{color-scheme:dark;--coral:#e3a99d;--soft:#efd0c8;--deep:#c98476;--text:#f8ede9;--dim:rgba(248,237,233,.62);--line:rgba(255,228,218,.2);--glass:rgba(255,240,232,.08)}",
   '*{box-sizing:border-box}',
   "html,body{margin:0;background:transparent;color:var(--text);font:14px/1.5 ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif}",
   'body{padding:14px 16px}',
   'button{font:inherit;color:var(--text);background:rgba(255,238,230,.07);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;transition:transform .2s cubic-bezier(.34,1.56,.64,1),background .2s}',
-  'button:hover{background:rgba(255,154,132,.28);transform:translateY(-2px) scale(1.03)}',
+  'button:hover{background:rgba(227,169,157,.28);transform:translateY(-2px) scale(1.03)}',
   'button:active{transform:scale(.95)}',
-  'button.primary{background:rgba(255,154,132,.16);border-color:rgba(255,154,132,.5);color:var(--soft)}',
+  'button.primary{background:rgba(227,169,157,.16);border-color:rgba(227,169,157,.5);color:var(--soft)}',
   'input,select,textarea{font:inherit;color:var(--text);background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:8px 14px;outline:none}',
   'textarea{border-radius:18px}',
-  'input:focus,select:focus,textarea:focus{border-color:rgba(255,154,132,.6)}',
+  'input:focus,select:focus,textarea:focus{border-color:rgba(227,169,157,.6)}',
   'a{color:var(--soft)}',
   'canvas,img,svg{max-width:100%}',
   '[data-busy] button{opacity:.55;pointer-events:none}',
@@ -199,13 +199,13 @@ const embed = (value: unknown): string => JSON.stringify(value).replace(/</g, '\
 export const VISUAL_CSS = `
   .nc-visual { margin-top: 10px; width: min(560px, 78vw); max-width: 100%; border: 1px solid var(--border); border-radius: 24px;
     background: rgba(255, 240, 232, 0.07); backdrop-filter: blur(26px) saturate(1.5); overflow: hidden;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 12px 28px rgba(0, 0, 0, 0.28), 0 0 24px rgba(255, 154, 132, 0.06);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 12px 28px rgba(0, 0, 0, 0.28), 0 0 24px rgba(227,169,157, 0.06);
     animation: morphicExpand 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
   .nc-visual-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 0 16px; font-size: 11px; opacity: 0.62; }
   .nc-visual-bar button, #nc-bench button, #nc-visual-btn { font: inherit; color: var(--text); background: rgba(255, 238, 230, 0.07);
     border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer;
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s; }
-  .nc-visual-bar button:hover, #nc-bench button:hover, #nc-visual-btn:hover { background: rgba(255, 154, 132, 0.28); transform: translateY(-2px) scale(1.03); }
+  .nc-visual-bar button:hover, #nc-bench button:hover, #nc-visual-btn:hover { background: rgba(227,169,157, 0.28); transform: translateY(-2px) scale(1.03); }
   .nc-visual-bar button:active, #nc-bench button:active, #nc-visual-btn:active { transform: scale(0.95); }
   .nc-visual iframe { display: block; width: 100%; height: 120px; border: 0; background: transparent; transition: height 0.25s ease; }
   .nc-visual pre { margin: 0; padding: 10px 16px; max-height: 260px; overflow: auto; white-space: pre-wrap; border-top: 1px solid var(--border);
@@ -213,16 +213,16 @@ export const VISUAL_CSS = `
   .nc-visual-buttons { display: flex; gap: 6px; }
   #nc-app-card { margin: 0 24px 8px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 32px; max-height: 70vh; overflow: auto; position: relative; z-index: 1;
     background: rgba(255, 240, 232, 0.08); backdrop-filter: blur(26px) saturate(1.5); font-size: 13px;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 16px 36px rgba(0, 0, 0, 0.35), 0 0 28px rgba(255, 154, 132, 0.08); }
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 16px 36px rgba(0, 0, 0, 0.35), 0 0 28px rgba(227,169,157, 0.08); }
   #nc-app-card p { margin: 6px 0; } #nc-app-card .nc-dim { opacity: 0.62; }
   #nc-app-card input[type=text] { width: 100%; margin: 8px 0; font: inherit; color: var(--text); background: rgba(255, 240, 232, 0.07);
     border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px; outline: none; }
-  #nc-app-card input[type=text]:focus { border-color: rgba(255, 154, 132, 0.6); }
+  #nc-app-card input[type=text]:focus { border-color: rgba(227,169,157, 0.6); }
   #nc-app-card button, #nc-app-card a { font: inherit; color: var(--text); background: rgba(255, 238, 230, 0.07); border: 1px solid var(--border); border-radius: 999px;
     padding: 6px 14px; cursor: pointer; text-decoration: none; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s; }
-  #nc-app-card button:hover, #nc-app-card a:hover { background: rgba(255, 154, 132, 0.28); transform: translateY(-2px) scale(1.03); }
+  #nc-app-card button:hover, #nc-app-card a:hover { background: rgba(227,169,157, 0.28); transform: translateY(-2px) scale(1.03); }
   #nc-app-card button:active { transform: scale(0.95); }
-  #nc-app-card .primary { background: rgba(255, 154, 132, 0.16); border-color: rgba(255, 154, 132, 0.5); color: var(--primary-light); }
+  #nc-app-card .primary { background: rgba(227,169,157, 0.16); border-color: rgba(227,169,157, 0.5); color: var(--primary-light); }
   #nc-app-card .nc-bench-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 10px; }
   #nc-app-card .nc-card-path, #nc-app-card .nc-card-pre { display: block; padding: 8px 14px; border-radius: 18px; background: rgba(14, 10, 12, 0.55); border: 1px solid var(--border);
     font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; margin: 6px 0; }
@@ -231,7 +231,7 @@ export const VISUAL_CSS = `
   #nc-visual-btn { padding: 12px 20px; min-height: 44px; }
   #nc-bench { margin: 0 24px 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 32px; max-height: 70vh; overflow: auto;
     background: rgba(255, 240, 232, 0.08); backdrop-filter: blur(26px) saturate(1.5);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 16px 36px rgba(0, 0, 0, 0.35), 0 0 28px rgba(255, 154, 132, 0.08); }
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 16px 36px rgba(0, 0, 0, 0.35), 0 0 28px rgba(227,169,157, 0.08); }
   #nc-bench[hidden] { display: none; }
   #nc-bench { position: relative; z-index: 1; }
   #nc-bench .nc-bench-head, #nc-bench .nc-bench-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -240,11 +240,11 @@ export const VISUAL_CSS = `
   #nc-bench label { font-size: 12px; opacity: 0.8; display: flex; gap: 6px; align-items: center; }
   #nc-bench textarea { width: 100%; min-height: 8em; resize: vertical; color: var(--text); background: rgba(14, 10, 12, 0.55); border: 1px solid var(--border);
     border-radius: 18px; padding: 10px 14px; outline: none; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  #nc-bench textarea:focus { border-color: rgba(255, 154, 132, 0.6); }
+  #nc-bench textarea:focus { border-color: rgba(227,169,157, 0.6); }
   #nc-bench .nc-visual { margin: 10px 0; width: 100%; }
   #nc-bench .nc-bench-actions { justify-content: space-between; }
   #nc-bench-log { font-size: 12px; opacity: 0.7; min-height: 1.4em; overflow-wrap: anywhere; }
-  #nc-bench .primary { background: rgba(255, 154, 132, 0.16); border-color: rgba(255, 154, 132, 0.5); color: var(--primary-light); }
+  #nc-bench .primary { background: rgba(227,169,157, 0.16); border-color: rgba(227,169,157, 0.5); color: var(--primary-light); }
   @media (max-width: 520px) { #nc-bench { margin: 0 16px 8px; } #nc-visual-btn { padding: 12px 14px; } }
   @media (prefers-reduced-motion: reduce) { .nc-visual, .nc-visual iframe, .nc-visual-bar button, #nc-bench button { animation: none; transition: none; } }
 `;
@@ -638,7 +638,7 @@ export function visualAppPage(app: { id: string; name: string; code: string }): 
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(app.name)}</title>
 <style>
-  :root { --primary: #ff9a84; --primary-light: #ffc4b4; --bg-dark: #110c0e; --border: rgba(255, 228, 218, 0.2); --text: #f8ede9; }
+  :root { --primary: #e3a99d; --primary-light: #efd0c8; --bg-dark: #110c0e; --border: rgba(255, 228, 218, 0.2); --text: #f8ede9; }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg-dark); color: var(--text);
     font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif; }

@@ -30,12 +30,12 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   h2 { font-size: 18px; margin: 0 0 4px; }
   h3 { font-size: 15px; margin: 18px 0 6px; }
   p { margin: 6px 0 12px; font-size: 14px; line-height: 1.5; }
-  a { color: #ffc4b4; }
+  a { color: #efd0c8; }
   .back { text-decoration: none; display: inline-flex; align-items: center; }
   nav[role=tablist] { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   nav[role=tablist]::-webkit-scrollbar { display: none; }
   nav[role=tablist] .nc-btn { flex: 0 0 auto; white-space: nowrap; min-height: 44px; }
-  nav[role=tablist] .nc-btn[aria-selected=true] { color: #ffc4b4; background: rgba(255,154,132,.16); border-color: rgba(255,154,132,.5); }
+  nav[role=tablist] .nc-btn[aria-selected=true] { color: #efd0c8; background: rgba(227,169,157,.16); border-color: rgba(227,169,157,.5); }
   section.nc-glass { padding: 22px; min-width: 0; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(255,228,218,.12); flex-wrap: wrap; }
   .row:first-of-type { border-top: 0; }
@@ -45,17 +45,17 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   .stack { display: grid; gap: 10px; max-width: 420px; }
   .stack label { font-size: 13px; color: rgba(248,237,233,.62); display: grid; gap: 6px; }
   .nc-input { width: 100%; min-width: 0; }
-  select.nc-input { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, #ffc4b4 50%), linear-gradient(135deg, #ffc4b4 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; background-color: rgba(20,12,14,.4); }
+  select.nc-input { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, #efd0c8 50%), linear-gradient(135deg, #efd0c8 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; background-color: rgba(20,12,14,.4); }
   select.nc-input option { background: #1b1216; color: #f8ede9; }
   input[type=checkbox][role=switch] { appearance: none; -webkit-appearance: none; flex: 0 0 auto; width: 52px; height: 32px; border-radius: 999px; background: rgba(255,238,230,.1); border: 1px solid rgba(255,228,218,.28); position: relative; cursor: pointer; transition: background .25s, border-color .25s; margin: 0; }
   input[type=checkbox][role=switch]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #f8ede9; transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
-  input[type=checkbox][role=switch]:checked { background: rgba(255,154,132,.3); border-color: rgba(255,154,132,.7); }
-  input[type=checkbox][role=switch]:checked::after { transform: translateX(20px); background: #ffc4b4; }
+  input[type=checkbox][role=switch]:checked { background: rgba(227,169,157,.3); border-color: rgba(227,169,157,.7); }
+  input[type=checkbox][role=switch]:checked::after { transform: translateX(20px); background: #efd0c8; }
   input[type=checkbox][role=switch]:disabled { opacity: .5; cursor: default; }
-  :focus-visible { outline: 2px solid #ff9a84; outline-offset: 2px; }
+  :focus-visible { outline: 2px solid #e3a99d; outline-offset: 2px; }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(255,228,218,.2); background: rgba(255,238,230,.07); color: rgba(248,237,233,.62); }
   .badge.ok { color: var(--ok); border-color: rgba(143,227,168,.45); }
-  .badge.warn { color: #ffc4b4; border-color: rgba(255,154,132,.5); }
+  .badge.warn { color: #efd0c8; border-color: rgba(227,169,157,.5); }
   .badge.bad { color: var(--err); border-color: rgba(255,154,168,.5); }
   .banner { padding: 12px 16px; border-radius: 24px; font-size: 14px; border: 1px solid rgba(255,154,168,.5); background: rgba(255,154,168,.1); color: var(--err); overflow-wrap: anywhere; }
   .banner.ok { border-color: rgba(143,227,168,.45); background: rgba(143,227,168,.08); color: var(--ok); }
@@ -63,7 +63,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   #status.err { color: var(--err); } #status.ok { color: var(--ok); }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   .grid a { display: block; padding: 14px 18px; border-radius: 24px; background: rgba(255,240,232,.06); border: 1px solid rgba(255,228,218,.14); text-decoration: none; color: inherit; min-height: 44px; }
-  .grid a b { display: block; color: #ffc4b4; }
+  .grid a b { display: block; color: #efd0c8; }
   .grid a span { font-size: 13px; color: rgba(248,237,233,.62); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
@@ -334,7 +334,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
     del.addEventListener('click', async function () {
       if (confirmBox.value !== 'delete everything') return say('Type "delete everything" exactly to confirm.', 'err');
       del.disabled = true;
-      try { var r = await api('/api/memory/all', { method: 'DELETE', body: { confirm: 'delete everything' } }); try { localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } confirmBox.value = ''; say('Forgot ' + r.memories + ' memories, ' + r.threads + ' chats and ' + r.rooms + ' rooms.', 'ok'); }
+      try { var r = await api('/api/memory/all', { method: 'DELETE', body: { confirm: 'delete everything' } }); try { localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } confirmBox.value = ''; say('Forgot ' + r.memories + ' memories, ' + (r.topicNotes || 0) + ' topic notes, ' + r.threads + ' chats and ' + r.rooms + ' rooms.', 'ok'); }
       catch (e) { say(e.message, 'err'); } finally { del.disabled = false; }
     });
     panel.replaceChildren(

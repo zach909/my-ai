@@ -9,9 +9,9 @@
     --bg-primary: #110c0e;
     --bg-secondary: #1b1216;
     --bg-tertiary: #3b2b2e;
-    --accent-primary: #ff9a84;
-    --accent-secondary: #ffc4b4;
-    --accent-glow: rgba(255, 154, 132, 0.3);
+    --accent-primary: #e3a99d;
+    --accent-secondary: #efd0c8;
+    --accent-glow: rgba(227,169,157, 0.3);
     --text-primary: #f8ede9;
     --text-secondary: #b9a7a2;
     --text-muted: #8f7d79;
@@ -35,8 +35,8 @@
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background: 
-      radial-gradient(circle at 20% 30%, rgba(255, 154, 132, 0.08) 0%, transparent 40%),
-      radial-gradient(circle at 80% 70%, rgba(255, 190, 150, 0.08) 0%, transparent 40%);
+      radial-gradient(circle at 20% 30%, rgba(227,169,157, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(226,190,170, 0.08) 0%, transparent 40%);
     pointer-events: none;
     z-index: 0;
   }
@@ -57,7 +57,7 @@
     font-size: 16px; 
     font-weight: 600; 
     letter-spacing: 0.5px;
-    background: linear-gradient(135deg, #fff 0%, #ffc4b4 100%);
+    background: linear-gradient(135deg, #fff 0%, #efd0c8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -96,7 +96,7 @@
     transition: all 0.2s;
   }
   .tab:hover { 
-    background: rgba(255, 154, 132, 0.1); 
+    background: rgba(227,169,157, 0.1); 
     color: var(--text-primary);
   }
   .tab.active { 
@@ -137,7 +137,7 @@
     align-self: flex-end; 
     background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%); 
     color: white;
-    box-shadow: 0 4px 12px rgba(255, 154, 132, 0.3);
+    box-shadow: 0 4px 12px rgba(227,169,157, 0.3);
   }
   .msg.ai { 
     align-self: flex-start; 
@@ -176,7 +176,7 @@
   }
   #input:focus { 
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(255, 154, 132, 0.1);
+    box-shadow: 0 0 0 3px rgba(227,169,157, 0.1);
   }
   button { 
     background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%); 
@@ -188,11 +188,11 @@
     font-size: 13px; 
     transition: all 0.2s;
     border-radius: 999px;
-    box-shadow: 0 4px 12px rgba(255, 154, 132, 0.3);
+    box-shadow: 0 4px 12px rgba(227,169,157, 0.3);
   }
   button:hover { 
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 154, 132, 0.4);
+    box-shadow: 0 6px 20px rgba(227,169,157, 0.4);
   }
   button:active { transform: translateY(0); }
   button.ghost { 
@@ -225,11 +225,11 @@
   }
   textarea:focus { 
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(255, 154, 132, 0.1);
+    box-shadow: 0 0 0 3px rgba(227,169,157, 0.1);
   }
   .hint { color: var(--text-muted); font-size: 13px; margin: 10px 0; line-height: 1.6; }
   .hint code {
-    background: rgba(255, 154, 132, 0.15);
+    background: rgba(227,169,157, 0.15);
     padding: 2px 6px;
     border-radius: 24px;
     font-family: 'JetBrains Mono', monospace;
@@ -246,7 +246,7 @@
   }
   .card:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 4px 20px rgba(255, 154, 132, 0.15);
+    box-shadow: 0 4px 20px rgba(227,169,157, 0.15);
   }
   .card h3 { 
     font-size: 12px; 

@@ -66,6 +66,18 @@ Name and location for net search:
 "netsearch"@net="location"
 ```
 
+#### Making a net or a skill
+
+`kind`, `neurons`, `@frozen`, `@input`, `@response`, `@reads` and `train` make the program build and train a net. See [[Net-Maker]] for what they do, what was measured, and what they do not do.
+
+```
+kind="network"
+neurons="8"
+"n1"@input="hello"
+"n1"@response="hi there"
+train="responses"
+```
+
 ## Examples
 
 ### Simple Neuron Network

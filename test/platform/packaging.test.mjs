@@ -233,8 +233,8 @@ test('Linux: a real .deb and .tar.gz are built with the right metadata, files an
     assert.ok(['amd64', 'arm64'].includes(field('Architecture')));
     assert.match(field('Description'), /Local-first AI agent/);
     assert.ok(field('Description').includes(COMMIT), 'the package says which source commit it was built from');
-    assert.equal(field('Depends'), '', 'bundles its runtime: nothing to install first');
-    assert.match(field('Recommends'), /chromium/);
+    assert.match(field('Depends'), /libwebkit2gtk-4\.1-0/, 'the window is the system\'s WebKitGTK');
+    assert.doesNotMatch(field('Depends') + field('Recommends'), /chrom|firefox|edge|browser/i, 'no browser is required or recommended');
     const listing = spawnSync('dpkg-deb', ['-c', deb], { encoding: 'utf8' }).stdout.split('\n');
     const has = (re) => listing.some((l) => re.test(l));
     assert.ok(has(/-rwxr-xr-x root\/root .* \.\/usr\/bin\/neuroclaw$/), 'the command is executable');
@@ -309,6 +309,8 @@ test('macOS: the bundle is laid out as a standard .app with a valid Info.plist, 
     for (const [k, v] of [['CFBundleIdentifier', BUNDLE_ID], ['CFBundleExecutable', 'NeuroClaw'], ['CFBundleIconFile', 'AppIcon'], ['CFBundlePackageType', 'APPL'], ['CFBundleShortVersionString', V.replace(/-.*/, '')]]) assert.match(plist, new RegExp(`<key>${k}</key>\\s*<string>${v.replace(/\./g, '\\.')}</string>`), k);
     assert.match(plist, /<key>NSHighResolutionCapable<\/key>\s*<true\/>/);
     assert.deepEqual([...plist.matchAll(/<key>(\w*UsageDescription)<\/key>/g)].map((m) => m[1]), ['NSAppleEventsUsageDescription'], 'the only prompt text is the one for the AI OS button clicker (System Events); no camera, microphone, location or contacts text');
+    assert.doesNotMatch(plist, /NSAppTransportSecurity|NSAllowsLocalNetworking/, 'no loopback exception: the app opens no network connection of its own');
+    assert.doesNotMatch(plist, /UsageDescription/, 'no permission prompts are declared: none are used');
     if (spawnSync('python3', ['--version']).status === 0) {
       assert.equal(spawnSync('python3', ['-c', 'import plistlib,sys; plistlib.load(open(sys.argv[1],"rb"))', path.join(app, 'Contents/Info.plist')]).status, 0, 'Info.plist parses as a property list');
     }
@@ -322,7 +324,9 @@ test('macOS: the bundle is laid out as a standard .app with a valid Info.plist, 
   const swift = text('scripts/release/macos/NeuroClawHost.swift');
   const imports = [...swift.matchAll(/^import (\w+)/gm)].map((m) => m[1]).sort();
   assert.deepEqual(imports, ['Foundation', 'SwiftUI', 'WebKit'], 'Apple frameworks only');
-  assert.match(swift, /--no-window/); assert.match(swift, /READY /); assert.match(swift, /applicationWillTerminate/); assert.match(swift, /runOpenPanelWith/);
+  assert.match(swift, /--embedded/); assert.match(swift, /READY/); assert.match(swift, /applicationWillTerminate/); assert.match(swift, /runOpenPanelWith/);
+  assert.match(swift, /WKURLSchemeHandler/); assert.match(swift, /nc:\/\/app/);
+  assert.doesNotMatch(swift, /127\.0\.0\.1|localhost|URLSession/, 'the window talks to the engine through a pipe, not a network address');
   assert.doesNotMatch(swift, /AVCaptureDevice|CNContactStore|CLLocationManager|AXIsProcessTrusted|CGWindowListCreateImage|NSAppleScript/, 'asks for no camera, contacts, location, accessibility or screen capture');
 });
 
