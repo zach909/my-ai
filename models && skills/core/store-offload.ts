@@ -448,11 +448,11 @@ export function startAutoOffload(
     }
     if (!stopped) {
       timer = setTimeout(() => void tick(), interval);
-      timer.unref();
+      (timer as { unref?: () => void }).unref?.();
     }
   };
   timer = setTimeout(() => void tick(), opts.firstDelayMs ?? FIRST_RUN_DELAY_MS);
-  timer.unref();
+  (timer as { unref?: () => void }).unref?.();
   autoStop = () => {
     stopped = true;
     if (timer) clearTimeout(timer);

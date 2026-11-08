@@ -421,7 +421,7 @@ export class NeuroclawSystem {
     if (process.env.NEUROCLAW_SHARED_MESH !== "0" && !process.env.VITEST) {
       this.sharedMesh.boot();
       const interval = Number(process.env.NEUROCLAW_SHARED_LEARNING_INTERVAL_MS) || DEFAULT_SYNC_INTERVAL_MS;
-      setInterval(() => void this.sharedMesh.tick(), interval).unref();
+      (setInterval(() => void this.sharedMesh.tick(), interval) as { unref?: () => void }).unref?.();
     }
     this.empathy = new EmpathyEngine();
     this.runner = new NeuroclawRunner(this.llm, this.pipeline, this.pluginRegistry);
@@ -567,7 +567,7 @@ export class NeuroclawSystem {
       this.restoreCuriosity();
       if (process.env.NEUROCLAW_CURIOSITY !== "0") {
         const every = Number(process.env.NEUROCLAW_CURIOSITY_INTERVAL_MS) || 5 * 60_000;
-        setInterval(() => void this.curiosityTick(), every).unref();
+        (setInterval(() => void this.curiosityTick(), every) as { unref?: () => void }).unref?.();
       }
     }
 
