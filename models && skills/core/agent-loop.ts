@@ -33,6 +33,8 @@ import {
 export interface AgentCapabilities {
   /** Semantic search over long-term memory. */
   recall?: (query: string) => string[] | Promise<string[]>;
+  /** Search the folder-tree memory the agent files notes into (memory-folders.ts). */
+  searchTopics?: (query: string) => string[] | Promise<string[]>;
   /** Wiki page search. */
   searchWiki?: (query: string) => string[] | Promise<string[]>;
   /** Store catalogue search. */
@@ -124,6 +126,8 @@ async function perceive(skill: PromptingSkill, goal: string, last: string | unde
   switch (skill.source) {
     case "memory":
       return caps.recall ? [...(await caps.recall(query))] : [];
+    case "topics":
+      return caps.searchTopics ? [...(await caps.searchTopics(query))] : [];
     case "wiki":
       return caps.searchWiki ? [...(await caps.searchWiki(query))] : [];
     case "store":
