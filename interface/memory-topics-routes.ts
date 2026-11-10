@@ -13,7 +13,9 @@
  *   GET    /api/memory-topics/search?q=garden      notes ranked by topic words
  *   GET    /api/memory-topics/note?path=a/b        one note with its text
  *   PUT    /api/memory-topics/note                 {path, content}  create or replace
- *   POST   /api/memory-topics/append               {path, text}     add a dated line
+ *   GET    /api/memory-topics/summary              notes that still have no summary
+ *   PUT    /api/memory-topics/summary              {path, summary}  set a note's one-line summary
+ *   POST   /api/memory-topics/append              {path, text}     add a dated line
  *   POST   /api/memory-topics/move                 {from, to}       re-file a note or folder
  *   DELETE /api/memory-topics?path=a/b[&recursive=1]  forget a note or folder
  */
@@ -77,6 +79,14 @@ async function route(ctx: MemoryTopicsContext): Promise<boolean> {
     if (method === "PUT") {
       const b = await body();
       return send(store.write(String(b.path ?? ""), typeof b.content === "string" ? b.content : ""));
+    }
+  }
+
+  if (pathname === "/api/memory-topics/summary") {
+    if (method === "GET") return send({ notes: store.unsummarized(Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50) || 50))) });
+    if (method === "PUT") {
+      const b = await body();
+      return send(store.setSummary(String(b.path ?? ""), typeof b.summary === "string" ? b.summary : ""));
     }
   }
 

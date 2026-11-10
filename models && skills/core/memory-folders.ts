@@ -56,6 +56,15 @@ export interface NoteInfo {
   /** Last change, ms since epoch. */
   updated: number;
   chars: number;
+  /**
+   * One line saying what the note is about. The one the AI wrote when there is
+   * one (`hasSummary`), otherwise the start of the note, worked out on the fly
+   * and never written to disk, so a note nobody has summarised still has
+   * something to show.
+   */
+  summary: string;
+  /** True when the summary is one the AI (or the owner) wrote into the note. */
+  hasSummary: boolean;
 }
 
 export interface TopicFolder {
@@ -123,6 +132,57 @@ export function parsePath(raw: unknown, opts: { allowRoot?: boolean; note?: bool
 
 const words = (text: string): string[] => text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 
+/**
+ * A summary lives in the note itself, as a quote line right under the heading:
+ *
+ *   # Garden plan
+ *
+ *   > Summary: Raised beds along the south fence; tomatoes first, planted in May.
+ *
+ * It is plain markdown, so it moves with the note, shows in any editor and can
+ * be corrected by hand.
+ */
+const SUMMARY_LINE = /^>[ \t]*Summary:[ \t]*(.*)$/im;
+const SUMMARY_LINE_ALL = /^>[ \t]*Summary:.*\r?\n?/gim;
+export const MAX_SUMMARY = 300;
+
+function cleanSummary(raw: string): string {
+  return raw
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^summary:\s*/i, "")
+    .slice(0, MAX_SUMMARY)
+    .trim();
+}
+
+function storedSummary(content: string): string {
+  const m = SUMMARY_LINE.exec(content);
+  return m ? cleanSummary(m[1]) : "";
+}
+
+/** The start of the note, for a note with no written summary. Not stored anywhere. */
+function leadSummary(content: string): string {
+  const lines = content
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !/^#\s/.test(l) && !SUMMARY_LINE.test(l))
+    .slice(0, 3)
+    .map(l => l.replace(/^[-*]\s+/, "").replace(/^\d{4}-\d{2}-\d{2}:\s*/, ""));
+  const text = lines.join(" ");
+  return text.length > 200 ? `${text.slice(0, 199)}…` : text;
+}
+
+/** The note with its summary line set (or replaced), placed right under the first heading. */
+function withSummary(text: string, summary: string): string {
+  const line = `> Summary: ${summary}`;
+  const stripped = text.replace(SUMMARY_LINE_ALL, "");
+  const m = /^#\s.*$/m.exec(stripped);
+  if (!m) return `${line}\n\n${stripped.replace(/^\s+/, "")}`;
+  const end = m.index + m[0].length;
+  const tail = stripped.slice(end).replace(/^(\r?\n){2,}/, "\n\n");
+  return `${stripped.slice(0, end)}\n\n${line}${tail}`;
+}
+
 const titleFromName = (name: string): string => {
   const t = name.replace(/-/g, " ");
   return t.charAt(0).toUpperCase() + t.slice(1);
@@ -186,7 +246,15 @@ export class MemoryFolders {
   // ── Reading ─────────────────────────────────────────────────────────
 
   private info(parts: string[], content: string, updated: number): NoteInfo {
-    return { path: parts.join("/"), title: titleOf(content, parts[parts.length - 1]), updated, chars: content.length };
+    const written = storedSummary(content);
+    return {
+      path: parts.join("/"),
+      title: titleOf(content, parts[parts.length - 1]),
+      updated,
+      chars: content.length,
+      summary: written || leadSummary(content),
+      hasSummary: written.length > 0,
+    };
   }
 
   /** Every note under a folder, depth first, in name order. Skips links, dotfiles and anything that is not a .md file. */
@@ -294,35 +362,51 @@ export class MemoryFolders {
 
   /**
    * Notes ranked by how well they answer a few words. A word found in a folder
-   * or note NAME counts most, then the note's title, then the body (a few
-   * repeats help, more do not, so a long note is not favoured for being long).
+   * or note NAME counts most, then the note's title, then the note's written
+   * summary, then the body (a few repeats help, more do not, so a long note is
+   * not favoured for being long). The summary is what the AI said the note is
+   * about, so it counts for more than a passing mention in the text, and the
+   * summary line itself is not counted again as body.
    */
   search(query: string, topK = 5): SearchHit[] {
     const q = [...new Set(words(query))].filter(w => w.length > 1 || /\d/.test(w));
     if (q.length === 0) return [];
-    const hits: SearchHit[] = [];
+    const ranked: Array<{ hit: SearchHit; raw: number }> = [];
     for (const n of this.walk()) {
       const nameWords = new Set(words(n.parts.join(" ")));
       const title = titleOf(n.content, n.parts[n.parts.length - 1]);
       const titleWords = new Set(words(title));
-      const bodyWords = words(n.content);
+      const summaryWords = new Set(words(storedSummary(n.content)));
       const body = new Map<string, number>();
-      for (const w of bodyWords) body.set(w, (body.get(w) ?? 0) + 1);
+      for (const w of words(n.content.replace(SUMMARY_LINE_ALL, ""))) body.set(w, (body.get(w) ?? 0) + 1);
       let score = 0;
       for (const w of q) {
         if (nameWords.has(w)) score += 3;
         if (titleWords.has(w)) score += 2;
+        if (summaryWords.has(w)) score += 1.5;
         score += Math.min(body.get(w) ?? 0, 3) / 3;
       }
       if (score <= 0) continue;
-      hits.push({ ...this.info(n.parts, n.content, n.updated), score: Math.round((score / (q.length * 6)) * 1000) / 1000, snippet: snippetFor(n.content, q) });
+      // Shown out of 1 (a summarised note can score past the old ceiling of 6 a word); ranked on the raw score.
+      const shown = Math.min(1, Math.round((score / (q.length * 6)) * 1000) / 1000);
+      ranked.push({ hit: { ...this.info(n.parts, n.content, n.updated), score: shown, snippet: snippetFor(n.content, q) }, raw: score });
     }
-    return hits.sort((a, b) => b.score - a.score || b.updated - a.updated).slice(0, Math.max(1, Math.min(topK, 50)));
+    ranked.sort((a, b) => b.raw - a.raw || b.hit.updated - a.hit.updated);
+    return ranked.slice(0, Math.max(1, Math.min(topK, 50))).map(r => r.hit);
   }
 
-  /** Lines for the agent's perception step: where a note lives and the part that matched. */
+  /** Lines for the agent's perception step: where a note lives and what it is about (its written summary, else the part that matched). */
   digest(query: string, limit = 5): string[] {
-    return this.search(query, limit).map(h => `memory/${h.path}: ${h.title} — ${h.snippet}`);
+    return this.search(query, limit).map(h => `memory/${h.path}: ${h.title} — ${h.hasSummary ? h.summary : h.snippet}`);
+  }
+
+  /** Notes that have no written summary yet, newest change first. This is the AI's to-do list for summarising. */
+  unsummarized(limit = 20): NoteInfo[] {
+    return this.walk()
+      .map(n => this.info(n.parts, n.content, n.updated))
+      .filter(n => !n.hasSummary)
+      .sort((a, b) => b.updated - a.updated)
+      .slice(0, Math.max(1, Math.min(limit, 200)));
   }
 
   // ── Writing ─────────────────────────────────────────────────────────
@@ -331,8 +415,13 @@ export class MemoryFolders {
     if (isNew && this.count() >= MAX_NOTES) throw new MemoryFolderError(`Memory holds ${MAX_NOTES} notes already; merge or forget some first.`, 507);
   }
 
-  /** Create a note, or replace it. A heading is added when the text does not start with one. */
-  write(notePath: string, content: string): Note {
+  /**
+   * Create a note, or replace it. A heading is added when the text does not
+   * start with one. `summary` is the one-line "what this note is about" that
+   * search looks at; replacing a note without giving one drops the old
+   * summary, because it described text that is gone.
+   */
+  write(notePath: string, content: string, summary?: string): Note {
     const parts = parsePath(notePath, { note: true });
     if (typeof content !== "string" || content.trim().length === 0) throw new MemoryFolderError("A note needs some text.");
     if (content.length > MAX_WRITE_CHARS) throw new MemoryFolderError(`A note can be at most ${MAX_WRITE_CHARS} characters; split it into subtopics.`);
@@ -342,11 +431,24 @@ export class MemoryFolders {
     }
     this.ensureRoom(!this.isNote(parts));
     const body = content.trim();
-    const text = (/^#\s/.test(body) ? body : `# ${titleFromName(parts[parts.length - 1])}\n\n${body}`) + "\n";
+    let text = (/^#\s/.test(body) ? body : `# ${titleFromName(parts[parts.length - 1])}\n\n${body}`) + "\n";
+    const clean = typeof summary === "string" ? cleanSummary(summary) : "";
+    if (clean) text = withSummary(text, clean);
     const file = this.noteFile(parts);
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileAtomic(file, text);
     return this.read(parts.join("/"));
+  }
+
+  /** Set or replace the summary of an existing note, leaving the rest of it alone. */
+  setSummary(notePath: string, summary: string): Note {
+    const clean = typeof summary === "string" ? cleanSummary(summary) : "";
+    if (!clean) throw new MemoryFolderError("A summary needs some text.");
+    const note = this.read(notePath);
+    const text = withSummary(note.content.replace(/\s+$/, ""), clean) + "\n";
+    if (text.length > MAX_NOTE_CHARS) throw new MemoryFolderError(`"${note.path}" is too long to add a summary (${MAX_NOTE_CHARS} characters). Split it into subtopics first.`);
+    writeFileAtomic(this.noteFile(note.path.split("/")), text);
+    return this.read(note.path);
   }
 
   /** Add one dated line to a note, making the note if needed. The everyday way to "update". */
@@ -445,7 +547,7 @@ export class MemoryFolders {
 }
 
 function snippetFor(content: string, q: string[]): string {
-  const lines = content.split("\n").map(l => l.trim()).filter(l => l.length > 0 && !/^#\s/.test(l));
+  const lines = content.split("\n").map(l => l.trim()).filter(l => l.length > 0 && !/^#\s/.test(l) && !SUMMARY_LINE.test(l));
   let best = lines[0] ?? "";
   let bestN = -1;
   for (const l of lines) {
