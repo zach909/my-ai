@@ -3176,6 +3176,8 @@ async function testAGIModules() {
   check(rr.verified && rr.confidence > 0 && rr.confidence <= 1, 'ReasoningEngine: a non-empty answer is reported verified with bounded confidence');
   const grounded = await new ReasoningEngine({ recall: () => ['a relevant fact'], solveSub: () => 'generated' }).reason('anything');
   check(grounded.result === 'a relevant fact' && grounded.available.length === 1, 'ReasoningEngine: recalled memory is used as the answer when there is any');
+  const groundedButFailed = await new ReasoningEngine({ recall: () => ['a relevant fact'], solveSub: () => '[unsolved: no]' }).reason('anything');
+  check(groundedButFailed.result === 'a relevant fact' && !groundedButFailed.verified, 'ReasoningEngine: recalled memory does not hide a solver that failed');
   const failedRun = await new ReasoningEngine({ solveSub: () => '[error: boom]' }).reason('anything');
   check(!failedRun.verified, 'ReasoningEngine: an error-marked answer is not verified');
   const emptyRun = await new ReasoningEngine({}).reason('anything');
