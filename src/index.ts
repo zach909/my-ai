@@ -2490,8 +2490,8 @@ export class NeuroclawSystem {
         return grounding && grounding.importance < 0.3;
       });
       const cause: "missing-knowledge" | "incorrect-skill" | "bad-memory" | "reasoning" =
-        r.available.length === 0 ? "missing-knowledge" :
         failedViaSkill ? "incorrect-skill" :
+        r.available.length === 0 ? "missing-knowledge" :
         badMemory ? "bad-memory" :
         "reasoning";
       // §5: "which skills are missing/incomplete" needs to name the actual
