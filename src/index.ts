@@ -2513,7 +2513,7 @@ export class NeuroclawSystem {
         // the chosen approach's own consequence prediction rested on, not
         // left blank. Previously this field existed on Mistake/MistakeInput
         // but nothing ever populated it.
-        assumption: r.assumptions[0],
+        assumption: solvePrediction.assumptions[0],
         // §6: "how the failure can be prevented in the future" has to
         // actually depend on *why* it failed — every cause previously got
         // the exact same "gather information" text, which makes no sense
@@ -2550,10 +2550,10 @@ export class NeuroclawSystem {
     // known contradiction touching this problem's central concept, so a
     // confident-looking answer doesn't hide that the knowledge graph holds
     // two things it flatly disagrees about on the same topic.
-    const objectiveKey = normalizeText(r.objective);
+    const problemKey = normalizeText(problem);
     const contradictions = this.knowledge
       .findContradictions()
-      .filter(c => normalizeText(c.a.from) === objectiveKey || normalizeText(c.a.to) === objectiveKey)
+      .filter(c => [c.a.from, c.a.to].some(concept => { const k = normalizeText(concept); return k.length > 0 && problemKey.includes(k); }))
       .map(c => `"${c.a.from} ${c.a.type} ${c.a.to}" vs "${c.b.from} ${c.b.type} ${c.b.to}"`);
     // A known, unresolved contradiction on the topic at hand is itself
     // evidence the system shouldn't be fully confident — a deserved
@@ -2567,7 +2567,7 @@ export class NeuroclawSystem {
     // evidence, and re-checks known failure patterns for this task from
     // scratch, rather than trusting how the reasoner already applied them
     // internally.
-    const criticReport = await this.critic.review(Critic.fromReasoningResult(r));
+    const criticReport = await this.critic.review(Critic.fromReasoningResult(r, { assumptions: solvePrediction.assumptions }));
     const unsupportedAssumptions = criticReport.assumptionChallenges.filter(a => !a.supported);
     if (unsupportedAssumptions.length > 0) confidence = Math.max(0, confidence - 0.1);
     // ASI §5: "which memories are unreliable" — reinforce or demote the

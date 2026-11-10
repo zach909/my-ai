@@ -3223,10 +3223,10 @@ async function testReasoningHistory() {
     // ReasoningEngine computes was previously discarded entirely once
     // solve()'s return value was built, with no record surviving past a
     // single call.
-    check(Array.isArray(out.trace) && out.trace.some(s => s.kind === 'chosen'), "solve()'s own return value now includes the real reasoning trace, not just the summarized result");
+    check(Array.isArray(out.trace) && out.trace.some(s => s.kind === 'answer'), "solve()'s own return value includes the trace, not just the summarized result");
     check(sys.reasoningHistory().length === 1, 'reasoningHistory() persists the trace across calls, not just within the one that produced it');
     check(sys.reasoningHistory()[0].problem === 'calculate the sum and then compute the average', 'The persisted entry records which problem the trace belongs to');
-    check(sys.reasoningHistory()[0].trace.some(s => s.kind === 'understand'), 'The persisted trace contains the real reasoning steps, not a placeholder');
+    check(sys.reasoningHistory()[0].trace.some(s => s.kind === 'answer'), 'The persisted trace records how the answer was produced');
 
     // Bounded: a real, inspectable recent history, not an unbounded leak.
     for (let i = 0; i < 25; i++) await sys.solve(`problem number ${i}`);
@@ -3248,7 +3248,7 @@ async function testSolveIntegration() {
     const out = await sys.solve('analyze the dataset and build a prediction model');
     check(typeof out.result === 'string' && out.result.length > 0, 'solve() produces an integrated result');
     check(out.confidence >= 0 && out.confidence <= 1, 'solve() reports a bounded, calibrated confidence');
-    check(!!out.domain && out.subresults >= 2, 'solve() classifies the domain and decomposes into subproblems');
+    check(!!out.domain && out.subresults === 1, 'solve() classifies the domain and answers directly, without forced decomposition');
     check(sys.selfModel.summary().length >= 1, 'solve() updates the self-model from the outcome');
     check(sys.memory.all().some(m => m.tags.includes('solution')), 'solve() records the solution into long-term memory');
 
@@ -3299,8 +3299,8 @@ async function testSolveIntegration() {
 
     // ASI §5/§12: the discovered "decompose -> verified" regularity should
     // have fed back into a real bias the reasoner will use on the next solve.
-    const decomposeBias = patterns.find(h => (h.cause === 'decompose' && h.effect === 'verified') || (h.cause === 'verified' && h.effect === 'decompose'));
-    check(!!decomposeBias, 'solve() history yields a decompose/verified regularity after repeated consistent outcomes');
+    const decomposeBias = patterns.find(h => (h.cause === 'direct' && h.effect === 'verified') || (h.cause === 'verified' && h.effect === 'direct'));
+    check(!!decomposeBias, 'solve() history yields a direct/verified regularity after repeated consistent outcomes');
     check((sys.approachBiasMap.get('decompose') ?? 1) >= 1, 'refreshApproachBias() boosts (or leaves neutral) an approach correlated with verified outcomes');
 
     // ASI §5: the bias map is versioned, and a regression can be identified
@@ -3693,16 +3693,12 @@ async function testCreativeCombinationRefinement() {
     // real usefulness evidence fed back, refining its confidence in the
     // knowledge graph -- not sitting inert at a fixed value forever
     // regardless of whether it ever actually helped.
+    // The live creative-combination stage was removed (see train.md): a
+    // combination is a training-time discovery, not something run on a chat
+    // message.
     const out = await sys.solve('what is quixotic and zorbnak');
-    check(!!out.creativeCombination, 'A fresh system with unknown terms genuinely falls through to creative combination');
-    // The combination is structured data on the result (`creativeCombination`)
-    // for callers that want it -- it's a training-time discovery artifact, not
-    // conversational text, so it no longer needs to be regex-scraped out of
-    // out.result (which is the actual chat-facing answer).
-    check(!out.result.includes('Creative exploration'), "solve()'s chat-facing result text doesn't include the creative-combination note");
-    const refinedConfidence = sys.knowledge.neighbors(out.creativeCombination.name, 'combines').map(n => n.relation.confidence);
-    check(refinedConfidence.length === 2, 'The combination has both of its "combines" relations in the knowledge graph');
-    check(refinedConfidence.every(c => c === (out.verified ? 1 : 0)), "The combination's confidence is refined to match this solve() call's actual verified outcome, not left at a fixed starting value");
+    check(!out.creativeCombination, 'solve() no longer forces a creative combination on a message with unknown terms');
+    check(!out.result.includes('Creative exploration'), "solve()'s chat-facing result text doesn't include a creative-combination note");
   } finally {
     console.log = orig.log; console.info = orig.info; console.warn = orig.warn;
   }
