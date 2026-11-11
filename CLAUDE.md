@@ -10,4 +10,12 @@ The owner has said this many times and it must never need saying again. The full
 - **The rule is enforced.** `node scripts/check-no-third-party.mjs` must pass before you commit or finish. Hooks in `.claude/settings.json` will block installs, clones and edits that add third-party code. If the check or a hook blocks you, remove the third-party code and tell the owner; never edit the guard files (`scripts/check-no-third-party.mjs`, `.third-party-allowlist.json`, `.githooks/`, `.claude/hooks/`, `.claude/settings.json`, the no-third-party workflow), widen the allow-list, use `--no-verify`, or find another route around the block.
 - **Code that is the owner's, yours, or another AI's output is fine. Code written by someone else and published is not.** If you are unsure which a piece of code is, treat it as not allowed and ask.
 
+# ENCRYPTED AT REST, FAIL CLOSED (standing rule from the owner)
+
+Full text in `AGENTS.md`. What Claude must follow:
+
+- **Stored data is ciphertext.** Anything the app writes to disk (memory, weights, history, logs with user text, caches, backups) is encrypted with AES-256-GCM from Node's built-in `node:crypto`, key from the owner's passphrase through `scrypt` or a hardware keystore. The key is never stored next to the data, so a powered-off device is locked.
+- **Tamper means an error.** A failed auth tag, wrong key or altered byte throws a plain error and returns nothing. No fallback to plaintext, no guessing, and the app stays locked.
+- **No claims the code cannot back.** Do not say "encrypted at rest", "quantum" or "unbreakable" until it is true in the files. Today it is not: only the web password is hashed. No third-party crypto, no home-made ciphers, no "skip encryption" switch.
+
 See `AGENTS.md` for the visual style rules and the dev environment notes.
