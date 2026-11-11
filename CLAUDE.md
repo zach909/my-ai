@@ -18,6 +18,7 @@ Full text in `AGENTS.md`. What Claude must follow:
 - **Tamper means an error.** A failed auth tag, wrong key or altered byte throws a plain error and returns nothing. No fallback to plaintext, no guessing, and the app stays locked.
 - **Prefer physics-backed failure where hardware exists.** Key sealed in a TPM, Secure Enclave, StrongBox or OS keystore (first-party interfaces only), then chip-derived keys, then split keys, and quantum key distribution only if the owner supplies the hardware. AES alone is maths, not a law of physics; report on the status page which tier is really active and never show a stronger one.
 - **Physics is the target; software-only is an owner-chosen fallback.** Demand the chip-sealed or token-held key, never downgrade silently, keep secret-class data locked when no physical tier exists, and show the active tier. No commodity device gives quantum no-cloning today; do not imply it.
+- **Strongest provable protection for master secrets** (key split into shares on separate physical holders), AES-256-GCM plus an unreachable key for bulk data. Never write "unhackable" or "impossible to hack" anywhere; say what is protected and what is not.
 - **No claims the code cannot back.** Do not say "encrypted at rest", "quantum" or "unbreakable" until it is true in the files. Today it is not: only the web password is hashed. No third-party crypto, no home-made ciphers, no "skip encryption" switch.
 
 See `AGENTS.md` for the visual style rules and the dev environment notes.
