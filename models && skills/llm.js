@@ -3,6 +3,7 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { neuronsText } from "./core/neurons.js";
 import { effortText } from "./core/effort.js";
+import { questionsText } from "./core/questions.js";
 import { graftNetSkill } from "./core/net-skill-graft.js";
 import { ONEBRAIN_ID, ONEBRAIN_NAME, parseSelfExtension, emptyOneBrain, foldEdges, readOneBrain, writeOneBrain } from "./onebrain-memory.js";
 // Registry versions of OneBrain kept for rollback; older ones are removed so
@@ -356,6 +357,12 @@ export class NeuroclawLLM {
         const effortLine = effortText(options.effort);
         if (effortLine)
             zipFiles[`${ZIP_FOLDERS.effort}effort.txt`] = effortLine;
+        // Questions (how often to ask when unsure, core/questions.ts) is the
+        // third input of the kind: a one-line file in questions/, absent unless
+        // set. Port 9.
+        const questionsLine = questionsText(options.questions);
+        if (questionsLine)
+            zipFiles[`${ZIP_FOLDERS.questions}questions.txt`] = questionsLine;
         this.lastZipLoopFiles = Object.keys(zipFiles);
         const oneBrainRun = await runUntilStoppedAsync(zip, { files: zipFiles }, {
             quietTicks: 32,

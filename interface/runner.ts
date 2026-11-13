@@ -77,6 +77,7 @@ export class NeuroclawRunner extends EventEmitter {
     promptingSkills?: Array<{ name: string; title?: string; description?: string }>,
     neurons?: number | null,
     effort?: number | null,
+    questions?: number | null,
   ): Promise<string> {
     if (!this.running) await this.start();
 
@@ -112,6 +113,8 @@ export class NeuroclawRunner extends EventEmitter {
       ...(typeof neurons === 'number' ? { neurons } : {}),
       // Effort (how hard to try) is the next input beside it, on its own port.
       ...(typeof effort === 'number' ? { effort } : {}),
+      // Questions (how often to ask when unsure) is the third, on Port 9.
+      ...(typeof questions === 'number' ? { questions } : {}),
     });
     // The loop only ever saw one side of the conversation: prompts went in and
     // the agent's own answers did not, so it could never learn that an answer

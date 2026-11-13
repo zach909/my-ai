@@ -45,6 +45,11 @@ export interface GenerateOptions {
      */
     effort: number;
     /**
+     * Questions: how often to ask when unsure, 0-100 (core/questions.ts). Sent through the
+     * Zip Loop as questions/questions.txt (Port 9); nothing is sent when unset.
+     */
+    questions: number;
+    /**
      * Give up on OneBrain's answer after this many milliseconds. A run cut off
      * reads as silent (ONE_BRAIN_SILENT_REPLY) rather than hanging the caller.
      */

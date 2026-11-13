@@ -34,6 +34,7 @@ import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
 import { parseNeurons } from '../models && skills/core/neurons.js';
 import { parseEffort } from '../models && skills/core/effort.js';
+import { parseQuestions } from '../models && skills/core/questions.js';
 import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
@@ -610,10 +611,10 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     transform: translateY(0) scale(0.95);
   }
 
-  #neurons-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
-  #neurons { width: 96px; accent-color: #ff9a84; }
-  #neurons-out { min-width: 2.2em; opacity: 0.8; }
-  @media (max-width: 600px) { #neurons-wrap { display: none; } }
+  #neurons-wrap, #questions-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
+  #neurons, #questions { width: 96px; accent-color: #ff9a84; }
+  #neurons-out, #questions-out { min-width: 2.2em; opacity: 0.8; }
+  @media (max-width: 600px) { #neurons-wrap, #questions-wrap { display: none; } }
   #send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -761,6 +762,11 @@ ${PROMPT_BUTTON_CSS}
     <input type="range" id="neurons" min="0" max="100" step="5" value="50" aria-label="Neurons, how confident the AI acts, 0 to 100" aria-valuetext="50, balanced">
     <output id="neurons-out" for="neurons">50</output>
   </label>
+  <label id="questions-wrap" for="questions" title="Questions: how often it asks when it is not sure. Low assumes and gets on with it. High asks first.">
+    <span class="nc-dim">Questions</span>
+    <input type="range" id="questions" min="0" max="100" step="5" value="50" aria-label="Questions, how often the AI asks when it is not sure, 0 to 100" aria-valuetext="50, sometimes">
+    <output id="questions-out" for="questions">50</output>
+  </label>
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
@@ -782,6 +788,19 @@ ${PROMPT_BUTTON_CSS}
   try { const saved = localStorage.getItem('nc-neurons'); if (saved !== null && saved !== '') neuronsEl.value = saved; } catch (e) { /* storage may be blocked */ }
   showNeurons();
   neuronsEl.addEventListener('input', function () { showNeurons(); try { localStorage.setItem('nc-neurons', neuronsEl.value); } catch (e) { /* not saved */ } });
+  // Questions: how often the AI asks when it is not sure (0-100), its own input beside the message. Kept in this browser only.
+  const questionsEl = document.getElementById('questions');
+  const questionsOut = document.getElementById('questions-out');
+  const QUESTIONS_WORDS = [[90, 'always'], [70, 'often'], [40, 'sometimes'], [15, 'rarely'], [0, 'never']];
+  function showQuestions() {
+    const v = Number(questionsEl.value);
+    const w = QUESTIONS_WORDS.find(function (x) { return v >= x[0]; })[1];
+    questionsOut.textContent = String(v);
+    questionsEl.setAttribute('aria-valuetext', v + ', ' + w);
+  }
+  try { const savedQ = localStorage.getItem('nc-questions'); if (savedQ !== null && savedQ !== '') questionsEl.value = savedQ; } catch (e) { /* storage may be blocked */ }
+  showQuestions();
+  questionsEl.addEventListener('input', function () { showQuestions(); try { localStorage.setItem('nc-questions', questionsEl.value); } catch (e) { /* not saved */ } });
   const clearBtn = document.getElementById('clear-btn');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
@@ -1102,6 +1121,7 @@ ${PROMPT_BUTTON_CSS}
           visuals: ncVisuals.enabled(),
           buttons: true,
           neurons: Number(neuronsEl.value),
+          questions: Number(questionsEl.value),
           visualEvent,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
@@ -4542,7 +4562,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4580,7 +4600,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;

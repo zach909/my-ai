@@ -1,19 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import {
   ALL_PORTS, ZIP_LOOP_PORTS, PORT_COUNT, portByNumber, portOfNeuron, portLabel, bitPort, sendPort, portsOfDoorway,
-  PortTracker, QUESTIONING_PORT, EFFORT_PORT,
+  PortTracker, QUESTIONING_PORT, EFFORT_PORT, QUESTION_PORT,
 } from '../../models && skills/core/ports.js';
 import { zipLoopIdsFor } from '../../models && skills/core/onebrain.js';
 import { ZIP_FOLDERS } from '../../models && skills/core/zip-halt.js';
 
 describe('ports', () => {
-  it('numbers every neuron and input 1 to 8, inputs before outputs for the Zip Loop', () => {
-    expect(PORT_COUNT).toBe(8);
-    expect(ALL_PORTS.map(p => p.port)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  it('numbers every neuron and input 1 to 9, inputs before outputs for the Zip Loop', () => {
+    expect(PORT_COUNT).toBe(9);
+    expect(ALL_PORTS.map(p => p.port)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(ZIP_LOOP_PORTS.map(p => p.label)).toEqual(['bit 0 in', 'bit 1 in', 'send in', 'bit 0 out', 'bit 1 out', 'send out']);
     expect(ZIP_LOOP_PORTS.slice(0, 3).every(p => p.side === 'in')).toBe(true);
     expect(ZIP_LOOP_PORTS.slice(3).every(p => p.side === 'out')).toBe(true);
-    expect(portByNumber(9)).toBeUndefined();
+    expect(portByNumber(10)).toBeUndefined();
     expect(portLabel(3)).toBe('Port 3 (send in)');
   });
 
@@ -29,9 +29,10 @@ describe('ports', () => {
     expect(portOfNeuron(99)).toBeUndefined();
   });
 
-  it('puts questioning on 7 and effort on 8, in the folders the archive uses', () => {
+  it('puts questioning on 7, effort on 8 and the questions dial on 9, in the folders the archive uses', () => {
     expect(portByNumber(QUESTIONING_PORT)?.folder).toBe(ZIP_FOLDERS.neurons);
     expect(portByNumber(EFFORT_PORT)?.folder).toBe(ZIP_FOLDERS.effort);
+    expect(portByNumber(QUESTION_PORT)?.folder).toBe(ZIP_FOLDERS.questions);
   });
 
   it('lays a doorway\'s neurons (bit0In, bit1In, bit0Out, bit1Out, toggleIn, toggleOut) onto ports 1-6', () => {
