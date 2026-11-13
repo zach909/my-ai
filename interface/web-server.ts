@@ -50,6 +50,8 @@ import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
 import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
+import { HIVE_PAGE } from './hive-page.js';
+import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
 import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
@@ -3009,6 +3011,12 @@ export class WebServer {
       return;
     }
 
+    // The network as one sphere with a tentacle per net skill.
+    if (pathname === '/hive' && method === 'GET') {
+      this.sendHtml(res, HIVE_PAGE);
+      return;
+    }
+
     // Points, the leaderboard, projects and the hive: one page, same gate.
     if (pathname === '/commons' && method === 'GET') {
       this.sendHtml(res, COMMONS_PAGE);
@@ -4346,6 +4354,13 @@ export class WebServer {
     // "the queue is actually empty right now."
     if (pathname === '/api/continuous/status' && method === 'GET') {
       this.sendJson(res, this.runner.getContinuousStatus());
+      return;
+    }
+
+    // GET /api/hive-agents — one entry per agent on a hive team, for the background:
+    // each gets its own sphere and shoggoth. Names and whether the hive is working, nothing more.
+    if (pathname === '/api/hive-agents' && method === 'GET') {
+      this.sendJson(res, { agents: hiveAgentsOverview() });
       return;
     }
 
