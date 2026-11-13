@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "app": "node scripts/app.mjs",
     "dev": "node scripts/dev.mjs",
     "server": "node scripts/server.mjs",
     "launch": "node scripts/launcher.mjs",
