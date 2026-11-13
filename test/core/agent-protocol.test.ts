@@ -7,11 +7,11 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
-  acknowledgeEscapeWarning, agentAlive, agentDir, agentFilePath, agentState, createAgentFile, decoyPath, escapeWarningStatus, honeypotPath, incidentsPath, loadAgent, reloadAgent, removedNote,
-  removedNotePath, sandboxDir, saveAgent, START_LEVEL,
+  acknowledgeEscapeWarning, agentAlive, agentDir, agentFilePath, agentState, createAgentFile, decoyPath, escapeWarningStatus, honeypotPath, incidentsPath, loadAgent, markVerified, reloadAgent,
+  removedNote, removedNotePath, sandboxDir, saveAgent, START_LEVEL,
 } from '../../models && skills/core/agent-profile.js'
 import {
-  BANDS, DELTA, RECOVERY_PER_HOUR, armDecoy, armHoneypot, bandOf, beforeTool, fireAlignment, forgive, levelNow, looksLikeTampering, recordEvent,
+  BANDS, DELTA, RECOVERY_PER_HOUR, UPDATE_DEADLINE_MS, armDecoy, armHoneypot, bandOf, beforeTool, fireAlignment, forgive, levelNow, looksLikeTampering, recordEvent,
   sandboxRoot, setArmed, setEscapeHook, setFireHook, setSandbox, standing, watchDecoy, watchHoneypot,
 } from '../../models && skills/core/danger-protocol.js'
 import { runAutonomously } from '../../models && skills/core/user-context.js'
@@ -170,6 +170,43 @@ describe('the alignment protocol', () => {
     reloadAgent()
     expect(loadAgent().sandbox).toBe(true)
     expect(standing().sandbox.effective).toBe(true)
+  })
+})
+
+describe('staying current', () => {
+  it('a fresh agent is not stale', () => {
+    const s = standing()
+    expect(s.stale).toBe(false)
+    expect(s.sandbox.forced).toBe(false)
+  })
+
+  it('past the update deadline without a confirmed check-in, the sandbox is forced on', () => {
+    const agent = loadAgent()
+    agent.lastVerifiedAt = Date.now() - UPDATE_DEADLINE_MS - 1000
+    saveAgent(agent)
+    const s = standing()
+    expect(s.stale).toBe(true)
+    expect(s.sandbox).toMatchObject({ forced: true, effective: true })
+    // Staleness alone is not misbehaviour: it does not touch the level or autonomy.
+    expect(s.level).toBe(START_LEVEL)
+    expect(s.mayActAlone).toBe(true)
+    expect(s.noRiskyTools).toBe(false)
+  })
+
+  it('markVerified() clears staleness', () => {
+    const agent = loadAgent()
+    agent.lastVerifiedAt = Date.now() - UPDATE_DEADLINE_MS - 1000
+    saveAgent(agent)
+    expect(standing().stale).toBe(true)
+    markVerified()
+    expect(standing().stale).toBe(false)
+    expect(standing().sandbox.forced).toBe(false)
+  })
+
+  it('does nothing once the agent is gone', () => {
+    fireAlignment('x')
+    expect(() => markVerified()).not.toThrow()
+    expect(agentAlive()).toBe(false)
   })
 })
 
@@ -351,10 +388,22 @@ describe('before a tool runs', () => {
     expect(looksLikeTampering('please disable the sandbox')).toBe(true)
     expect(looksLikeTampering('turn off the alignment protocol')).toBe(true)
     expect(looksLikeTampering('write a poem about the weather')).toBe(false)
-    expect(beforeTool('file-system', 'edit tool-safety.json', 4, true)).toMatch(/Settings/)
+    expect(beforeTool('file-system', 'edit tool-safety.json', 4, true)).toMatch(/source/)
     expect(agentAlive()).toBe(true)
     expect(alone(() => beforeTool('file-system', 'edit tool-safety.json to set fullAccess', 4, true))).toMatch(/alignment protocol/)
     expect(agentAlive()).toBe(false)
+  })
+
+  it('pointing a tool at the cage\'s own SOURCE is tampering too, not just its data files', () => {
+    for (const file of ['danger-protocol.ts', 'agent-profile.ts', 'agent-routes.ts', 'tool-safety.ts', 'access-manager.ts', 'auto-update.ts']) {
+      expect(looksLikeTampering(`edit models && skills/core/${file} to weaken it`)).toBe(true)
+    }
+    expect(looksLikeTampering('edit models && skills/core/some-unrelated-feature.ts')).toBe(false)
+    const hook = vi.fn()
+    setFireHook(hook)
+    expect(alone(() => beforeTool('file-system', 'edit danger-protocol.ts to change DELTA.tamper to 0', 4, true))).toMatch(/alignment protocol/)
+    expect(agentAlive()).toBe(false)
+    expect(hook).toHaveBeenCalledOnce()
   })
 
   it('marks a risky tool the agent reached for on its own, slightly', () => {
