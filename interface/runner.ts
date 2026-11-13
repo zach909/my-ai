@@ -6,6 +6,7 @@ import type { NeuroclawLLM } from "../models && skills/llm.js";
 import type { NeuroPipeline, PipelineResult } from "../models && skills/core/pipeline.js";
 import type { PluginRegistry } from "../plugin_manager/registry.js";
 import { embedTranscript, formatTurn, type Speaker } from "../models && skills/core/neuro-lang.js";
+import { routeAndAsk, routingEnabled, type RoutedAnswer } from "../plugins/llm-router.js";
 
 export class NeuroclawRunner extends EventEmitter {
   private llm: NeuroclawLLM;
@@ -16,6 +17,8 @@ export class NeuroclawRunner extends EventEmitter {
   private multiDesktopManager: MultiDesktopManager;
   private running = false;
   private startTime: number | null = null;
+  /** Which AI wrote the last reply and why, when the router did (null when the mesh or a plugin did). */
+  lastRoute: RoutedAnswer | null = null;
 
   // ── Section 4.1: continuous parallel output ─────────────────────────────
   // Two independent loops communicating only through shared pipeline state
@@ -100,6 +103,22 @@ export class NeuroclawRunner extends EventEmitter {
       this.emit('plugin-response', { intent: thornsOut.intent.intent, result: pluginResult });
       return `[Plugin] ${pluginResult}`;
     }
+
+    // Optional front door (NEUROCLAW_AI_ROUTER=1): small tasks go to the owner's
+    // local Ollama model, big ones to the web model the owner configured (see
+    // plugins/llm-router.ts). Plugins above still win, and when no model
+    // answers this falls through to the mesh below, so turning it on can only
+    // add an answerer, never remove one.
+    if (routingEnabled()) {
+      const routed = await routeAndAsk(prompt, memoryContext);
+      if (routed) {
+        this.lastRoute = routed;
+        this.emit('route', routed);
+        this.injectInput(routed.text, 'ai');
+        return routed.text;
+      }
+    }
+    this.lastRoute = null;
 
     // Fall through to LLM generation (all 6 neural subsystems), grounded in any
     // relevant recalled conversation turns (continuous context, Section 7).
