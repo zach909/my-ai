@@ -18,6 +18,24 @@ A data neuron alone cannot say how many bits it means: holding the 0 neuron for 
 
 `ZipLoopInterface` still supports the older clock for callers that pass those ids: a send neuron (off while a bit is set up, on to commit it, two ticks per bit), optionally with a toggle that flips per bit. The live mesh doesn't use them.
 
+## Port numbers
+
+Every neuron that carries something in or out of the mesh is a **port**, numbered once and for good (`models && skills/core/ports.ts`):
+
+| Port | What it is |
+|---|---|
+| 1 | bit 0 in |
+| 2 | bit 1 in |
+| 3 | send in (the ramp: one tick per bit) |
+| 4 | bit 0 out |
+| 5 | bit 1 out |
+| 6 | send out |
+| 7 | questioning in (the confidence dial, `neurons/` folder) |
+| 8 | effort in (the effort dial, `effort/` folder) |
+| 9 | question in (the questions dial, `questions/` folder: how often it asks when it is not sure) |
+
+Inputs come before outputs. A doorway's six neurons are numbered 1 to 6 the same way, and each doorway counts the bits that go through each of its ports (`GET /api/doorways` shows them; `GET /api/ports` lists all nine). Effort is a 0-100 dial sent as `effort/effort.txt` (nothing is sent at the default of 50); the chat request takes it as `effort` beside `neurons`. Questions is the same kind of dial, sent as `questions/questions.txt` and taken as `questions`: 0 never asks and assumes the likeliest meaning, higher asks whenever it is less than that many percent sure what was meant (up to five questions), 100 asks at any doubt. It is separate from the confidence dial, and when both are set its line says it decides on asking. The chat page has a "Questions" slider beside "Neurons".
+
 ## Overview
 
 **Purpose**: Extend effective context far beyond what raw token storage would allow, by compressing everything that goes in and out and wrapping it in a bounded ring buffer instead of an ever-growing list.
