@@ -5,6 +5,8 @@ emit many simultaneous, independent streams of information — from users,
 external software, hardware, plugins, extensions, and its own internal
 subsystems — without collapsing them onto a single serial input/output path.
 
+> **Numbered ports in the code today.** The Zip Loop's six neurons and the two dials that ride beside the prompt are Ports 1-8 (`models && skills/core/ports.ts`, listed in `wiki/Zip-IO.md`). This document is the larger design for a many-stream Port Manager; those eight numbered ports are the part that exists.
+
 This document assumes familiarity with the existing systems the Port System
 sits between rather than replaces:
 
