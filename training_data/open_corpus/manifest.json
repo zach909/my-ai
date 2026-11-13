@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-31",
+  "generated": "2026-11-13",
   "gutenberg": [
     {
       "id": 1342,
@@ -8,8 +8,10 @@
       "url": "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",
       "page": "https://www.gutenberg.org/ebooks/1342",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 728713
+      "accessed": "2026-11-13",
+      "chars": 728713,
+      "file": "gutenberg/1342.txt",
+      "sha256": "ec5006ab5edb21cf0ee304712665ef03a8a96bc5ef2e8bb70877dca86973d79c"
     },
     {
       "id": 84,
@@ -18,8 +20,10 @@
       "url": "https://www.gutenberg.org/cache/epub/84/pg84.txt",
       "page": "https://www.gutenberg.org/ebooks/84",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 419336
+      "accessed": "2026-11-13",
+      "chars": 419336,
+      "file": "gutenberg/84.txt",
+      "sha256": "bde72e6909fb0caebf375b81f7a63140d2b6ffab49a473c670a498dee96934a8"
     },
     {
       "id": 11,
@@ -28,8 +32,10 @@
       "url": "https://www.gutenberg.org/cache/epub/11/pg11.txt",
       "page": "https://www.gutenberg.org/ebooks/11",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 144599
+      "accessed": "2026-11-13",
+      "chars": 144599,
+      "file": "gutenberg/11.txt",
+      "sha256": "b44b499274ef98e0bc12c190ee08d9c63480b7c96946101a540a0cb24b3a944c"
     },
     {
       "id": 2009,
@@ -38,8 +44,10 @@
       "url": "https://www.gutenberg.org/cache/epub/2009/pg2009.txt",
       "page": "https://www.gutenberg.org/ebooks/2009",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 1257090
+      "accessed": "2026-11-13",
+      "chars": 1257090,
+      "file": "gutenberg/2009.txt",
+      "sha256": "7bd26f06c6a6a73bea3d3c5b9d7ade6c44439ba7b18566ae28526d4358aa6aae"
     },
     {
       "id": 30155,
@@ -48,8 +56,10 @@
       "url": "https://www.gutenberg.org/cache/epub/30155/pg30155.txt",
       "page": "https://www.gutenberg.org/ebooks/30155",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 185570
+      "accessed": "2026-11-13",
+      "chars": 185570,
+      "file": "gutenberg/30155.txt",
+      "sha256": "824ee60bad8ed05c7e876cc614fe734fdbeb78afd05d0befc3a4068f96f70c5d"
     },
     {
       "id": 1497,
@@ -58,8 +68,10 @@
       "url": "https://www.gutenberg.org/cache/epub/1497/pg1497.txt",
       "page": "https://www.gutenberg.org/ebooks/1497",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 1194443
+      "accessed": "2026-11-13",
+      "chars": 1194443,
+      "file": "gutenberg/1497.txt",
+      "sha256": "30e5b674ac9f72c4906cfb5cf5d3f1e0df3b8459a1211d3a36879b6abad6515f"
     },
     {
       "id": 2680,
@@ -68,8 +80,70 @@
       "url": "https://www.gutenberg.org/cache/epub/2680/pg2680.txt",
       "page": "https://www.gutenberg.org/ebooks/2680",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 398201
+      "accessed": "2026-11-13",
+      "chars": 398201,
+      "file": "gutenberg/2680.txt",
+      "sha256": "95bcfa55d3a6bba03c42af3f32cff2dd5a7e3822962c8f267d3249f769adbfba"
+    },
+    {
+      "id": 59,
+      "title": "Discourse on the Method of Rightly Conducting One's Reason and of Seeking Truth in the Sciences",
+      "author": "René Descartes",
+      "url": "https://www.gutenberg.org/cache/epub/59/pg59.txt",
+      "page": "https://www.gutenberg.org/ebooks/59",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-11-13",
+      "chars": 128460,
+      "file": "gutenberg/59.txt",
+      "sha256": "532f88e7bbc73e7082991c626b034927d8c7089bc16c270d7a9aafd4198456d3"
+    },
+    {
+      "id": 9662,
+      "title": "An Enquiry Concerning Human Understanding",
+      "author": "David Hume",
+      "url": "https://www.gutenberg.org/cache/epub/9662/pg9662.txt",
+      "page": "https://www.gutenberg.org/ebooks/9662",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-11-13",
+      "chars": 347219,
+      "file": "gutenberg/9662.txt",
+      "sha256": "f026b9647e241c0754a43fc441f578db3ba8236aa9b23044b3756026f8ce9f57"
+    },
+    {
+      "id": 4280,
+      "title": "The Critique of Pure Reason",
+      "author": "Immanuel Kant",
+      "url": "https://www.gutenberg.org/cache/epub/4280/pg4280.txt",
+      "page": "https://www.gutenberg.org/ebooks/4280",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-11-13",
+      "chars": 1270044,
+      "file": "gutenberg/4280.txt",
+      "sha256": "f3d78b4ba78dbc10887f53fa3f78c3e557a8209b915b98d287b5972f9037586e"
+    },
+    {
+      "id": 205,
+      "title": "Walden, and On The Duty Of Civil Disobedience",
+      "author": "Henry David Thoreau",
+      "url": "https://www.gutenberg.org/cache/epub/205/pg205.txt",
+      "page": "https://www.gutenberg.org/ebooks/205",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-11-13",
+      "chars": 634786,
+      "file": "gutenberg/205.txt",
+      "sha256": "67c01b61970d6eecbccb372a6d5c2b644ae76f3c8fdac21eb238fea502306b05"
+    },
+    {
+      "id": 33504,
+      "title": "Opticks",
+      "author": "Isaac Newton",
+      "url": "https://www.gutenberg.org/cache/epub/33504/pg33504.txt",
+      "page": "https://www.gutenberg.org/ebooks/33504",
+      "licence": "Public domain in the USA (Project Gutenberg)",
+      "accessed": "2026-11-13",
+      "chars": 566900,
+      "file": "gutenberg/33504.txt",
+      "sha256": "e37ca1e6a0a1e1851a461839ffff591f967c9cea6e40b2be2e54a9db1a87ed63"
     },
     {
       "id": 34901,
@@ -78,8 +152,10 @@
       "url": "https://www.gutenberg.org/cache/epub/34901/pg34901.txt",
       "page": "https://www.gutenberg.org/ebooks/34901",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 306458
+      "accessed": "2026-11-13",
+      "chars": 306458,
+      "file": "gutenberg/34901.txt",
+      "sha256": "7b13eba8d886fe97a8f9a596d5f5c24bf7a235946637d1317a31cababe8c55ff"
     },
     {
       "id": 11224,
@@ -88,37 +164,45 @@
       "url": "https://www.gutenberg.org/cache/epub/11224/pg11224.txt",
       "page": "https://www.gutenberg.org/ebooks/11224",
       "licence": "Public domain in the USA (Project Gutenberg)",
-      "accessed": "2026-10-31",
-      "chars": 161129
+      "accessed": "2026-11-13",
+      "chars": 161129,
+      "file": "gutenberg/11224.txt",
+      "sha256": "27d684daac175b8dcb48148439541c31e90ba9218f3a0dda71e2c09e54164741"
     }
   ],
   "wikipedia": [
     {
       "title": "Photosynthesis",
       "url": "https://en.wikipedia.org/wiki/Photosynthesis",
-      "revision": "1379238357",
-      "timestamp": "2026-10-08T19:44:08Z",
+      "revision": "1383248806",
+      "timestamp": "2026-11-01T19:09:13Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 901
+      "accessed": "2026-11-13",
+      "chars": 901,
+      "file": "wikipedia/Photosynthesis.txt",
+      "sha256": "bb0a4892e5c7597b2cbfe46b899b3cd9b2def4323da633526632f00c880f3fc2"
     },
     {
       "title": "Black hole",
       "url": "https://en.wikipedia.org/wiki/Black_hole",
-      "revision": "1382111817",
-      "timestamp": "2026-10-26T17:46:21Z",
+      "revision": "1384668324",
+      "timestamp": "2026-11-09T13:08:54Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 608
+      "accessed": "2026-11-13",
+      "chars": 608,
+      "file": "wikipedia/Black_hole.txt",
+      "sha256": "a5a40e651e87d5767295b8fa3672e40d46f15b66e72dfc6c2fc9cc79b64a1439"
     },
     {
       "title": "Quantum computing",
       "url": "https://en.wikipedia.org/wiki/Quantum_computing",
-      "revision": "1382157097",
-      "timestamp": "2026-10-26T23:54:42Z",
+      "revision": "1385514453",
+      "timestamp": "2026-11-13T17:59:15Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 585
+      "accessed": "2026-11-13",
+      "chars": 585,
+      "file": "wikipedia/Quantum_computing.txt",
+      "sha256": "114b0e69eb5d02d6bd8ce73697b49cea6c924486aa6a0bfdfe85b915ecca316e"
     },
     {
       "title": "Logic gate",
@@ -126,8 +210,10 @@
       "revision": "1380379458",
       "timestamp": "2026-10-15T11:42:30Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 338
+      "accessed": "2026-11-13",
+      "chars": 338,
+      "file": "wikipedia/Logic_gate.txt",
+      "sha256": "3148c446d39e63ebd269695aa4a180d3a2159014ce0da1abc023ba1a0b5556bc"
     },
     {
       "title": "Periodic table",
@@ -135,44 +221,54 @@
       "revision": "1381469771",
       "timestamp": "2026-10-22T18:50:36Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 603
+      "accessed": "2026-11-13",
+      "chars": 603,
+      "file": "wikipedia/Periodic_table.txt",
+      "sha256": "fd5e8f9eb97f824fca54ee5827a10a19faceff692c0cc5a20e2fac610fe5c1d9"
     },
     {
       "title": "Thermodynamics",
       "url": "https://en.wikipedia.org/wiki/Thermodynamics",
-      "revision": "1382597008",
-      "timestamp": "2026-10-29T11:54:55Z",
+      "revision": "1383796974",
+      "timestamp": "2026-11-04T22:51:23Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 645
+      "accessed": "2026-11-13",
+      "chars": 645,
+      "file": "wikipedia/Thermodynamics.txt",
+      "sha256": "b22e7b1f6aebcf10934078b84e584baf716fe701d6c1ee67f3e4a0ddd7eded9a"
     },
     {
       "title": "Machine learning",
       "url": "https://en.wikipedia.org/wiki/Machine_learning",
-      "revision": "1382314933",
-      "timestamp": "2026-10-28T00:12:37Z",
+      "revision": "1384336237",
+      "timestamp": "2026-11-07T20:01:34Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 251
+      "accessed": "2026-11-13",
+      "chars": 251,
+      "file": "wikipedia/Machine_learning.txt",
+      "sha256": "43de04edd04970ba9475729fc118a81a4d4a2e4a11242037b540120943108515"
     },
     {
       "title": "Neuron",
       "url": "https://en.wikipedia.org/wiki/Neuron",
-      "revision": "1378644558",
-      "timestamp": "2026-10-05T12:10:45Z",
+      "revision": "1384120005",
+      "timestamp": "2026-11-06T18:20:08Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 486
+      "accessed": "2026-11-13",
+      "chars": 566,
+      "file": "wikipedia/Neuron.txt",
+      "sha256": "b96dc7c4fa4470592c0ec5cc7165f4e7d6fd117a92c3ee5597f95d7693a8578c"
     },
     {
       "title": "DNA",
       "url": "https://en.wikipedia.org/wiki/DNA",
-      "revision": "1379332306",
-      "timestamp": "2026-10-09T08:37:08Z",
+      "revision": "1385505395",
+      "timestamp": "2026-11-13T16:48:28Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 498
+      "accessed": "2026-11-13",
+      "chars": 498,
+      "file": "wikipedia/DNA.txt",
+      "sha256": "9c7d2914227de9ed2eb50d72ad0200a6ae28711c98be3dd05e8d3c38a90315b9"
     },
     {
       "title": "Plate tectonics",
@@ -180,8 +276,10 @@
       "revision": "1381934246",
       "timestamp": "2026-10-25T18:21:16Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 488
+      "accessed": "2026-11-13",
+      "chars": 488,
+      "file": "wikipedia/Plate_tectonics.txt",
+      "sha256": "79f1380ee32fbe6344a1d298aafb887b36919640d1432233967520ef517ac578"
     },
     {
       "title": "Prime number",
@@ -189,8 +287,10 @@
       "revision": "1381705799",
       "timestamp": "2026-10-24T07:13:30Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 614
+      "accessed": "2026-11-13",
+      "chars": 614,
+      "file": "wikipedia/Prime_number.txt",
+      "sha256": "e5a793398218c16bd28b3023c7cdb89c3b04290853282b2b8b638499767cf361"
     },
     {
       "title": "Ethics",
@@ -198,8 +298,10 @@
       "revision": "1382513816",
       "timestamp": "2026-10-29T01:50:50Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 261
+      "accessed": "2026-11-13",
+      "chars": 261,
+      "file": "wikipedia/Ethics.txt",
+      "sha256": "d91dd8c441ac0f6ef3a889b03e2d410af4e21e3faad97682030282b167805e5c"
     },
     {
       "title": "Scientific method",
@@ -207,8 +309,10 @@
       "revision": "1381348974",
       "timestamp": "2026-10-21T20:27:02Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 599
+      "accessed": "2026-11-13",
+      "chars": 599,
+      "file": "wikipedia/Scientific_method.txt",
+      "sha256": "4e6a55fe877a92eafbdd120a259818fb952b6aafb3ab7cb5299609460c5549f4"
     },
     {
       "title": "Electromagnetism",
@@ -216,17 +320,239 @@
       "revision": "1382852918",
       "timestamp": "2026-10-30T17:27:22Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 542
+      "accessed": "2026-11-13",
+      "chars": 542,
+      "file": "wikipedia/Electromagnetism.txt",
+      "sha256": "092d00b349b67b2c6d5da4110c19f97bc1366b7fbaac1d6dfe7d1c7bff55fec8"
     },
     {
       "title": "Evolution",
       "url": "https://en.wikipedia.org/wiki/Evolution",
-      "revision": "1381515403",
-      "timestamp": "2026-10-23T01:23:41Z",
+      "revision": "1385277053",
+      "timestamp": "2026-11-12T16:28:45Z",
       "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
-      "accessed": "2026-10-31",
-      "chars": 511
+      "accessed": "2026-11-13",
+      "chars": 511,
+      "file": "wikipedia/Evolution.txt",
+      "sha256": "2b809e04175a222b980b046db06fe2cf048ffc030e0b9e6f7bafeda96a61a027"
+    }
+  ],
+  "wikipediaFull": [
+    {
+      "title": "Entropy",
+      "url": "https://en.wikipedia.org/wiki/Entropy",
+      "revision": 1384089979,
+      "timestamp": "2026-11-06T14:50:37Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Entropy&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 56381,
+      "file": "wikipedia_full/Entropy.txt",
+      "sha256": "d738b62b09abf40402589c9271d3ce1d55e1a912b25e08f80021f07c732d5135"
+    },
+    {
+      "title": "Atom",
+      "url": "https://en.wikipedia.org/wiki/Atom",
+      "revision": 1384671172,
+      "timestamp": "2026-11-09T13:38:43Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Atom&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 52905,
+      "file": "wikipedia_full/Atom.txt",
+      "sha256": "a7f69a91dbff8b67ac2f5f953b922bae6276304f487bffa23b6b3ce12e780d2e"
+    },
+    {
+      "title": "Cell (biology)",
+      "url": "https://en.wikipedia.org/wiki/Cell_(biology)",
+      "revision": 1384616868,
+      "timestamp": "2026-11-09T04:12:54Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Cell_(biology)&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 39634,
+      "file": "wikipedia_full/Cell_(biology).txt",
+      "sha256": "2e745ad5dbbd007e34a1236829bf054e25ee8a68a6d94ed461a05366f987e73e"
+    },
+    {
+      "title": "Energy",
+      "url": "https://en.wikipedia.org/wiki/Energy",
+      "revision": 1378442640,
+      "timestamp": "2026-10-04T14:25:19Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Energy&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 41553,
+      "file": "wikipedia_full/Energy.txt",
+      "sha256": "ede9807409fe7227c6c9c412aa8eb86580a5b30f3bba557a2c8a4b97797d68bf"
+    },
+    {
+      "title": "Gravity",
+      "url": "https://en.wikipedia.org/wiki/Gravity",
+      "revision": 1384351785,
+      "timestamp": "2026-11-07T21:23:17Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Gravity&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 37503,
+      "file": "wikipedia_full/Gravity.txt",
+      "sha256": "90b6f8596bb3aebd4381815d164e960cd13eb75992988018a32f05bdd841bd68"
+    },
+    {
+      "title": "Chemical reaction",
+      "url": "https://en.wikipedia.org/wiki/Chemical_reaction",
+      "revision": 1367113117,
+      "timestamp": "2026-08-01T02:07:10Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Chemical_reaction&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 42875,
+      "file": "wikipedia_full/Chemical_reaction.txt",
+      "sha256": "e16943ac1355365f334f57e9149e2022c623e07ab823822ec0b9ac6240703e85"
+    },
+    {
+      "title": "Algorithm",
+      "url": "https://en.wikipedia.org/wiki/Algorithm",
+      "revision": 1384972961,
+      "timestamp": "2026-11-11T03:47:02Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Algorithm&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 28235,
+      "file": "wikipedia_full/Algorithm.txt",
+      "sha256": "d10f26674bfada6c6c1bec413cd14f350b94d1e48526dc7ffebcaa84405f3abb"
+    },
+    {
+      "title": "Computer",
+      "url": "https://en.wikipedia.org/wiki/Computer",
+      "revision": 1384540596,
+      "timestamp": "2026-11-08T19:41:52Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Computer&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 55352,
+      "file": "wikipedia_full/Computer.txt",
+      "sha256": "b1644bd696859cbb73b5f3225e9d69d9bb51db003d72540b92eaf2c227d23b78"
+    },
+    {
+      "title": "Mathematics",
+      "url": "https://en.wikipedia.org/wiki/Mathematics",
+      "revision": 1385206051,
+      "timestamp": "2026-11-12T09:40:53Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Mathematics&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 55708,
+      "file": "wikipedia_full/Mathematics.txt",
+      "sha256": "640044d3f010f6b8ecee6d289fc472df3ef008ec4c03367b17759f59a1fc4e60"
+    },
+    {
+      "title": "Probability",
+      "url": "https://en.wikipedia.org/wiki/Probability",
+      "revision": 1381440308,
+      "timestamp": "2026-10-22T14:29:40Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Probability&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 21755,
+      "file": "wikipedia_full/Probability.txt",
+      "sha256": "22f609b4606e45eee9ef850be4267f8749f89d31c1881dcced2441d566caa0bc"
+    },
+    {
+      "title": "Logic",
+      "url": "https://en.wikipedia.org/wiki/Logic",
+      "revision": 1384254302,
+      "timestamp": "2026-11-07T10:01:10Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Logic&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 56357,
+      "file": "wikipedia_full/Logic.txt",
+      "sha256": "4b02af9e8f6db3214c7298c5a7d33c4359877ff964cb1214bec527a43a71bda5"
+    },
+    {
+      "title": "Epistemology",
+      "url": "https://en.wikipedia.org/wiki/Epistemology",
+      "revision": 1385300421,
+      "timestamp": "2026-11-12T18:03:52Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Epistemology&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 54683,
+      "file": "wikipedia_full/Epistemology.txt",
+      "sha256": "281d5c2199b540b774ee997218673a8717671897611380b4af90d9ced68c95a3"
+    },
+    {
+      "title": "Information theory",
+      "url": "https://en.wikipedia.org/wiki/Information_theory",
+      "revision": 1384611664,
+      "timestamp": "2026-11-09T03:26:43Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Information_theory&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 31885,
+      "file": "wikipedia_full/Information_theory.txt",
+      "sha256": "f129fb8f11f4e609a3f040eb139ba4e3c4b8d4e22a245146489cd6376c477e86"
+    },
+    {
+      "title": "Cryptography",
+      "url": "https://en.wikipedia.org/wiki/Cryptography",
+      "revision": 1385327236,
+      "timestamp": "2026-11-12T20:30:43Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Cryptography&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 54127,
+      "file": "wikipedia_full/Cryptography.txt",
+      "sha256": "06cf97ef88855e96d13c80a3d43b9a4f89a7179f63f3900b4cb1ddac9ff9d27a"
+    },
+    {
+      "title": "Neural network (machine learning)",
+      "url": "https://en.wikipedia.org/wiki/Neural_network_(machine_learning)",
+      "revision": 1383844653,
+      "timestamp": "2026-11-05T03:24:26Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Neural_network_(machine_learning)&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 44942,
+      "file": "wikipedia_full/Artificial_neural_network.txt",
+      "sha256": "0ce4db1944728d46c964fd42a00199d3555532cda761a853d4043434cc9ac39c"
+    },
+    {
+      "title": "Natural selection",
+      "url": "https://en.wikipedia.org/wiki/Natural_selection",
+      "revision": 1381515893,
+      "timestamp": "2026-10-23T01:28:23Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Natural_selection&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 53830,
+      "file": "wikipedia_full/Natural_selection.txt",
+      "sha256": "5edb4994637bcd8c5054b5c63f9a33b358d77ab4c42167810e06986ec733066e"
+    },
+    {
+      "title": "Genetics",
+      "url": "https://en.wikipedia.org/wiki/Genetics",
+      "revision": 1380286629,
+      "timestamp": "2026-10-14T21:39:58Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Genetics&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 41242,
+      "file": "wikipedia_full/Genetics.txt",
+      "sha256": "c638f29dcd1c7f6ee161680041b84fdb29d917abd94230798b994a3af4a34cc6"
+    },
+    {
+      "title": "Optics",
+      "url": "https://en.wikipedia.org/wiki/Optics",
+      "revision": 1383635793,
+      "timestamp": "2026-11-03T21:12:16Z",
+      "history": "https://en.wikipedia.org/w/index.php?title=Optics&action=history",
+      "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); text by Wikipedia contributors",
+      "accessed": "2026-11-13",
+      "chars": 63858,
+      "file": "wikipedia_full/Optics.txt",
+      "sha256": "748112d10496fb6b7c458e55704df39345fc60b9f4c3440382ff111e83da363a"
     }
   ]
 }

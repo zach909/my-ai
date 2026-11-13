@@ -75,6 +75,11 @@ export const ZIP_FOLDERS = {
    */
   neurons: "neurons/",
   /**
+   * Effort: how hard to try and how long to keep going, a dial from 0 to 100 (core/effort.ts). Its own input
+   * beside the prompt, like neurons/ and not part of the prompt. Absent unless the dial was set. Port 8 (core/ports.ts).
+   */
+  effort: "effort/",
+  /**
    * Chat history from other conversations -- the network's past across
    * sessions, not just the exchange it is in the middle of. A folder like any
    * other, so being handed your own history comes through the same doorway as
