@@ -8,6 +8,9 @@ That has been removed. `reason()` now recalls what memory holds for the problem 
 problem to the hive / neural runner. Whatever shape the thinking takes is meant to come from the
 network.
 
+What the network is trained *on* (music, art, animal calls, speech, math, 360° video, simulation, code,
+chip design, in that order) is in `docs/TRAINING_CURRICULUM.md`.
+
 The old code is still in git history if you want to read it:
 `git show 878d95d9:"models && skills/core/reasoning-engine.ts"`.
 
