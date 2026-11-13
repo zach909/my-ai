@@ -19,11 +19,14 @@ Connections are drawn from the thesaurus, then defined by the dictionary.
 name="example"
 ```
 
-#### Set Elastic-Core Value
+#### Set a Neuron's Value
 Higher value means the neuron changes less (more stable knowledge).
 ```
-"name"@vale="number"
+"name"@value="number"
 ```
+The number is stored as written, and also, clamped to 0 to 1, as how much the
+neuron resists change (it feeds the [[Elastic-Value-Budget]]). `@vale` is the
+older spelling and means exactly the same.
 
 #### Define Connections
 Default is all-to-all if not filled in. The runtime TypeScript parser
@@ -36,13 +39,14 @@ Default is all-to-all if not filled in. The runtime TypeScript parser
 In the Section 20 form, `/variable` names a per-dimension state selector (parsed;
 the scalar-per-edge weight is `bias`, and a trailing bare number folds in as an
 additive refinement — `.y/state*0.5+0.25` → weight `0.75`). `@conections`
-(single-n) is accepted as an alias. The per-dimension state-var *routing* is a
+is the older spelling and is still accepted. The per-dimension state-var *routing* is a
 Python-track feature; the TS runtime stores one scalar weight per edge.
 
 #### Define Output for Input-Only Case
 ```
-"name"@definishon="definshon"
+"name"@definition="text"
 ```
+(`@definishon` is the older spelling and is still accepted.)
 
 ### Advanced Features
 
@@ -84,22 +88,22 @@ train="responses"
 
 ```
 name="input_layer"
-vale="10"
+value="10"
 
 name="hidden_layer"
-vale="5"
-conections=".input_layer"*"0.5"+"1.0"
+value="5"
+connections=".input_layer"*"0.5"+"1.0"
 
 name="output_layer"
-vale="8"
-conections=".hidden_layer"*"0.7"+"0.5"
-definishon="final_output"
+value="8"
+connections=".hidden_layer"*"0.7"+"0.5"
+definition="final_output"
 ```
 
 ### Code-to-Net Example
 
 ```
-code@binary_import="my_function"
+code@name="binary_import"
 "binary_import"@code="0x89504E47..."
 ```
 

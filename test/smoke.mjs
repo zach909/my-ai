@@ -1983,8 +1983,9 @@ async function testNeuralDefinitionDirectives() {
   const { NeuroLangInterpreter } = await load('models && skills/core/neuro-lang.js');
   const it = new NeuroLangInterpreter();
   const src = [
-    'name="alpha"', '"alpha"@value="2.5"', '"alpha"@vale="0.8"',
+    'name="alpha"', '"alpha"@value="2.5"',
     '"alpha"@definition="the first neuron"',
+    'name="gamma"', '"gamma"@vale="0.8"',
     'name="beta"', '"beta"@connections=".alpha*0.5"',
     'code@name="calc"', '"calc"@code="return a+b"',
     '"netsearch"@name="finder"', '"netsearch"@net="corpus/defs"',
@@ -1992,7 +1993,9 @@ async function testNeuralDefinitionDirectives() {
   const r = await it.parse(src);
   const neurons = await it.evaluate(r);
   check(r.errors.length === 0, 'Neural Definition DSL parses all directives without error');
-  check(neurons.get('alpha').value === 2.5 && neurons.get('alpha').vale === 0.8, 'name/@value/@vale applied');
+  // @value and @vale are one setting: the number as written, and that number clamped to 0..1 as resistance to change.
+  check(neurons.get('alpha').value === 2.5 && neurons.get('alpha').vale === 1, '@value stores the number and clamps it to 1 as the elasticity');
+  check(neurons.get('gamma').value === 0.8 && neurons.get('gamma').vale === 0.8, 'the old spelling @vale means exactly the same');
   check(neurons.get('beta').connections.get('alpha') === 0.5, '@connections installs a weighted edge');
   // The multi-target form documented in neuro-lang.ts's header
   // (".other*0.5+.third*0.3") must parse into one edge per target — guards

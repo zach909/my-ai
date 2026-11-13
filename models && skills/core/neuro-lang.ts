@@ -3,11 +3,12 @@
  *
  * Syntax summary:
  *   name="example"                             — create neuron named "example"
- *   "name"@value="1.0"                         — set neuron's value
- *   "name"@vale="0.9"                          — set neuron's vale (elasticity/resistance to change)
+ *   "name"@value="0.9"                         — what the neuron is worth: stored as written, and
+ *                                                 (clamped to 0..1) how much it resists change.
+ *                                                 Old spelling @vale= means exactly the same.
  *   "name"@wave="0.3,1.57"                     — set neuron's wave: frequency, then phase in radians
- *   "name"@connections=".other*0.5+.third*0.3"  — set connections (alias: @conections=)
- *   "name"@definition="text"                   — set definition (alias: @definishon=)
+ *   "name"@connections=".other*0.5+.third*0.3"  — set connections (old spelling: @conections=)
+ *   "name"@definition="text"                   — set definition (old spelling: @definishon=)
  *   "name"@code="code"                         — attach code
  *   "name"@role="input"                        — tag as this skill's input layer (alias: "output")
  *   code@name="calc"                           — create code-to-net neuron
@@ -37,10 +38,11 @@
  * reads it back after install() to hand a skill's caller its input/output
  * neurons without needing to know their names in advance.
  *
- * @conections= and @definishon= are the DSL's canonical (deliberately
- * non-standard) spellings from the original neurolang.py; @connections=/
- * @definition= are accepted as the same primitive under a conventional
- * spelling. Both parse to the same NeuriNeuron fields.
+ * @connections=, @definition= and @value= are the spellings to write. The
+ * original design notes spelled them @conections=, @definishon= and @vale=;
+ * those are still accepted and mean exactly the same, so older programs and
+ * wiki examples keep working. Both spellings parse to the same NeuriNeuron
+ * fields.
  *
  * All neurons are connected by default (weight 0.1) unless an explicit
  * connection is specified.
@@ -108,6 +110,10 @@ export type NeuriFrozen = 'now' | 'after';
 /** Most neurons `neurons="N"` may ask for: the mesh is all-to-all, so cost grows with the square. */
 export const MAX_DECLARED_NEURONS = 1024;
 
+/** Stand-ins for \" and \\ inside a value while a line is matched (private-use characters nobody types). */
+const ESC_QUOTE = '\uE000';
+const ESC_BACKSLASH = '\uE001';
+
 /** The program-level statements: what is being made, how big, and how it is trained. */
 export interface NeuriProgram {
   kind?: NeuriKind;
@@ -124,6 +130,8 @@ export interface ParseResult {
   printOutputs: string[];
   /** Present only when the source used kind / neurons / train statements. */
   program?: NeuriProgram;
+  /** Things that parsed but are probably mistakes: a typo that made a new neuron, a repeated kind, two neurons with one input. Present only when there are some. */
+  warnings?: string[];
 }
 
 // ── JSON serialisation helpers ────────────────────────────────────────────────
@@ -169,6 +177,13 @@ const EVALUATE_YIELD_EVERY_PAIRS = 200_000;
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 export class NeuroLangInterpreter {
+  /** Most neurons `neurons="N"` may make. The default protects the routes that parse a stranger's source; a caller that trusts its own source can pass Infinity. */
+  private readonly maxNeurons: number;
+
+  constructor(opts: { maxNeurons?: number } = {}) {
+    this.maxNeurons = opts.maxNeurons ?? MAX_DECLARED_NEURONS;
+  }
+
   /** Parse-scoped: the pending `"netsearch"@name=` awaiting a `@net=`. */
   private pendingNetSearch: string | null = null;
 
@@ -196,6 +211,11 @@ export class NeuroLangInterpreter {
   private program: NeuriProgram = { defaults: {} };
   private programTouched = false;
   private explicit = { value: new Set<string>(), vale: new Set<string>(), frozen: new Set<string>() };
+  /** Parse-scoped: the neuron the last `name="X"` opened, which bare `vale="…"`-style lines apply to. */
+  private current: string | null = null;
+  /** Parse-scoped: neurons made on purpose (name=, code@name=, netsearch@name=, neurons="N"), as opposed to by being mentioned. */
+  private declared = new Set<string>();
+  private warnings: string[] = [];
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -215,6 +235,9 @@ export class NeuroLangInterpreter {
     this.program = { defaults: {} };
     this.programTouched = false;
     this.explicit = { value: new Set(), vale: new Set(), frozen: new Set() };
+    this.current = null;
+    this.declared = new Set();
+    this.warnings = [];
 
     const lines = source.split(/\r?\n/);
 
@@ -234,7 +257,7 @@ export class NeuroLangInterpreter {
       // "unrecognised syntax".
       if (/^dims\s*=\s*\d+$/i.test(raw.trim())) continue;
       // Strip inline comments (-- ...) and trim whitespace
-      const line = raw.replace(/--.*$/, '').trim();
+      const line = this.prepareLine(raw);
       if (!line) continue;
 
       const compilesBefore = this.compileCallCount;
@@ -248,10 +271,79 @@ export class NeuroLangInterpreter {
     }
 
     this.finalizeProgram(neurons);
+    this.unescapeText(neurons);
+    this.checkForMistakes(neurons);
     this.lastNeurons = neurons;
     const result: ParseResult = { neurons, errors, printOutputs };
     if (this.programTouched) result.program = this.program;
+    if (this.warnings.length > 0) result.warnings = this.warnings;
     return result;
+  }
+
+  /**
+   * One line, ready to match: a `--` comment is cut off only when it is OUTSIDE
+   * a quoted value (it used to cut text that happened to contain `--`), and
+   * `\"` and `\\` inside a quoted value become placeholder characters so a value
+   * can hold a quote or a backslash. unescapeText() turns them back after
+   * parsing. No program in the repo used a backslash, so this changes nothing
+   * that worked before.
+   */
+  private prepareLine(raw: string): string {
+    let out = '';
+    let inString = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (inString) {
+        if (ch === '\\' && (raw[i + 1] === '"' || raw[i + 1] === '\\')) {
+          out += raw[i + 1] === '"' ? ESC_QUOTE : ESC_BACKSLASH;
+          i++;
+          continue;
+        }
+        if (ch === '"') inString = false;
+        out += ch;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === '-' && raw[i + 1] === '-') break; // a comment, outside any value
+      out += ch;
+    }
+    return out.trim();
+  }
+
+  /** Put the quotes and backslashes back in every text value. */
+  private unescapeText(neurons: Map<string, NeuriNeuron>): void {
+    const back = (t: string) => t.split(ESC_QUOTE).join('"').split(ESC_BACKSLASH).join('\\');
+    for (const n of neurons.values()) {
+      n.definition = back(n.definition);
+      n.corpus = back(n.corpus);
+      n.query = back(n.query);
+      if (n.code !== null) n.code = back(n.code);
+      if (n.input !== undefined) n.input = back(n.input);
+      if (n.response !== undefined) n.response = back(n.response);
+      if (n.reads !== undefined) n.reads = back(n.reads);
+    }
+    if (this.program.train?.text !== undefined) this.program.train.text = back(this.program.train.text);
+  }
+
+  /** Things that parsed but are probably not what was meant. */
+  private checkForMistakes(neurons: Map<string, NeuriNeuron>): void {
+    // A typo in a neuron name makes a brand new neuron when the program said how many it wanted.
+    if (this.program.neuronCount !== undefined) {
+      for (const name of neurons.keys()) {
+        if (!this.declared.has(name)) {
+          this.warnings.push(`"${name}" was not declared (neurons="${this.program.neuronCount}" made n1 to n${this.program.neuronCount}); it was made because a statement mentions it. A typo?`);
+        }
+      }
+    }
+    // Two neurons with one input have no single answer to it.
+    const byInput = new Map<string, string[]>();
+    for (const n of neurons.values()) {
+      if (n.input === undefined) continue;
+      byInput.set(n.input, [...(byInput.get(n.input) ?? []), n.name]);
+    }
+    for (const [input, names] of byInput) {
+      if (names.length > 1) this.warnings.push(`${names.map(n => `"${n}"`).join(' and ')} share the input "${input}", so typing it is ambiguous`);
+    }
   }
 
   /**
@@ -495,6 +587,21 @@ export class NeuroLangInterpreter {
     neurons: Map<string, NeuriNeuron>,
     printOutputs: string[]
   ): void {
+    // ── value="…" / vale="…" / connections="…" / definition="…" … on their own ──
+    // The documented older form: a bare attribute applies to the neuron the last
+    // `name="X"` opened. Rewritten to the explicit form and matched below.
+    {
+      const m = line.match(/^(value|vale|connections|conections|definition|definishon|code|wave|role|frozen|input|response|reads)\s*=\s*(.*)$/);
+      if (m) {
+        if (this.current === null) throw new Error(`${m[1]}= has no neuron to apply to: write name="…" first, or name the neuron: "x"@${m[1]}="…"`);
+        let rest = m[2].trim();
+        // The old connection form quoted every part: ".a"*"0.5"+"1.0". Take the quotes out.
+        if (m[1] === 'connections' || m[1] === 'conections') rest = `"${rest.replace(/"/g, '')}"`;
+        this.parseLine(`"${this.current}"@${m[1]}=${rest}`, neurons, printOutputs);
+        return;
+      }
+    }
+
     // ── name="X" — create neuron ────────────────────────────────────────────
     {
       const m = line.match(/^name\s*=\s*"([^"]+)"$/);
@@ -503,6 +610,8 @@ export class NeuroLangInterpreter {
         if (!neurons.has(name)) {
           neurons.set(name, this.defaultNeuron(name));
         }
+        this.current = name;
+        this.declared.add(name);
         return;
       }
     }
@@ -515,6 +624,8 @@ export class NeuroLangInterpreter {
         const neuron = neurons.get(name) ?? this.defaultNeuron(name);
         neuron.isCodeNet = true;
         neurons.set(name, neuron);
+        this.current = name;
+        this.declared.add(name);
         return;
       }
     }
@@ -527,6 +638,7 @@ export class NeuroLangInterpreter {
         const neuron = neurons.get(name) ?? this.defaultNeuron(name);
         neuron.isNetSearch = true;
         neurons.set(name, neuron);
+        this.declared.add(name);
         // Remember this as the definition awaiting a location (parse order),
         // so a following `@net=` binds here regardless of Map iteration order.
         this.pendingNetSearch = name;
@@ -580,31 +692,20 @@ export class NeuroLangInterpreter {
       }
     }
 
-    // ── "X"@value="N" — set value ───────────────────────────────────────────
+    // ── "X"@value="N" (old spelling: @vale) — what a neuron is worth ───────
+    // One setting, two spellings. The number is stored as written (`value`) and
+    // also, clamped to 0..1, as how much the neuron resists change (`vale`, which
+    // the elastic value budget reads). Until now `@value` only stored the number
+    // and `@vale` only set the elasticity, so a program written with the correct
+    // spelling had no effect on the budget.
     {
-      const m = line.match(/^"([^"]+)"\s*@\s*value\s*=\s*"([^"]+)"$/);
+      const m = line.match(/^"([^"]+)"\s*@\s*(?:value|vale)\s*=\s*"?([^"\s]+)"?$/);
       if (m) {
         const name = m[1];
         const val = parseFloat(m[2]);
         if (isNaN(val)) throw new Error(`Invalid value "${m[2]}" for neuron "${name}"`);
         const neuron = neurons.get(name) ?? this.defaultNeuron(name);
-        neuron.value = val;
-        this.explicit.value.add(name);
-        neurons.set(name, neuron);
-        return;
-      }
-    }
-
-    // ── "X"@vale="0.9" — set elasticity/resistance to change ───────────────
-    {
-      const m = line.match(/^"([^"]+)"\s*@\s*vale\s*=\s*"?([0-9.]+)"?$/);
-      if (m) {
-        const name = m[1];
-        const val = parseFloat(m[2]);
-        if (isNaN(val)) throw new Error(`Invalid vale "${m[2]}" for neuron "${name}"`);
-        const neuron = neurons.get(name) ?? this.defaultNeuron(name);
-        neuron.vale = Math.max(0, Math.min(1, val));
-        this.explicit.vale.add(name);
+        this.setWorth(neuron, val);
         neurons.set(name, neuron);
         return;
       }
@@ -703,7 +804,11 @@ export class NeuroLangInterpreter {
     {
       const m = line.match(/^kind\s*=\s*"(skill|network)"$/i);
       if (m) {
-        this.program.kind = m[1].toLowerCase() as NeuriKind;
+        const kind = m[1].toLowerCase() as NeuriKind;
+        if (this.program.kind !== undefined && this.program.kind !== kind) {
+          this.warnings.push(`kind="${this.program.kind}" and then kind="${kind}": the last one, "${kind}", is used`);
+        }
+        this.program.kind = kind;
         this.programTouched = true;
         return;
       }
@@ -715,8 +820,8 @@ export class NeuroLangInterpreter {
       if (m) {
         const count = parseInt(m[1], 10);
         if (count < 1) throw new Error(`neurons="${m[1]}": need at least 1`);
-        if (count > MAX_DECLARED_NEURONS) {
-          throw new Error(`neurons="${count}": the most one program may make is ${MAX_DECLARED_NEURONS} (the mesh is all-to-all, so cost grows with the square)`);
+        if (count > this.maxNeurons) {
+          throw new Error(`neurons="${count}": the most one program may make is ${this.maxNeurons} (the mesh is all-to-all, so cost grows with the square)`);
         }
         for (let i = 1; i <= count; i++) {
           const name = `n${i}`;
@@ -724,6 +829,10 @@ export class NeuroLangInterpreter {
           const neuron = this.defaultNeuron(name);
           neuron.generated = true;
           neurons.set(name, neuron);
+          this.declared.add(name);
+        }
+        if (this.program.neuronCount !== undefined && this.program.neuronCount !== count) {
+          this.warnings.push(`neurons="${count}" after neurons="${this.program.neuronCount}": both were made, and ${count} is the count used`);
         }
         this.program.neuronCount = count;
         this.programTouched = true;
@@ -740,8 +849,9 @@ export class NeuroLangInterpreter {
         } else {
           const val = parseFloat(m[2]);
           if (isNaN(val)) throw new Error(`Invalid ${m[1]} "${m[2]}" for neurons`);
-          if (m[1] === 'value') this.program.defaults.value = val;
-          else this.program.defaults.vale = Math.max(0, Math.min(1, val));
+          // value and vale are one setting (see "X"@value above): either spelling sets both.
+          this.program.defaults.value = val;
+          this.program.defaults.vale = Math.max(0, Math.min(1, val));
         }
         this.programTouched = true;
         return;
@@ -857,7 +967,7 @@ export class NeuroLangInterpreter {
       // A bare number is the additive `+weight` term for the previous edge. It
       // must start with a digit so a dotted target like `.5` (an edge to a
       // neuron named "5") is still parsed as a connection, not an additive.
-      const additive = trimmed.match(/^([0-9][0-9.]*)$/);
+      const additive = trimmed.match(/^(-?[0-9][0-9.]*(?:[eE]-?[0-9]+)?)$/);
       if (additive) {
         if (lastTarget === null) {
           throw new Error(`Leading additive weight "${trimmed}" has no target in connections for "${sourceName}"`);
@@ -869,7 +979,7 @@ export class NeuroLangInterpreter {
       }
 
       // .target[/variable][*bias]
-      const connMatch = trimmed.match(/^\.([A-Za-z0-9_:@\-. ]+?)(?:\/([A-Za-z0-9_]+))?(?:\s*\*\s*([\d.]+))?$/);
+      const connMatch = trimmed.match(/^\.([A-Za-z0-9_:@\-. ]+?)(?:\/([A-Za-z0-9_]+))?(?:\s*\*\s*(-?[\d.]+(?:[eE]-?\d+)?))?$/);
       if (!connMatch) {
         throw new Error(
           `Invalid connection segment "${trimmed}" in connections for "${sourceName}". ` +
@@ -886,6 +996,14 @@ export class NeuroLangInterpreter {
     }
 
     return connections;
+  }
+
+  /** One setting, two stored forms: the number as written, and that number clamped to 0..1 as resistance to change. */
+  private setWorth(neuron: NeuriNeuron, val: number): void {
+    neuron.value = val;
+    neuron.vale = Math.max(0, Math.min(1, val));
+    this.explicit.value.add(neuron.name);
+    this.explicit.vale.add(neuron.name);
   }
 
   /** 'now' | 'true' → frozen from the start; 'after' → frozen once trained; 'no' | 'false' → not frozen. */
@@ -922,6 +1040,10 @@ export class NeuroLangInterpreter {
     if (n.isCodeNet) flags.push('code-net');
     if (n.isNetSearch) flags.push(`netsearch:${n.netLocation}`);
     if (n.role) flags.push(`role:${n.role}`);
+    if (n.frozen) flags.push(`frozen:${n.frozen}`);
+    if (n.input !== undefined) flags.push(`input:"${n.input}"`);
+    if (n.response !== undefined) flags.push(`response:"${n.response}"`);
+    if (n.reads !== undefined) flags.push(`reads:${n.reads}`);
 
     return (
       `[Neuron "${n.name}"] ` +

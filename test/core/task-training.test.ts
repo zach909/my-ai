@@ -2,7 +2,7 @@
  * Task training (task-training.ts): single, hive, separate and silent.
  */
 import { describe, it, expect } from 'vitest';
-import { trainTasks, arithmeticTasks, validateTasks, MAX_TASKS, type Task } from '../../models && skills/core/task-training';
+import { trainTasks, arithmeticTasks, validateTasks, type Task } from '../../models && skills/core/task-training';
 import { handleWeightsRoutes } from '../../interface/weights-routes';
 
 const plain = arithmeticTasks(6, 1);
@@ -16,10 +16,17 @@ describe('tasks', () => {
     expect(t.parts).toEqual([`sum ${a + b}`, `product ${a * b}`]);
   });
 
-  it('are refused when the net language cannot carry them', () => {
-    const bad: Task[] = [{ id: 'a', input: 'say "hi"', parts: ['x'] }, { id: 'a', input: 'same', parts: [] }];
-    expect(validateTasks(bad).length).toBeGreaterThanOrEqual(2);
-    expect(validateTasks(arithmeticTasks(MAX_TASKS + 1, 1)).some(p => p.includes('at most'))).toBe(true);
+  it('have no cap on how many, or on what the text may contain', async () => {
+    expect(arithmeticTasks(500, 1)).toHaveLength(500); // a fixed operand range would have run out and never returned
+    const odd: Task[] = [{ id: 'q', input: 'say "hi" -- twice\nplease', parts: ['he said "hi"'] }, { id: 'long', input: 'x'.repeat(5000), parts: ['y'.repeat(5000)] }];
+    expect(validateTasks(odd)).toEqual([]);
+    const r = await trainTasks(odd, { mode: 'single', rounds: 1, epochs: 40 });
+    expect(r.tasks).toBe(2);
+  });
+
+  it('are refused only when they would have no single answer', () => {
+    const bad: Task[] = [{ id: 'a', input: 'same', parts: ['x'] }, { id: 'a', input: 'same', parts: [] }, { id: 'c', input: '', parts: ['z'] }];
+    expect(validateTasks(bad).length).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -81,6 +88,7 @@ describe('route', () => {
     expect(ok.data.mode).toBe('single');
     expect((await call({ mode: 'nope', generate: { count: 3 } })).status).toBe(400);
     expect((await call({ mode: 'single' })).status).toBe(400);
-    expect((await call({ mode: 'single', tasks: [{ input: 'say "hi"', parts: ['x'] }] })).status).toBe(422);
+    expect((await call({ mode: 'single', tasks: [{ input: 'say "hi"', parts: ['x'] }], rounds: 1, epochs: 20 })).status).toBe(200);
+    expect((await call({ mode: 'single', tasks: [{ input: '', parts: ['x'] }] })).status).toBe(422);
   });
 });
