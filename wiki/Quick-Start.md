@@ -127,7 +127,7 @@ through the CLI or the HTTP API, not a script you run standalone:
      NeuriLang: 1 neurons defined
        greeting value:0
    ```
-   Setting multiple properties on one neuron (`@vale=`, `@definishon=`, ...)
+   Setting multiple properties on one neuron (`@value=`, `@definition=`, ...)
    needs a NeuriLang source string with real embedded newlines between
    directives — not practical to type interactively line-by-line at this
    prompt, since each Enter submits a separate top-level CLI command. Use
@@ -135,7 +135,7 @@ through the CLI or the HTTP API, not a script you run standalone:
    ```bash
    curl -X POST http://localhost:7861/api/extension/build \
      -H "Content-Type: application/json" \
-     -d '{"name":"greeting_ext","code":"name=\"greeting\"\n\"greeting\"@vale=\"0.9\"\n\"greeting\"@definishon=\"Hello!\"","quantize":true}'
+     -d '{"name":"greeting_ext","code":"name=\"greeting\"\n\"greeting\"@value=\"0.9\"\n\"greeting\"@definition=\"Hello!\"","quantize":true}'
    ```
 
 2. The API response's `savedAs` field is the extension file written under

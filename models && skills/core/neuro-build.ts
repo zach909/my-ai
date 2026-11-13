@@ -47,7 +47,7 @@ import {
   type NeuriKind,
   type NeuriTrainMode,
 } from "./neuro-lang.js";
-import { ZipSpeaker } from "./zip-speech.js";
+import { ZipSpeaker, solveRidge } from "./zip-speech.js";
 import { graftNetSkill, MAX_MESH_NEURONS, type SkillNeuron } from "./net-skill-graft.js";
 
 // ── Options and results ──────────────────────────────────────────────────────
@@ -61,6 +61,12 @@ export interface MakerOptions {
   dimensions?: number;
   /** Seed for the network's starting weights and for random mode. Default 1. */
   seed?: number;
+  /**
+   * Most neurons a program may make and a network may have. Default 1024: the
+   * mesh is all-to-all, so cost grows with the square. Pass Infinity to lift it
+   * (a caller that trusts its own source and accepts the cost).
+   */
+  maxNeurons?: number;
   /** A response counts as met when its mean squared error is under this. Default 0.2. */
   tolerance?: number;
   /** Overrides for the program's own train statements. */
@@ -188,6 +194,10 @@ interface Contract {
   response: string;
 }
 
+/** Passes of the closed-form solve: writing the output's weights changes what the other neurons hear back. */
+const SOLVE_PASSES = 4;
+/** "auto" also tries the delta rule when there are at most this many responses. */
+const DELTA_TRIED_UP_TO = 12;
 /** Most (context -> next byte) pairs one predict run trains on. */
 const MAX_PREDICT_PAIRS = 192;
 /** Bytes of context the mesh hears before it is asked for the next one. */
@@ -309,11 +319,32 @@ export class BuiltNet {
 
   /**
    * Set up every declared response: highlight the neuron, require the output
-   * to say its response, adjust, and go around again until they are all met
-   * or the rounds run out. A response whose output neuron is frozen is
-   * skipped, not forced.
+   * to say its response. A response whose output neuron is frozen is skipped,
+   * not forced.
+   *
+   * method "auto" (default) tries "solve" at four regularisation strengths and,
+   * for up to 12 responses, the delta rule if none of them gets every response
+   * right (above 12 it was slower and never won), restores the net
+   * between tries, and keeps the one that gets the most responses right (ties:
+   * the smaller error). No single method won everywhere: the closed-form solve
+   * is far better from about 12 tasks up, but the delta rule did better on a
+   * handful of very short numeric answers.
+   *
+   * method "solve" fits the output neuron's incoming weights in
+   * closed form: for each dimension, a ridge-regularised least squares from
+   * what every other neuron says (settled with the task's neuron driven) to
+   * what the output must say, repeated a few passes because the output feeds
+   * back into the others. method "delta" is the engine's own delta rule, many
+   * small steps.
+   *
+   * Measured on distinct answers (16 dimensions, one extra hidden neuron per
+   * task unless noted), tasks answered right: 6 of 6 at 6 tasks, 12 of 12 at
+   * 12, 18 of 20 at 20, 31 of 40 at 40 for "solve"; the delta rule got 5 of 6,
+   * 8 of 12, 12 of 20 and 11 of 40 with no extra neurons, and extra neurons
+   * and dimensions did not help it. Both write ordinary engine weights, so
+   * freezing and the weight editor mean the same thing for either.
    */
-  trainResponses(opts: { epochs?: number; rounds?: number; tolerance?: number } = {}): TrainReport {
+  trainResponses(opts: { epochs?: number; rounds?: number; tolerance?: number; method?: "auto" | "solve" | "delta"; ridge?: number } = {}): TrainReport {
     const tolerance = opts.tolerance ?? 0.2;
     const epochs = opts.epochs ?? 200;
     const rounds = Math.max(1, opts.rounds ?? 5);
@@ -335,6 +366,25 @@ export class BuiltNet {
       return report;
     }
 
+    const method = opts.method ?? "auto";
+    if (method === "solve" || method === "auto") {
+      report.rounds = 1;
+      // The same neuron driven, the same output, two different things to say: no weights can do both.
+      for (let i = 0; i < active.length; i++) for (let j = i + 1; j < active.length; j++) {
+        const a = active[i], b = active[j];
+        if (a.drive === b.drive && a.readout === b.readout && a.response !== b.response) report.conflicts.push({ a: a.neuron, b: b.neuron });
+      }
+      if (method === "solve") {
+        this.solveReadouts(active, opts.ridge ?? 1e-3);
+        notes.push(`fitted by closed-form solve, ridge ${opts.ridge ?? 1e-3}`);
+      } else {
+        notes.push(`fitted by ${this.autoFit(active, all, tolerance, epochs)}`);
+      }
+      this.scoreResponses(active, all, report, tolerance);
+      this.applyAfterFreezes();
+      return report;
+    }
+
     const defs = active.map(c => ({ driveNeuronId: c.drive, input: c.input, readoutNeuronId: c.readout, target: c.target }));
     let last: ReturnType<HyperDimensionalEngine["trainDefinitions"]> | null = null;
     for (let r = 0; r < rounds; r++) {
@@ -343,29 +393,123 @@ export class BuiltNet {
       if (last.converged) break;
     }
     if (last) {
-      active.forEach((c, i) => (last!.losses[i] < tolerance ? report.satisfied : report.unsatisfied).push(c.neuron));
-      report.converged = last.converged;
       // The engine flags any two responses sharing an output neuron. That is
       // only a real contradiction when the same neuron is the one driven.
       for (const k of last.conflicts) {
         const a = active[k.a], b = active[k.b];
         if (a.drive === b.drive && a.readout === b.readout) report.conflicts.push({ a: a.neuron, b: b.neuron });
       }
-      let correct = 0;
-      for (const c of active) {
-        const out = this.runVector(c.neuron, c.input, c.readoutName);
-        let nearest = c, best = -Infinity;
-        for (const other of all) {
-          if (other.readout !== c.readout) continue;
-          const sim = cosine(out, other.target);
-          if (sim > best) { best = sim; nearest = other; }
-        }
-        if (nearest.target === c.target) correct++;
-      }
-      report.recall = { correct, total: active.length };
+      this.scoreResponses(active, all, report, tolerance);
     }
     this.applyAfterFreezes();
     return report;
+  }
+
+  /**
+   * Fit each output neuron's incoming weights in closed form (see
+   * trainResponses). Per dimension d: z = atanh(target[d]) is what the output
+   * must hear, the features are every other neuron's d-th state after the
+   * task's neuron is driven, and the weights are the ridge least squares from
+   * one to the other. Four passes, since writing the weights changes what the
+   * others hear back.
+   */
+  private solveReadouts(active: Contract[], ridge: number): void {
+    const eng = this.engine;
+    const dims = this.dims;
+    const N = eng.getNeuronCount();
+    const buf = new Float32Array(dims);
+    const groups = new Map<number, Contract[]>();
+    for (const c of active) {
+      const list = groups.get(c.readout);
+      if (list) list.push(c); else groups.set(c.readout, [c]);
+    }
+    for (const [readout, cs] of groups) {
+      const srcs: number[] = [];
+      for (let j = 0; j < N; j++) if (j !== readout) srcs.push(j);
+      const n = srcs.length;
+      for (let pass = 0; pass < SOLVE_PASSES; pass++) {
+        const features = cs.map(c => {
+          eng.process(c.input, undefined, new Set([c.drive]), undefined, { learn: false });
+          return srcs.map(j => { eng.readNeuronContent(j, buf); return Float32Array.from(buf); });
+        });
+        for (let d = 0; d < dims; d++) {
+          const A = new Float64Array(n * n);
+          const b = new Float64Array(n);
+          cs.forEach((c, ci) => {
+            const z = Math.atanh(Math.max(-0.95, Math.min(0.95, c.target[d])));
+            const f = features[ci];
+            for (let a = 0; a < n; a++) {
+              const fa = f[a][d];
+              b[a] += fa * z;
+              for (let a2 = 0; a2 < n; a2++) A[a * n + a2] += fa * f[a2][d];
+            }
+          });
+          const [w] = solveRidge(A, n, ridge, [b]);
+          for (let a = 0; a < n; a++) eng.setConnectionWeight(readout, srcs[a], d + 1, w[a]);
+        }
+      }
+    }
+  }
+
+  /** What the net says NOW for each response: how many land closest to their own, and how far off they are. */
+  private measureResponses(active: Contract[], all: Contract[], tolerance: number): { correct: number; mse: number; met: string[]; unmet: string[] } {
+    let correct = 0, total = 0;
+    const met: string[] = [], unmet: string[] = [];
+    for (const c of active) {
+      const out = this.runVector(c.neuron, c.input, c.readoutName);
+      let err = 0;
+      for (let d = 0; d < out.length; d++) { const e = c.target[d] - out[d]; err += e * e; }
+      const mse = err / Math.max(1, out.length);
+      total += mse;
+      (mse < tolerance ? met : unmet).push(c.neuron);
+      let nearest = c, best = -Infinity;
+      for (const other of all) {
+        if (other.readout !== c.readout) continue;
+        const sim = cosine(out, other.target);
+        if (sim > best) { best = sim; nearest = other; }
+      }
+      // By the text it says, not by which vector object: two tasks may share an answer.
+      if (nearest.response === c.response) correct++;
+    }
+    return { correct, mse: total / Math.max(1, active.length), met, unmet };
+  }
+
+  /** Try the fits, keep the best (see trainResponses). Returns what won. */
+  private autoFit(active: Contract[], all: Contract[], tolerance: number, epochs: number): string {
+    const eng = this.engine;
+    const base = eng.captureNetworkState();
+    let best: { state: ReturnType<HyperDimensionalEngine["captureNetworkState"]>; correct: number; mse: number; label: string } | null = null;
+    const consider = (label: string, apply: () => void) => {
+      eng.restoreNetworkState(base);
+      apply();
+      const m = this.measureResponses(active, all, tolerance);
+      if (!best || m.correct > best.correct || (m.correct === best.correct && m.mse < best.mse)) {
+        best = { state: eng.captureNetworkState(), correct: m.correct, mse: m.mse, label };
+      }
+    };
+    for (const ridge of [1e-1, 1e-2, 1e-3, 1e-4]) consider(`closed-form solve, ridge ${ridge}`, () => this.solveReadouts(active, ridge));
+    // The delta rule is only worth trying for a handful of responses: that is where
+    // it beat the solve, and above that it was the slow part and never won.
+    if (best!.correct < active.length && active.length <= DELTA_TRIED_UP_TO) {
+      const defs = active.map(c => ({ driveNeuronId: c.drive, input: c.input, readoutNeuronId: c.readout, target: c.target }));
+      consider("the delta rule", () => { eng.trainDefinitions(defs, { epochs, tolerance }); });
+    }
+    eng.restoreNetworkState(best!.state);
+    return best!.label;
+  }
+
+  /**
+   * Fill the report from what the net says NOW: which responses are within
+   * the tolerance, and, the test that matters, how many land closest to their
+   * own response. "converged" needs both, because a loose tolerance is met by
+   * an output that is merely near the average of the answers.
+   */
+  private scoreResponses(active: Contract[], all: Contract[], report: TrainReport, tolerance: number): void {
+    const m = this.measureResponses(active, all, tolerance);
+    report.satisfied.push(...m.met);
+    report.unsatisfied.push(...m.unmet);
+    report.recall = { correct: m.correct, total: active.length };
+    report.converged = m.unmet.length === 0 && m.correct === active.length;
   }
 
   /**
@@ -504,26 +648,26 @@ function fail(kind: NeuriKind, errors: string[], warnings: string[] = []): Maker
 
 /** Reads the program's own kind, then builds a net or a net skill. */
 export async function makeFromSource(source: string, opts: MakerOptions = {}): Promise<MakerResult> {
-  const interpreter = new NeuroLangInterpreter();
+  const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
   const kind: NeuriKind = parsed.program?.kind ?? "network";
-  return build(parsed.neurons, parsed.errors, parsed.program, kind, opts);
+  return build(parsed.neurons, parsed.errors, parsed.program, kind, opts, parsed.warnings);
 }
 
 /** NET MAKER: a network of its own, whatever the program says its kind is. */
 export async function netMaker(source: string, opts: MakerOptions = {}): Promise<MakerResult> {
-  const interpreter = new NeuroLangInterpreter();
+  const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
-  const result = await build(parsed.neurons, parsed.errors, parsed.program, "network", opts);
+  const result = await build(parsed.neurons, parsed.errors, parsed.program, "network", opts, parsed.warnings);
   if (parsed.program?.kind === "skill") result.warnings.push('the program says kind="skill" but this is the net maker, so it was made as a network of its own');
   return result;
 }
 
 /** NET SKILL MAKER: the program's neurons joined into `base`, the AI they change. */
 export async function netSkillMaker(source: string, base: HyperDimensionalEngine, opts: MakerOptions = {}): Promise<MakerResult> {
-  const interpreter = new NeuroLangInterpreter();
+  const interpreter = new NeuroLangInterpreter({ maxNeurons: opts.maxNeurons });
   const parsed = await interpreter.parse(source);
-  const result = await build(parsed.neurons, parsed.errors, parsed.program, "skill", { ...opts, base });
+  const result = await build(parsed.neurons, parsed.errors, parsed.program, "skill", { ...opts, base }, parsed.warnings);
   if (parsed.program?.kind === "network") result.warnings.push('the program says kind="network" but this is the net skill maker, so it was grafted into the base AI as a skill');
   return result;
 }
@@ -534,8 +678,9 @@ async function build(
   program: NeuriProgram | undefined,
   kind: NeuriKind,
   opts: MakerOptions,
+  parseWarnings: string[] = [],
 ): Promise<MakerResult> {
-  const warnings: string[] = [];
+  const warnings: string[] = [...parseWarnings];
   if (parseErrors.length > 0) return fail(kind, parseErrors);
   const names = Array.from(neurons.keys());
   if (names.length < 2) return fail(kind, ["need at least two neurons: one to be driven and one to answer"]);
@@ -571,7 +716,8 @@ async function build(
     }
     for (const n of names) ids.set(n, grafted.ids[n]);
   } else {
-    if (names.length > MAX_MESH_NEURONS) return fail(kind, [`${names.length} neurons is more than the ${MAX_MESH_NEURONS} one network may have`]);
+    const cap = opts.maxNeurons ?? MAX_MESH_NEURONS;
+    if (names.length > cap) return fail(kind, [`${names.length} neurons is more than the ${cap} one network may have`]);
     engine = new HyperDimensionalEngine({
       neuronCount: names.length,
       dimensions: opts.dimensions ?? 32,
