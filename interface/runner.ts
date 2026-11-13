@@ -6,6 +6,7 @@ import type { NeuroclawLLM } from "../models && skills/llm.js";
 import type { NeuroPipeline, PipelineResult } from "../models && skills/core/pipeline.js";
 import type { PluginRegistry } from "../plugin_manager/registry.js";
 import { embedTranscript, formatTurn, type Speaker } from "../models && skills/core/neuro-lang.js";
+import { chooserEnabled, routeMessage, type Route } from "../models && skills/core/engine-router.js";
 
 export class NeuroclawRunner extends EventEmitter {
   private llm: NeuroclawLLM;
@@ -16,6 +17,8 @@ export class NeuroclawRunner extends EventEmitter {
   private multiDesktopManager: MultiDesktopManager;
   private running = false;
   private startTime: number | null = null;
+  /** Which engine the chooser picked for the last reply and why (null when the chooser is off or a plugin answered). */
+  lastRoute: Route | null = null;
 
   // ── Section 4.1: continuous parallel output ─────────────────────────────
   // Two independent loops communicating only through shared pipeline state
@@ -103,19 +106,43 @@ export class NeuroclawRunner extends EventEmitter {
       return `[Plugin] ${pluginResult}`;
     }
 
+    // Optional chooser (NEUROCLAW_CHOOSER=1, see models && skills/core/engine-router.ts):
+    // reads this device (memory, load, speed, battery) and the size of the job,
+    // and may hand a big one to a bigger computer this device may borrow. If it
+    // does not, or that computer fails, this device answers below exactly as
+    // before, so turning it on can only add an answerer, never remove one.
+    this.lastRoute = null;
+    if (chooserEnabled()) {
+      const route = await routeMessage(prompt, memoryContext).catch(() => null);
+      this.lastRoute = route;
+      if (route && route.answer !== null) {
+        this.emit('route', route);
+        this.injectInput(route.answer, 'ai');
+        return route.answer;
+      }
+    }
+
     // Fall through to LLM generation (all 6 neural subsystems), grounded in any
     // relevant recalled conversation turns (continuous context, Section 7).
-    const response = await this.llm.generate(prompt, {
-      ...(memoryContext && memoryContext.length ? { memoryContext } : {}),
-      // Prompting skills go into the Zip Loop with the prompt (llm.generate).
-      ...(promptingSkills && promptingSkills.length ? { promptingSkills } : {}),
-      // Neurons (how confident to act) is its own Zip Loop input beside the prompt.
-      ...(typeof neurons === 'number' ? { neurons } : {}),
-      // Effort (how hard to try) is the next input beside it, on its own port.
-      ...(typeof effort === 'number' ? { effort } : {}),
-      // Questions (how often to ask when unsure) is the third, on Port 9.
-      ...(typeof questions === 'number' ? { questions } : {}),
-    });
+    const localStart = Date.now();
+    let response: string;
+    try {
+      response = await this.llm.generate(prompt, {
+        ...(memoryContext && memoryContext.length ? { memoryContext } : {}),
+        // Prompting skills go into the Zip Loop with the prompt (llm.generate).
+        ...(promptingSkills && promptingSkills.length ? { promptingSkills } : {}),
+        // Neurons (how confident to act) is its own Zip Loop input beside the prompt.
+        ...(typeof neurons === 'number' ? { neurons } : {}),
+        // Effort (how hard to try) is the next input beside it, on its own port.
+        ...(typeof effort === 'number' ? { effort } : {}),
+        // Questions (how often to ask when unsure) is the third, on Port 9.
+        ...(typeof questions === 'number' ? { questions } : {}),
+      });
+    } catch (err) {
+      this.lastRoute?.finish(false, Date.now() - localStart);
+      throw err;
+    }
+    this.lastRoute?.finish(true, Date.now() - localStart);
     // The loop only ever saw one side of the conversation: prompts went in and
     // the agent's own answers did not, so it could never learn that an answer
     // follows a question -- there were no answers in it.
