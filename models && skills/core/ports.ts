@@ -10,10 +10,11 @@
  *   Port 5  bit 1 out
  *   Port 6  send out
  *
- * Two more inputs ride the Zip Loop beside the prompt, each in its own archive folder, and each gets a port too:
+ * Three more inputs ride the Zip Loop beside the prompt, each in its own archive folder, and each gets a port too:
  *
  *   Port 7  questioning in  (the confidence dial, core/neurons.ts, folder neurons/)
  *   Port 8  effort in       (the effort dial, core/effort.ts, folder effort/)
+ *   Port 9  question in     (the questions dial, core/questions.ts, folder questions/: how often it asks when unsure)
  *
  * That is every port. A port number never changes, so logs, the UI and the docs can all say "port 5" and mean the
  * same thing. A port is a name for a neuron or an input; it does not move any signal itself.
@@ -26,10 +27,10 @@
  */
 
 export type PortSide = 'in' | 'out';
-export type PortKind = 'bit0' | 'bit1' | 'send' | 'questioning' | 'effort';
+export type PortKind = 'bit0' | 'bit1' | 'send' | 'questioning' | 'effort' | 'question';
 
 export interface PortSpec {
-  /** The port's number, 1 to 8. Fixed. */
+  /** The port's number, 1 to 9. Fixed. */
   port: number;
   /** "Port 3". */
   name: string;
@@ -61,11 +62,13 @@ export const ZIP_LOOP_PORTS: readonly PortSpec[] = Object.freeze([
 
 export const QUESTIONING_PORT = 7;
 export const EFFORT_PORT = 8;
+export const QUESTION_PORT = 9;
 
-/** Ports 7 and 8: the two dials that ride the Zip Loop in their own folders. Their folders match ZIP_FOLDERS in zip-halt.ts. */
+/** Ports 7, 8 and 9: the three dials that ride the Zip Loop in their own folders. Their folders match ZIP_FOLDERS in zip-halt.ts. */
 export const DIAL_PORTS: readonly PortSpec[] = Object.freeze([
   spec(QUESTIONING_PORT, 'questioning', 'in', 'questioning in', { folder: 'neurons/' }),
   spec(EFFORT_PORT, 'effort', 'in', 'effort in', { folder: 'effort/' }),
+  spec(QUESTION_PORT, 'question', 'in', 'question in', { folder: 'questions/' }),
 ]);
 
 /** Every port there is. */
