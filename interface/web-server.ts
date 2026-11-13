@@ -33,6 +33,8 @@ import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
 import { parseNeurons } from '../models && skills/core/neurons.js';
+import { parseEffort } from '../models && skills/core/effort.js';
+import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
@@ -3415,6 +3417,12 @@ export class WebServer {
       return;
     }
 
+    // ── Ports: the numbered neurons and inputs (core/ports.ts) ──────────
+    if (pathname === '/api/ports' && method === 'GET') {
+      this.sendJson(res, { ports: ALL_PORTS });
+      return;
+    }
+
     // ── Doorways besides the Zip Loop ───────────────────────────────────
     // Extensions declare them (their "io" block). Data goes in and out as raw
     // bytes, base64 on the wire; nothing here makes tokens out of anything.
@@ -4572,7 +4580,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort));
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;

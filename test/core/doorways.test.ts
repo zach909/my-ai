@@ -158,6 +158,22 @@ describe('using a doorway', () => {
     expect(f.driven[1]).toEqual([bit0In])
   })
 
+  it('numbers its six neurons as Ports 1-6 and counts the bits through each', async () => {
+    const f = fakeEngine()
+    const r = new DoorwayRegistry(() => f.engine)
+    r.declare({ name: 'mic', kind: 'audio', direction: 'both' })
+    expect(r.list()[0].ports).toEqual([])
+    await r.send('mic', new Uint8Array([0b10110000]))
+    f.say(0b01000000)
+    await r.receive('mic', 1)
+    const info = r.list()[0]
+    const [bit0In, bit1In, bit0Out, bit1Out, toggleIn, toggleOut] = info.neurons
+    expect(info.ports.map(p => [p.port, p.neuron])).toEqual([[1, bit0In], [2, bit1In], [3, toggleIn], [4, bit0Out], [5, bit1Out], [6, toggleOut]])
+    const count = (n: number) => info.ports.find(p => p.port === n)!.count
+    expect([count(1), count(2), count(3)]).toEqual([5, 3, 8])
+    expect([count(4), count(5), count(6)]).toEqual([7, 1, 8])
+  })
+
   it('gives two doorways different neurons', async () => {
     const f = fakeEngine()
     const r = new DoorwayRegistry(() => f.engine)
