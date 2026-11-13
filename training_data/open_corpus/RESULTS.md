@@ -1,5 +1,9 @@
 # Training results on the open corpus (2026-10-31)
 
+> The figures below were measured on the 2026-10-31 corpus (9 books, 15 summaries). On 2026-11-13 the corpus
+> grew (14 books, 15 summaries, 18 full Wikipedia articles under `wikipedia_full/`); these numbers have not
+> been re-measured. `train-open-corpus.mjs` still reads only `gutenberg/` and `wikipedia/`.
+
 Trainer: `NeuroclawTrainer` (`models && skills/trainer.ts`), character-level n-gram/embedding prose
 predictor, order 8, 1 epoch. No tokenizer; no third-party code. Data and licences: `CITATIONS.md`.
 Re-run: `node scripts/fetch-open-corpus.mjs` then `node scripts/train-open-corpus.mjs 1500000`.
