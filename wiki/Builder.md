@@ -42,6 +42,33 @@ This is the direct implementation of "Save projects without quantization. Instal
 - **Net Search** (`netSearch` / `netSearchGenerate` in TS, `NetSearchManager` in Python's `neurolang.py`): semantic search across neural definitions, then trains a small retrieval net and wires a new `netsearch`-type neuron to each match with a weighted edge.
 - **Code-to-Net** (`importCodeToNet` in TS, `train_codenet` in Python's `neurolang.py`): imports source or binary code and converts it into an equivalent neural network — function approximation when the code defines a numeric function.
 
+## Knowledge extensions (cited data)
+
+An extension does not have to be neurons. `extension-builder/corpus-extension.mjs` builds a **knowledge
+extension** from the cited open corpus in `training_data/open_corpus/` (fetched by
+`scripts/fetch-open-corpus.mjs`: Project Gutenberg public-domain books and Wikipedia text under CC BY-SA 4.0,
+each with its link, licence, access date, revision and SHA-256).
+
+```bash
+node scripts/fetch-open-corpus.mjs                                   # get the data and write the citations
+node extension-builder/build-corpus-extension.mjs                    # -> extension-builder/extensions/open-corpus-knowledge.kx.json
+node extension-builder/build-corpus-extension.mjs --search "second law of thermodynamics"
+node extension-builder/build-corpus-extension.mjs --verify extension-builder/extensions/open-corpus-knowledge.kx.json
+```
+
+- **No citation, no extension.** The build stops if any text file is missing from `manifest.json`, has a
+  licence other than public domain or CC BY-SA 4.0, or no longer matches its recorded SHA-256.
+- **Passages are exact slices** of the source (`text.slice(o, o + n)`), each with a hash and an offset, so a
+  passage can always be traced to the place it came from. The extension id is a hash of the sources.
+- **Search never returns text without its citation** (`searchKnowledgeExtension`). It compares character
+  3-grams of the raw text; there is no tokenizer.
+- **ShareAlike travels with the data:** the file carries an attribution block (authors via each article's
+  history link, licence obligations). Keep it with any copy.
+- The suffix is `.kx.json`, not `.ext.json`, because the server grafts the `neurons` of every `*.ext.json` at boot.
+- `applyToBuilder(builder, ext)` puts the sources into a live `ExtensionBuilder` as `netsearch` neurons. It is
+  only tested against a stand-in builder (`test/platform/corpus-extension.test.mjs`); run it against the real
+  engine once the backend is built.
+
 ## Verifying it
 
 - `python main.py demo` (`test_integration.py`, §3) saves a project un-quantized, installs it quantized, confirms the installed file is smaller, and reloads the installed extension into a **fresh** model object to prove the behaviour genuinely persisted rather than surviving in memory.
