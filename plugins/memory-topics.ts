@@ -9,6 +9,8 @@
  *   memory add <path>: <text>            add one dated line to a note (makes it if new)
  *   memory move <from> to <to>           re-file a note or a whole folder
  *   memory forget <path>                 forget a note (or an empty folder)
+ *   memory summary <path>: <one line>    write what a note is about (search looks at it)
+ *   memory summaries                     notes that still have no summary
  *
  * Paths read like projects/garden/plan. The agent is expected to look at
  * `memory tree` (or search) before filing something new, so related things end
@@ -31,9 +33,19 @@ const USAGE =
   "  memory save <path>: <text> — create or replace a note\n" +
   "  memory add <path>: <text> — add a dated line to a note\n" +
   "  memory move <from> to <to> — re-file a note or folder\n" +
-  "  memory forget <path> — forget a note or an empty folder";
+  "  memory forget <path> — forget a note or an empty folder\n" +
+  "  memory summary <path>: <one line> — write what a note is about; search looks at it\n" +
+  "  memory summaries — notes that still need a summary";
 
-const COMMAND = /^memory(?:\s+(tree|search|read|save|add|move|forget|help)\b)?/i;
+const COMMAND = /^memory(?:\s+(tree|search|read|save|add|move|forget|summary|summaries|help)\b)?/i;
+
+/** Said after a note is written or extended, so the AI keeps each note's summary current. */
+const summaryHint = (path: string, has: boolean, stale: boolean): string =>
+  !has
+    ? ` It has no summary yet: memory summary ${path}: <one line about what it holds>.`
+    : stale
+      ? ` Its summary may be out of date: memory summary ${path}: <one line>.`
+      : "";
 
 export class MemoryTopicsPlugin extends BasePlugin {
   constructor(definition: PluginDefinition) {
@@ -42,7 +54,7 @@ export class MemoryTopicsPlugin extends BasePlugin {
 
   describeCapabilities() {
     return {
-      commands: ["memory tree", "memory search <words>", "memory read <path>", "memory save <path>: <text>", "memory add <path>: <text>", "memory move <from> to <to>", "memory forget <path>"],
+      commands: ["memory tree", "memory search <words>", "memory read <path>", "memory save <path>: <text>", "memory add <path>: <text>", "memory move <from> to <to>", "memory forget <path>", "memory summary <path>: <one line>", "memory summaries"],
       verbs: ["remember", "recall", "memorize", "forget", "note"],
       nouns: ["memory", "memories", "topic", "topics", "note", "notes"],
     };
@@ -68,7 +80,22 @@ export class MemoryTopicsPlugin extends BasePlugin {
         if (!rest) return reply("Say what to look for: memory search <words>.");
         const hits = store.search(rest, 5);
         if (hits.length === 0) return reply(`Nothing in memory matches "${rest}".`);
-        return reply(hits.map(h => `${h.path} — ${h.title}: ${h.snippet}`).join("\n"));
+        // The written summary says what the note is about; without one, the line that matched is the next best thing.
+        const lines = hits.map(h => `${h.path} — ${h.title}: ${h.hasSummary ? h.summary : h.snippet}${h.hasSummary ? "" : " (no summary yet)"}`);
+        return reply(lines.join("\n"));
+      }
+
+      if (verb === "summaries") {
+        const todo = store.unsummarized(20);
+        if (todo.length === 0) return reply("Every note has a summary.");
+        return reply(`Notes without a summary (read each, then memory summary <path>: <one line>):\n${todo.map(n => `${n.path} — ${n.title}`).join("\n")}`);
+      }
+
+      if (verb === "summary") {
+        const m = /^(.+?):\s+([\s\S]+)$/.exec(rest);
+        if (!m) return reply("Format: memory summary <path>: <one line about what the note holds>.");
+        const n = store.setSummary(m[1], m[2]);
+        return reply(`Summary saved for ${n.path}: ${n.summary}`);
       }
 
       if (verb === "read") {
@@ -83,10 +110,10 @@ export class MemoryTopicsPlugin extends BasePlugin {
         if (!m) return reply(`Format: memory ${verb} <path>: <text>.`);
         if (verb === "save") {
           const n = store.write(m[1], m[2]);
-          return reply(`Saved ${n.path} (${n.chars} characters).`);
+          return reply(`Saved ${n.path} (${n.chars} characters).${summaryHint(n.path, n.hasSummary, false)}`);
         }
         const n = store.append(m[1], m[2]);
-        return reply(`Added to ${n.path}.`);
+        return reply(`Added to ${n.path}.${summaryHint(n.path, n.hasSummary, true)}`);
       }
 
       if (verb === "move") {

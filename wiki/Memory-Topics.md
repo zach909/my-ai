@@ -20,7 +20,9 @@ Through the `memory-topics` plugin, from any chat:
 | Command | What it does |
 |---------|--------------|
 | `memory tree` | Shows the folders and notes, so it can pick where something belongs. |
-| `memory search <words>` | Finds notes by topic words. A match in a folder or note **name** counts most, then the title, then the text. |
+| `memory search <words>` | Finds notes by topic words. A match in a folder or note **name** counts most, then the title, then the note's **summary**, then the text. Results show each note's summary. |
+| `memory summary <path>: <one line>` | Writes what a note is about. The AI is reminded to do this whenever it saves a note or adds a line to one. |
+| `memory summaries` | Lists the notes that still have no summary, so the AI can go through them. |
 | `memory read <path>` | Opens one note. |
 | `memory save <path>: <text>` | Creates a note, or replaces it. |
 | `memory add <path>: <text>` | Adds one dated line to a note. This is the everyday way to update. |
@@ -28,6 +30,20 @@ Through the `memory-topics` plugin, from any chat:
 | `memory forget <path>` | Forgets a note, or an empty folder. |
 
 A prompting skill can also use `topics` as a perception source, to read from these notes while it works.
+
+## Summaries
+
+Each note can carry a one-line summary, written by the AI, that says what the note is about. It sits in the note itself, right under the heading, so it moves with the note and you can read or fix it in any editor:
+
+```
+# Garden plan
+
+> Summary: Raised beds along the south fence; tomatoes first, planted in May.
+
+Tomatoes in May, beans in June.
+```
+
+Search looks at the summary, so a note is found by what it is about and not only by words that happen to be in its text. A note with no written summary still shows the start of its text in results, marked "no summary yet". That fallback is worked out on the fly and never saved. Replacing a note drops its old summary, since it described text that is gone. Adding a line keeps the summary, and the AI is told it may be out of date.
 
 ## Limits and safety
 
@@ -38,6 +54,6 @@ A prompting skill can also use `topics` as a perception source, to read from the
 
 ## For you
 
-Routes (behind the normal sign-in): `GET /api/memory-topics`, `GET /api/memory-topics/search?q=`, `GET|PUT /api/memory-topics/note`, `POST /api/memory-topics/append`, `POST /api/memory-topics/move`, `DELETE /api/memory-topics?path=` (add `&recursive=1` for a folder with notes in it).
+Routes (behind the normal sign-in): `GET /api/memory-topics`, `GET /api/memory-topics/search?q=`, `GET|PUT /api/memory-topics/note`, `GET|PUT /api/memory-topics/summary` (notes without a summary / set one), `POST /api/memory-topics/append`, `POST /api/memory-topics/move`, `DELETE /api/memory-topics?path=` (add `&recursive=1` for a folder with notes in it).
 
 **Delete all memory** in Settings also clears these notes.

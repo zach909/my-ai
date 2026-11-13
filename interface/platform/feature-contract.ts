@@ -69,7 +69,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'memory-topics', title: 'Memory topics', description: 'Memory as a folder tree of topic notes the agent files into, updates and searches itself.',
     implementation: ['models && skills/core/memory-folders.ts', 'plugins/memory-topics.ts', 'interface/memory-topics-routes.ts'],
-    routes: ['GET /api/memory-topics', 'GET /api/memory-topics/search', 'GET /api/memory-topics/note', 'PUT /api/memory-topics/note', 'POST /api/memory-topics/append', 'POST /api/memory-topics/move', 'DELETE /api/memory-topics'],
+    routes: ['GET /api/memory-topics', 'GET /api/memory-topics/search', 'GET /api/memory-topics/note', 'PUT /api/memory-topics/note', 'GET /api/memory-topics/summary', 'PUT /api/memory-topics/summary', 'POST /api/memory-topics/append', 'POST /api/memory-topics/move', 'DELETE /api/memory-topics'],
     needs: ENGINE, tests: [v('test/core/memory-folders.test.ts')],
   },
   {
