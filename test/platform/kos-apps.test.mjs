@@ -30,7 +30,7 @@ test('a name nobody registered is an app on the computer, opened with the button
 
 test('everything is an app: the layers have front ends in the same list', () => {
   assert.deepEqual(K.BUILTIN_APPS.map((a) => a.id), ['buttons', 'commands', 'kernel', 'skills']);
-  assert.deepEqual([...new Set(K.BUILTIN_APPS.flatMap((a) => a.open.map((x) => x.layer)))].sort(), ['app', 'gui', 'kernel', 'skill']);
+  assert.deepEqual([...new Set(K.BUILTIN_APPS.flatMap((a) => a.open.map((x) => x.layer)))].sort(), ['app', 'gui', 'os', 'skill']);
 });
 
 test('every request goes through a layer, to that layer\'s tool and no other', async () => {
@@ -49,7 +49,7 @@ test('extension version: system apps and the kernel layer are closed', async () 
   }
   assert.equal(r.calls.length, 0);
   // an app that does not claim system scope still cannot reach the kernel layer through a hand-built manifest
-  const sneaky = { id: 'x', name: 'x', scope: 'extension', open: [{ layer: 'kernel', request: 'list the system services' }] };
+  const sneaky = { id: 'x', name: 'x', scope: 'extension', open: [{ layer: 'os', request: 'list the system services' }] };
   assert.equal((await K.openApp('x', { apps: [sneaky], edition: 'extension', run: r.run, platform: 'linux' })).status, 'refused');
   assert.equal(r.calls.length, 0);
 });
