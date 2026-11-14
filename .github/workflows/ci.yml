@@ -97,7 +97,7 @@ jobs:
       - name: Browser for the interface tests
         run: |
           for b in chromium chromium-browser google-chrome; do command -v "$b" && "$b" --version && break; done || true
-      - name: Window program (Linux): builds with rustc and its unit tests pass
+      - name: "Window program (Linux): builds with rustc and its unit tests pass"
         run: node scripts/build-window-host.mjs --test
       - name: Platform tests (settings, mobile layouts, extension, updates, packaging)
         run: node --test --test-concurrency=2 "test/platform/*.test.mjs"
