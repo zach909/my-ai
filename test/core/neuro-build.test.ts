@@ -92,6 +92,36 @@ train="responses"`;
   });
 });
 
+describe('learning many responses', () => {
+  // Distinct, word-like answers made by code (a seeded draw of syllables).
+  function phrases(n: number): string[] {
+    let a = 9;
+    const rand = () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const syl = ['ba', 'ko', 'ri', 'mu', 'te', 'sa', 'vo', 'lin', 'dor', 'pex', 'qua', 'zen', 'hal', 'fro', 'nim', 'tuk'];
+    const out = new Set<string>();
+    const word = () => Array.from({ length: 2 + Math.floor(rand() * 2) }, () => syl[Math.floor(rand() * syl.length)]).join('');
+    while (out.size < n) out.add(`${word()} ${word()}`);
+    return [...out];
+  }
+  const program = (answers: string[]) => `neurons="${2 * answers.length + 1}"\n` +
+    answers.map((r, i) => `"n${i + 1}"@input="question number ${i + 1}"\n"n${i + 1}"@response="${r}"`).join('\n') + '\ntrain';
+
+  it('holds a dozen distinct answers in one net', async () => {
+    const r = await netMaker(program(phrases(12)), { dimensions: 16 });
+    expect(r.training!.recall!.correct).toBeGreaterThanOrEqual(11);
+  });
+
+  it('holds twenty, where the delta rule it replaced as the default did not', async () => {
+    const r = await netMaker(program(phrases(20)), { dimensions: 16 });
+    expect(r.training!.recall!.correct).toBeGreaterThanOrEqual(14);
+  });
+
+  it('counts two tasks with the same answer as right, not as a miss', async () => {
+    const r = await netMaker(`neurons="5"\n"n1"@input="first"\n"n1"@response="same answer"\n"n2"@input="second"\n"n2"@response="same answer"\ntrain`, { dimensions: 16 });
+    expect(r.training!.recall!.correct).toBe(2);
+  });
+});
+
 describe('net skill maker', () => {
   it('joins the base AI, trains only its own neurons, and leaves the base weights alone', async () => {
     const base = new HyperDimensionalEngine({ neuronCount: 12, dimensions: 32, seed: 5 });
@@ -147,5 +177,107 @@ describe('predict and random training', () => {
   it('warns when predict has no text', async () => {
     const r = await netMaker(`neurons="4"\ntrain="predict"`, { dimensions: 16 });
     expect(r.warnings.some(w => w.includes('needs text'))).toBe(true);
+  });
+});
+
+describe('the language itself', () => {
+  const parse = (src: string) => new NeuroLangInterpreter().parse(src);
+
+  it('parses the wiki\'s own simple network, bare attributes and all', async () => {
+    const p = await parse(`name="input_layer"
+vale="10"
+
+name="hidden_layer"
+vale="5"
+conections=".input_layer"*"0.5"+"1.0"
+
+name="output_layer"
+vale="8"
+conections=".hidden_layer"*"0.7"+"0.5"
+definishon="final_output"`);
+    expect(p.errors).toEqual([]);
+    expect(p.neurons.get('hidden_layer')!.vale).toBe(1); // clamped
+    expect(p.neurons.get('hidden_layer')!.connections.get('input_layer')).toBe(1.5);
+    expect(p.neurons.get('output_layer')!.definition).toBe('final_output');
+  });
+
+  it('says clearly when a bare attribute has no neuron to apply to', async () => {
+    const p = await parse('vale="3"');
+    expect(p.errors).toHaveLength(1);
+    expect(p.errors[0]).toMatch(/no neuron to apply to/);
+  });
+
+  it('carries quotes, "--" and backslashes inside a value, and still strips a real comment', async () => {
+    const p = await parse('"a"@definition="he said \\"hi\\" -- twice, C:\\\\dir"');
+    expect(p.neurons.get('a')!.definition).toBe('he said "hi" -- twice, C:\\dir');
+    const q = await parse('"a"@definition="x" -- a real comment');
+    expect(q.errors).toEqual([]);
+    expect(q.neurons.get('a')!.definition).toBe('x');
+  });
+
+  it('lets quotes inside @input and @response drive a real net', async () => {
+    const r = await netMaker('neurons="4"\n"n1"@input="say \\"hi\\""\n"n1"@response="he said \\"hi\\""\ntrain', { dimensions: 16 });
+    expect(r.net!.respond('say "hi"').response).toBe('he said "hi"');
+  });
+
+  it('accepts negative weights and scientific notation', async () => {
+    const p = await parse('name="a"\nname="b"\n"a"@connections=".b*-0.5"\n"a"@vale="1e-2"\n"a"@value="1e-3"');
+    expect(p.errors).toEqual([]);
+    expect(p.neurons.get('a')!.connections.get('b')).toBe(-0.5);
+    expect(p.neurons.get('a')!.vale).toBeCloseTo(0.01, 9);
+    const r = await netMaker('neurons="3"\n"n1"@connections=".n2*-0.5"', { dimensions: 8 });
+    expect(r.net!.engine.getConnectionWeight(1, 0, 1)).toBeCloseTo(-0.5, 5);
+  });
+
+  it('warns about a typo\'d neuron, a repeated kind, and two neurons with one input', async () => {
+    expect((await parse('neurons="3"\n"n9"@response="x"')).warnings!.some(w => w.includes('"n9" was not declared'))).toBe(true);
+    expect((await parse('kind="skill"\nkind="network"')).warnings!.some(w => w.includes('the last one'))).toBe(true);
+    expect((await parse('neurons="4"\n"n1"@input="a"\n"n2"@input="a"')).warnings!.some(w => w.includes('share the input'))).toBe(true);
+    expect((await parse('neurons="3"\n"n1"@input="a"')).warnings).toBeUndefined();
+    expect((await netMaker('neurons="3"\n"n9"@response="x"', { dimensions: 8 })).warnings.some(w => w.includes('n9'))).toBe(true);
+  });
+
+  it('leaves an ordinary old program exactly as it was', async () => {
+    const p = await parse('name="a"\n"a"@value="1"\n"a"@connections=".b*0.5"\nname="b"\n# comment\n"a"@definition="plain" -- old comment');
+    expect(p.errors).toEqual([]);
+    expect(p.neurons.get('a')!.definition).toBe('plain');
+    expect(p.warnings).toBeUndefined();
+  });
+
+  it('shows the new fields when a neuron is printed', async () => {
+    const p = await parse('neurons="3"\n"n1"@input="hi"\n"n1"@response="yo"\n"n1"@frozen="now"\nprint "n1"');
+    expect(p.printOutputs[0]).toContain('frozen:now');
+    expect(p.printOutputs[0]).toContain('input:"hi"');
+  });
+});
+
+describe('@value and @vale are one setting', () => {
+  const parse = (src: string) => new NeuroLangInterpreter().parse(src);
+
+  it('either spelling stores the number and sets the elasticity', async () => {
+    for (const spelling of ['value', 'vale']) {
+      const n = (await parse(`name="a"\n"a"@${spelling}="0.8"`)).neurons.get('a')!;
+      expect(n.value).toBe(0.8);
+      expect(n.vale).toBe(0.8);
+    }
+  });
+
+  it('keeps the number as written but clamps the elasticity to 0..1', async () => {
+    const p = await parse('"a"@value="10"\n"b"@vale="-2"\n"c"@value="1e-2"');
+    expect([p.neurons.get('a')!.value, p.neurons.get('a')!.vale]).toEqual([10, 1]);
+    expect([p.neurons.get('b')!.value, p.neurons.get('b')!.vale]).toEqual([-2, 0]);
+    expect(p.neurons.get('c')!.vale).toBe(0.01);
+  });
+
+  it('still refuses a number that is not one', async () => {
+    const p = await parse('"a"@value="abc"');
+    expect(p.errors[0]).toMatch(/Invalid value/);
+  });
+
+  it('works in the bare form and as a default for made neurons, with an explicit one winning', async () => {
+    const bare = await parse('name="a"\nvale="0.4"\nname="b"\nvalue="0.6"');
+    expect([bare.neurons.get('a')!.vale, bare.neurons.get('b')!.vale]).toEqual([0.4, 0.6]);
+    const made = await parse('neurons="3"\nneurons@vale="0.5"\n"n2"@value="0.9"');
+    expect([made.neurons.get('n1')!.value, made.neurons.get('n1')!.vale, made.neurons.get('n2')!.vale]).toEqual([0.5, 0.5, 0.9]);
   });
 });
