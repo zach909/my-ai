@@ -121,10 +121,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine'], ['remoteEngine']], tests: [v('test/core/searxng.test.ts')], needsNetwork: true,
   },
   {
-    id: 'settings', title: 'Settings', description: 'Appearance, chat, updates, remote access password, computer access, safety, data and about, in one persistent page.',
-    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts'],
-    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings'],
-    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs')],
+    id: 'settings', title: 'Settings', description: 'Appearance, chat, sources (links that open at the passage that backs a claim), updates, remote access password, computer access, safety, data and about, in one persistent page.',
+    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts', 'interface/sources.ts'],
+    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings', 'GET /source'],
+    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs'), n('test/platform/sources.test.mjs')],
   },
   {
     id: 'computer-access', title: 'Computer access', description: 'Per-capability grants and master switches for what the agent may do on a computer.',
