@@ -42,7 +42,9 @@ const HIVE_USAGE =
   "  hive team — list the current roster and each agent's trust\n" +
   "  hive ask <role>: <task> — ask one existing teammate directly (e.g. \"hive ask coder: write a fibonacci function\")\n" +
   "  hive summon <role> <specialization>: <task> — create a brand-new teammate and give it a task\n" +
-  "  hive summon team <name>: <task> — create a brand-new sub-team (with its own coordinator) and give it a task";
+  "  hive summon team <name>: <task> — create a brand-new sub-team (with its own coordinator) and give it a task\n" +
+  "  hive draft <topic> — the main AI outlines it, a hive agent writes each piece, the main AI reads and edits it, then you get it\n" +
+  "  hive draft <topic> then your own outline (## Title / /hivemind <role> / brief, one block per piece) — skips the outline step";
 
 /** Matches this plugin's `<word>[-_word]*` convention for a role/specialization/name token. */
 const TOKEN = "[A-Za-z][A-Za-z0-9_-]*";
@@ -59,6 +61,7 @@ export class HivePlugin extends BasePlugin {
         "hive ask <role>: <task>",
         "hive summon <role> <specialization>: <task>",
         "hive summon team <name>: <task>",
+        "hive draft <topic>",
       ],
       verbs: ["summon", "delegate", "ask", "consult"],
       nouns: [
@@ -114,6 +117,27 @@ export class HivePlugin extends BasePlugin {
       const result = await system.askHiveAgent(role, task.trim());
       if ("error" in result) return { tool: "hive", result: result.error };
       return { tool: "hive", result: `${result.role} (${result.agent}): ${result.output}` };
+    }
+
+    // "hive draft <topic>", optionally followed by the user's own outline on the
+    // next lines. An outline is recognised by a /hivemind marker in the text after
+    // the first line; without one everything is the topic and the main AI outlines.
+    const draft = input.match(/^hive\s+draft\s*:?\s*([\s\S]+)$/i);
+    if (draft) {
+      const body = draft[1].trim();
+      const nl = body.indexOf("\n");
+      const rest = nl === -1 ? "" : body.slice(nl + 1).trim();
+      const ownOutline = /\/hive\s?mind\b/i.test(rest) ? rest : undefined;
+      const topic = ownOutline ? body.slice(0, nl).trim() : body;
+      const system = await this.getSystem();
+      if (!system) return { tool: "hive", result: "Hive mind unavailable in fallback mode." };
+      const result = await system.draftWithHive(topic, ownOutline);
+      if ("error" in result) return { tool: "hive", result: result.error };
+      const how =
+        `\n\n---\nHow it was made (${result.status === "approved" ? "the main AI approved it" : "NOT approved: the main AI was still asking for changes"}` +
+        `${result.failed.length ? `; could not write: ${result.failed.join(", ")}` : ""}):\n` +
+        result.trace.map(l => `- ${l}`).join("\n");
+      return { tool: "hive", result: result.markdown + how };
     }
 
     return null;
