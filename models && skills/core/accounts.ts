@@ -443,6 +443,9 @@ const USER_PATTERNS: RegExp[] = [
   /^\/api\/chat-history\/threads\/[^/]+(\/pin)?$/,
   /^\/api\/accounts\/(status|login|logout|register|me|password)$/,
   /^\/api\/auth\/(status|logout)$/,
+  // Hosted mode: your own tokens and usage. The limits (/api/hosted/settings) are the admin's, so they are not listed.
+  /^\/api\/hosted\/(status|tokens)$/,
+  /^\/api\/hosted\/tokens\/[0-9a-f]{16}$/,
 ];
 
 /**

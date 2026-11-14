@@ -415,8 +415,10 @@ export function addPeer(input: { name: string; baseUrl: string; leaseToken: stri
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new ComputeError("\"baseUrl\" must be http or https.");
   if (url.username || url.password) throw new ComputeError("Do not put a password in the URL; the lease token is sent as a header.");
-  if (typeof input.leaseToken !== "string" || !input.leaseToken.startsWith("cl_") || input.leaseToken.length > 256) {
-    throw new ComputeError("That does not look like a lease token (they start with cl_).");
+  // A lease token from a friend's computer (cl_) or a hosted-account token from a server (nch_, hosted.ts):
+  // the borrower sends either the same way.
+  if (typeof input.leaseToken !== "string" || !(input.leaseToken.startsWith("cl_") || input.leaseToken.startsWith("nch_")) || input.leaseToken.length > 256) {
+    throw new ComputeError("That does not look like a lease token or a hosted-account token (they start with cl_ or nch_).");
   }
   const state = loadCompute(file);
   if (state.peers.some(p => p.name.toLowerCase() === input.name.toLowerCase())) {
