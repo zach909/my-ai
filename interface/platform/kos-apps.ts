@@ -32,7 +32,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { writeJsonAtomic } from '../../models && skills/core/atomic-write.js';
 import { configFile } from './app-paths.js';
-import { AI_OS_LAYERS, AI_OS_REQUEST_MAX, runLayer, type AiOsLayerId, type LayerOutcome, type ToolRunner } from './ai-os-layers.js';
+import { AI_OS_LAYERS, AI_OS_REQUEST_MAX, resolveLayerId, runLayer, type AiOsLayerId, type LayerOutcome, type ToolRunner } from './ai-os-layers.js';
 
 export const KOS_EDITIONS = ['extension', 'system'] as const;
 export type KosEdition = (typeof KOS_EDITIONS)[number];
@@ -64,7 +64,7 @@ const LAYER_IDS: readonly string[] = AI_OS_LAYERS.map((l) => l.id);
 export const BUILTIN_APPS: readonly KosApp[] = [
   { id: 'buttons', name: 'Button clicker', scope: 'extension', builtin: true, open: [{ layer: 'gui', request: 'list the open windows' }] },
   { id: 'commands', name: 'App commands', scope: 'extension', builtin: true, open: [{ layer: 'app', request: 'list the command-line apps installed on this computer' }] },
-  { id: 'kernel', name: 'Kernel commands', scope: 'system', builtin: true, open: [{ layer: 'kernel', request: 'list the system services' }] },
+  { id: 'kernel', name: 'Kernel commands', scope: 'system', builtin: true, open: [{ layer: 'os', request: 'list the system services' }] },
   { id: 'skills', name: 'Auto skill maker', scope: 'extension', builtin: true, open: [{ layer: 'skill', request: 'list the skills you have' }] },
 ];
 
@@ -81,10 +81,11 @@ export function validateApp(raw: unknown): KosApp {
   if (!Array.isArray(o.open) || o.open.length < 1 || o.open.length > MAX_ACTIONS) throw new KosAppError(`open must list 1 to ${MAX_ACTIONS} requests.`);
   const open: KosAction[] = o.open.map((a, i) => {
     const x = (typeof a === 'object' && a !== null ? a : {}) as Record<string, unknown>;
-    if (typeof x.layer !== 'string' || !LAYER_IDS.includes(x.layer)) throw new KosAppError(`open[${i}].layer must be one of: ${LAYER_IDS.join(', ')}.`);
+    const layer = resolveLayerId(x.layer); // "kernel" is still accepted as another name for "os"
+    if (!layer) throw new KosAppError(`open[${i}].layer must be one of: ${LAYER_IDS.join(', ')}.`);
     if (typeof x.request !== 'string' || !x.request.trim() || x.request.length > AI_OS_REQUEST_MAX) throw new KosAppError(`open[${i}].request must be 1 to ${AI_OS_REQUEST_MAX} characters.`);
-    if (x.layer === 'kernel' && o.scope !== 'system') throw new KosAppError(`open[${i}] uses the kernel layer, so the app's scope must be "system".`);
-    return { layer: x.layer as AiOsLayerId, request: x.request.trim() };
+    if (layer === 'os' && o.scope !== 'system') throw new KosAppError(`open[${i}] uses the kernel layer, so the app's scope must be "system".`);
+    return { layer, request: x.request.trim() };
   });
   return { id, name, scope: o.scope, open };
 }
@@ -117,7 +118,7 @@ export function checkOpen(app: KosApp, edition: KosEdition, platform: NodeJS.Pla
   if (app.scope === 'system' && edition !== 'system') {
     return { ok: false, status: 'refused', text: `${app.name} changes system apps, so it needs the system version of KOS. This computer is set to the extension version.` };
   }
-  if (app.open.some((a) => a.layer === 'kernel')) {
+  if (app.open.some((a) => a.layer === 'os')) {
     if (edition !== 'system') return { ok: false, status: 'refused', text: 'Kernel commands are closed in the extension version of KOS.' };
     if (platform !== 'linux') return { ok: false, status: 'unavailable', text: 'Kernel commands need Linux.' };
   }
