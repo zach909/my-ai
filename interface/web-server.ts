@@ -50,6 +50,8 @@ import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
 import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
+import { HIVE_PAGE } from './hive-page.js';
+import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
 import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
@@ -59,6 +61,7 @@ import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
 import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
+import { handleHostedRoutes, isHostedRoute } from './hosted-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { setNameGuard } from '../models && skills/core/points.js';
@@ -3001,11 +3004,27 @@ export class WebServer {
       if (handled) return;
     }
 
+    // ── Hosted mode: an account's tokens for the full AI on this computer ──
+    if (isHostedRoute(pathname)) {
+      const handled = await handleHostedRoutes({
+        req, res, pathname, method,
+        parseBody: (r, max) => this.parseBody(r, max),
+        sendJson: (r, data, status) => this.sendJson(r, data, status),
+      });
+      if (handled) return;
+    }
+
     // ── Logging in ──────────────────────────────────────────────────────
 
     // Data donor, lending and borrowing compute, and apps: one page, behind the normal gate.
     if (pathname === '/sharing' && method === 'GET') {
       this.sendHtml(res, SHARING_PAGE);
+      return;
+    }
+
+    // The network as one sphere with a tentacle per net skill.
+    if (pathname === '/hive' && method === 'GET') {
+      this.sendHtml(res, HIVE_PAGE);
       return;
     }
 
@@ -3195,6 +3214,8 @@ export class WebServer {
         parseBody: (r, max) => this.parseBody(r, max),
         sendJson: (r, data, status) => this.sendJson(r, data, status),
         chat: message => this.runner.generate(message),
+        // What guests get: text only, never a tool (see corona-routes.ts).
+        text: message => this.whileAgentLives(() => this.runner.generateText(message)),
         status: () => {
           const st = this.runner.getStatus();
           return { running: st.running, uptime: Math.floor(st.uptime) };
@@ -4346,6 +4367,13 @@ export class WebServer {
     // "the queue is actually empty right now."
     if (pathname === '/api/continuous/status' && method === 'GET') {
       this.sendJson(res, this.runner.getContinuousStatus());
+      return;
+    }
+
+    // GET /api/hive-agents — one entry per agent on a hive team, for the background:
+    // each gets its own sphere and shoggoth. Names and whether the hive is working, nothing more.
+    if (pathname === '/api/hive-agents' && method === 'GET') {
+      this.sendJson(res, { agents: hiveAgentsOverview() });
       return;
     }
 

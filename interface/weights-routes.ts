@@ -30,7 +30,7 @@ import type { HyperDimensionalEngine } from "../models && skills/core/onebrain.j
 import { makeFromSource, type BuiltNet, type MakerResult } from "../models && skills/core/neuro-build.js";
 import { EditRefused, WeightEditor, compileView } from "../models && skills/core/weight-editor.js";
 import { NeuroLangInterpreter } from "../models && skills/core/neuro-lang.js";
-import { MAX_TASKS, TASK_MODES, arithmeticTasks, trainTasks, type Task, type TaskMode } from "../models && skills/core/task-training.js";
+import { TASK_MODES, arithmeticTasks, trainTasks, type Task, type TaskMode } from "../models && skills/core/task-training.js";
 
 export interface WeightsContext {
   req: http.IncomingMessage;
@@ -127,12 +127,11 @@ async function route(ctx: WeightsContext): Promise<boolean> {
   }
 
   if (pathname === "/api/task-training" && method === "POST") {
-    const b = await body(32 * 1024);
+    const b = await body(Infinity);
     const mode = b.mode;
     if (typeof mode !== "string" || !TASK_MODES.includes(mode as TaskMode)) throw new BadRequest(`"mode" must be one of ${TASK_MODES.join(", ")}.`);
     let tasks: Task[];
     if (Array.isArray(b.tasks)) {
-      if (b.tasks.length > MAX_TASKS) throw new BadRequest(`At most ${MAX_TASKS} tasks.`);
       tasks = b.tasks.map((t, i) => {
         if (!isObj(t) || typeof t.input !== "string") throw new BadRequest(`Task ${i + 1}: expected {"input": "...", "parts": ["..."]}.`);
         const parts = Array.isArray(t.parts) ? t.parts.filter((p): p is string => typeof p === "string") : typeof t.answer === "string" ? [t.answer] : [];
@@ -140,7 +139,7 @@ async function route(ctx: WeightsContext): Promise<boolean> {
       });
     } else if (isObj(b.generate)) {
       const g = b.generate;
-      tasks = arithmeticTasks(Math.min(MAX_TASKS, Math.max(1, optNum(g, "count") ?? 6)), optNum(g, "seed") ?? 1, g.composite === true);
+      tasks = arithmeticTasks(Math.max(1, Math.floor(optNum(g, "count") ?? 6)), optNum(g, "seed") ?? 1, g.composite === true);
     } else {
       throw new BadRequest('Send "tasks" or "generate": {"count": 6, "composite": false}.');
     }
