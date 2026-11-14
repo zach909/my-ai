@@ -87,6 +87,7 @@ and the permissions each OS prompts for.
 | AI monitor (judge agent) | yes | yes | yes | no | partly | partly |
 | Mind reader (reads the network’s firing) | yes | yes | yes | no | partly | partly |
 | Alignment protocol (kill switch) | yes | yes | yes | no | partly | partly |
+| Plugin host (route groups as plugins) | yes | yes | yes | yes | yes | yes |
 <!-- parity-matrix:end -->
 
 <!-- capability-matrix:begin -->

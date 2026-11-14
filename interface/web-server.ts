@@ -41,32 +41,26 @@ import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } fr
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
-import { handlePlatformRoutes, isPlatformRoute } from './platform/routes.js';
+import { createServerHost, type ServerRouteContext } from './server-plugins.js';
+import type { PluginHost } from '../plugin_manager/host.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
 import { builderPage } from './platform/builder-page.js';
 import { selfImprovementPage } from './platform/self-improvement-page.js';
 import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
-import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
 import { HIVE_PAGE } from './hive-page.js';
 import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
-import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
-import { handleCommonsRoutes, withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
+import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
-import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
-import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
-import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
-import { handleHostedRoutes, isHostedRoute } from './hosted-routes.js';
+import { isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { setNameGuard } from '../models && skills/core/points.js';
-import { isComputerAdministrator } from '../models && skills/core/computer-admin.js';
-import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
 import { agentAlive } from '../models && skills/core/agent-profile.js';
 import { sharedMindReader, tapOfEngine } from '../models && skills/core/mind-reader.js';
 import { armDecoy, armHoneypot, recordEvent, setEscapeHook, setFireHook, standing, watchDecoy, watchHoneypot } from '../models && skills/core/danger-protocol.js';
@@ -1528,6 +1522,19 @@ export class WebServer {
    * sets a password.
    */
   private setupOnly = false;
+  /** The route plugins (interface/server-plugins.ts). Started once, by the first request or by start(). */
+  private routePluginHost: Promise<PluginHost<ServerRouteContext>> | null = null;
+  private routeHost(): Promise<PluginHost<ServerRouteContext>> {
+    if (!this.routePluginHost) {
+      const host = createServerHost(undefined, m => console.warn(`[plugins] ${m}`));
+      this.routePluginHost = host.startAll().then(() => host, err => {
+        // A broken plugin set must not take the server down with it; what did start still answers.
+        console.warn('[plugins] could not start every plugin:', err instanceof Error ? err.message : err);
+        return host;
+      });
+    }
+    return this.routePluginHost;
+  }
   // Independent of remoteAccessLock: gates only /api/chat-groups/* (and the
   // /app/chat-groups page's own login prompt), even over an already-trusted
   // localhost connection -- set via NEUROCLAW_CHAT_GROUPS_PASSWORD.
@@ -2115,6 +2122,11 @@ export class WebServer {
     this.stopExperts = null;
     this.stopScheduler?.();
     this.stopScheduler = null;
+    if (this.routePluginHost) {
+      const started = this.routePluginHost;
+      this.routePluginHost = null;
+      await started.then(h => h.stopAll()).catch(() => undefined);
+    }
     return new Promise<void>((resolve) => {
       this.server?.close(() => { this.server = null; resolve(); });
     });
@@ -2714,6 +2726,26 @@ export class WebServer {
    * own data. Someone not logged in is handled as anonymous, which has no data
    * folder at all.
    */
+  /** What the route plugins (interface/server-plugins.ts) get for one request: this server's own helpers, nothing more. */
+  private routeContext(req: http.IncomingMessage, res: http.ServerResponse, pathname: string, method: string, url: URL): ServerRouteContext {
+    return {
+      req, res, pathname, method, url,
+      parseBody: (r, max) => this.parseBody(r, max),
+      sendJson: (r, data, status) => this.sendJson(r, data, status),
+      fromThisMachine: r => this.isFromThisMachine(r),
+      setupCodeOk: code => this.remoteAccess.checkSetupCode(code),
+      onSetup: () => { this.setupOnly = false; },
+      chat: message => this.runner.generate(message),
+      // Text only, never a tool: see NeuroclawRunner.generateText().
+      text: message => this.whileAgentLives(() => this.runner.generateText(message)),
+      act: message => this.whileAgentLives(() => this.runner.generate(message)),
+      running: () => this.runner.getStatus().running,
+      uptime: () => this.runner.getStatus().uptime,
+      chatHistory: this.chatHistory,
+      learnFromFiling: text => this.learnFromFiling(text),
+    };
+  }
+
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     let identity = null;
     try {
@@ -2741,6 +2773,7 @@ export class WebServer {
     }
     const pathname = parsedUrl.pathname;
     const method = req.method?.toUpperCase() ?? 'GET';
+    const routePlugins = await this.routeHost();
 
     if (method === 'OPTIONS') {
       // No credentials are ever readable from a CORS preflight, so gating
@@ -2775,9 +2808,11 @@ export class WebServer {
       isStorePublicRoute(pathname, method) ||
       isSharedChatPublicRoute(pathname, method) ||
       isAuthPublicRoute(pathname, method) ||
-      // Apps and borrowers carry a bearer token, not a login; corona-routes.ts
-      // checks it on every request, so the password gate has nothing to add.
-      isCoronaApiRoute(pathname) ||
+      // Whatever a running route plugin keeps open: the corona plugin's token-checked API
+      // (apps and borrowers carry a bearer token, not a login, and corona-routes.ts checks it
+      // on every request) and the accounts plugin's login routes. A plugin that is turned
+      // off keeps nothing open.
+      routePlugins.isPublicRoute(pathname, method) ||
       isAmbientRoute(pathname, method) ||
       isPwaRoute(pathname, method);
 
@@ -2973,14 +3008,13 @@ export class WebServer {
       this.sendHtml(res, selfImprovementPage());
       return;
     }
-    if (isPlatformRoute(pathname)) {
-      const handled = await handlePlatformRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        isAdmin: () => isOwnerOrAdmin(),
-        fromThisMachine: () => this.isFromThisMachine(req),
-      });
+    // ── Route plugins ───────────────────────────────────────────────────
+    // Platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons
+    // and the plugin list are each a plugin that owns its routes (interface/server-plugins.ts). A plugin that
+    // is turned off answers nothing here. Their paths do not overlap, and none is shared with the pages and
+    // routes below, so one dispatch point in plugin order is the same as the nine blocks that stood here.
+    {
+      const handled = await routePlugins.dispatchRoute(pathname, method, this.routeContext(req, res, pathname, method, parsedUrl));
       if (handled) return;
     }
 
@@ -2989,30 +3023,8 @@ export class WebServer {
       this.sendHtml(res, ACCOUNTS_PAGE);
       return;
     }
-    if (isAccountsRoute(pathname)) {
-      const handled = await handleAccountsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        accounts: getAccounts(),
-        fromThisMachine: r => this.isFromThisMachine(r),
-        computerAdmin: () => isComputerAdministrator(),
-        setupCodeOk: code => this.remoteAccess.checkSetupCode(code),
-        onSetup: () => { this.setupOnly = false; },
-        token: r => readCookie(r.headers.cookie, USER_COOKIE),
-      });
-      if (handled) return;
-    }
 
     // ── Hosted mode: an account's tokens for the full AI on this computer ──
-    if (isHostedRoute(pathname)) {
-      const handled = await handleHostedRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-      });
-      if (handled) return;
-    }
 
     // ── Logging in ──────────────────────────────────────────────────────
 
@@ -3207,102 +3219,21 @@ export class WebServer {
     // ── Apps, compute sharing, data donor ───────────────────────────────
     // See corona-routes.ts: owner routes behind the normal gate, plus the
     // token-checked /api/corona/v1 API that apps and borrowers call.
-    if (pathname.startsWith('/api/corona-apps') || pathname.startsWith('/api/compute') ||
-        pathname.startsWith('/api/donor') || isCoronaApiRoute(pathname)) {
-      const handled = await handleCoronaRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        chat: message => this.runner.generate(message),
-        // What guests get: text only, never a tool (see corona-routes.ts).
-        text: message => this.whileAgentLives(() => this.runner.generateText(message)),
-        status: () => {
-          const st = this.runner.getStatus();
-          return { running: st.running, uptime: Math.floor(st.uptime) };
-        },
-      });
-      if (handled) return;
-    }
 
     // ── Memory topics: the folder-tree memory the agent files into ──────
     // See memory-topics-routes.ts: behind the normal gate, per person.
-    if (isMemoryTopicsRoute(pathname)) {
-      const handled = await handleMemoryTopicsRoutes({
-        req, res, pathname, method, url: parsedUrl,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-      });
-      if (handled) return;
-    }
 
     // ── Risky tools, approvals, complete access, auto-continue ──────────
     // See safety-routes.ts: owner routes behind the normal gate.
-    if (isSafetyRoute(pathname)) {
-      const handled = await handleSafetyRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        gate: sharedToolGate(),
-        access: async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager(),
-        runApproved: async (toolId, request) => {
-          const { getNeuroclawSystem } = await import('../src/index.js');
-          return (await getNeuroclawSystem()).pluginRegistry.runApproved(toolId, request);
-        },
-      });
-      if (handled) return;
-    }
 
     // ── Net maker, net skill maker, weight editor, compiler ─────────────
     // See weights-routes.ts: owner routes behind the normal gate.
-    if (isWeightsRoute(pathname)) {
-      const handled = await handleWeightsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        base: async () => {
-          const { getNeuroclawSystem } = await import('../src/index.js');
-          return (await getNeuroclawSystem()).pipeline.ensureBrain() ?? null;
-        },
-      });
-      if (handled) return;
-    }
 
     // ── The agent: sandbox, danger level, alignment protocol ────────────
     // See agent-routes.ts.
-    if (isAgentRoute(pathname)) {
-      const handled = await handleAgentRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        access: async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager(),
-      });
-      if (handled) return;
-    }
 
     // ── Points, projects and the hive ───────────────────────────────────
     // See commons-routes.ts: owner routes behind the normal gate.
-    if (pathname === '/api/commons' || pathname.startsWith('/api/commons/')) {
-      const handled = await handleCommonsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        // Text only, never a tool: see NeuroclawRunner.generateText().
-        chat: message => this.whileAgentLives(() => this.runner.generateText(message)),
-        act: message => this.whileAgentLives(() => this.runner.generate(message)),
-        status: () => ({ running: this.runner.getStatus().running }),
-        chats: this.chatHistory,
-        learn: text => this.learnFromFiling(text),
-        learner: async () => {
-          try {
-            const { getNeuroclawSystem } = await import('../src/index.js');
-            return (await getNeuroclawSystem()).hiveLearner();
-          } catch {
-            return null;
-          }
-        },
-      });
-      if (handled) return;
-    }
 
     // ── The public store ────────────────────────────────────────────────
     // Everything published lives in `store/` at the repo root and travels with
