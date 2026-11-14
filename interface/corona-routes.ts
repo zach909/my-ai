@@ -46,6 +46,8 @@ import {
   type JobRunner,
 } from "../models && skills/core/compute-share.js";
 import { borrowPriced, leaseOffer, runPricedJob } from "../models && skills/core/compute-market.js";
+import { isHostedToken } from "../models && skills/core/hosted.js";
+import { hostedService } from "./hosted-routes.js";
 import {
   DONOR_SOURCES,
   DonorError,
@@ -70,8 +72,17 @@ export interface RouteContext {
   sendJson(res: http.ServerResponse, data: unknown, status?: number): void;
   /** What the agent does with a chat message. */
   chat(message: string): Promise<string>;
+  /**
+   * Text only: the engine's own answer, never a plugin or a tool. What a guest
+   * (a lease holder or a hosted account) gets, because a stranger's prompt must
+   * not be able to reach the owner's terminal, files or mail. When absent the
+   * guest path refuses to run rather than fall back to `chat`.
+   */
+  text?(message: string): Promise<string>;
   status(): unknown;
 }
+
+const clientIp = (req: http.IncomingMessage): string => req.socket?.remoteAddress ?? "?";
 
 const limiter = new AppRateLimiter(120);
 const MAX_DONATION_BODY = 12 * 1024 * 1024;
@@ -271,6 +282,10 @@ async function handleApi(ctx: RouteContext): Promise<boolean> {
 
   // A borrower's lease token reaches the compute routes and nothing else.
   if (sub === "/compute/lease" && method === "GET") {
+    if (isHostedToken(token)) {
+      ctx.sendJson(res, hostedService().offer(token, clientIp(req)));
+      return true;
+    }
     const st = leaseOffer(token);
     if (!st) return unauthorized(ctx);
     ctx.sendJson(res, st);
@@ -279,9 +294,16 @@ async function handleApi(ctx: RouteContext): Promise<boolean> {
   if (sub === "/compute/run" && method === "POST") {
     const body = await ctx.parseBody(req, 64 * 1024);
     if (!isObj(body)) throw new ComputeError("Expected a JSON object.");
-    const runner: JobRunner = { chat: p => ctx.chat(p) };
+    // A guest gets the engine's words and nothing it can act with: never ctx.chat, which lets plugins run.
+    const text = ctx.text;
+    if (!text) throw new ComputeError("This computer cannot run guest jobs safely right now.", 503);
+    const runner: JobRunner = { chat: p => text(p) };
     if (!(JOB_KINDS as readonly string[]).includes(String(body.job))) {
       throw new ComputeError(`Unknown job. This computer runs: ${JOB_KINDS.join(", ")}.`);
+    }
+    if (isHostedToken(token)) {
+      ctx.sendJson(res, await hostedService().run(token, body.prompt, runner, clientIp(req)));
+      return true;
     }
     const result = await runPricedJob(token, {
       job: "chat",

@@ -59,6 +59,7 @@ import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
 import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
+import { handleHostedRoutes, isHostedRoute } from './hosted-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { setNameGuard } from '../models && skills/core/points.js';
@@ -3001,6 +3002,16 @@ export class WebServer {
       if (handled) return;
     }
 
+    // ── Hosted mode: an account's tokens for the full AI on this computer ──
+    if (isHostedRoute(pathname)) {
+      const handled = await handleHostedRoutes({
+        req, res, pathname, method,
+        parseBody: (r, max) => this.parseBody(r, max),
+        sendJson: (r, data, status) => this.sendJson(r, data, status),
+      });
+      if (handled) return;
+    }
+
     // ── Logging in ──────────────────────────────────────────────────────
 
     // Data donor, lending and borrowing compute, and apps: one page, behind the normal gate.
@@ -3195,6 +3206,8 @@ export class WebServer {
         parseBody: (r, max) => this.parseBody(r, max),
         sendJson: (r, data, status) => this.sendJson(r, data, status),
         chat: message => this.runner.generate(message),
+        // What guests get: text only, never a tool (see corona-routes.ts).
+        text: message => this.whileAgentLives(() => this.runner.generateText(message)),
         status: () => {
           const st = this.runner.getStatus();
           return { running: st.running, uptime: Math.floor(st.uptime) };
