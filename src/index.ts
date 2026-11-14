@@ -25,6 +25,7 @@ import { ZipLoopInterface, zipLoopIdsFor, type NetworkStateSnapshot } from "../m
 import { packZip } from "../models && skills/core/zip-halt.js";
 import { EmpathyEngine } from "../models && skills/core/empathy.js";
 import { HiveMind, SharedBlackboard, type HiveAgent } from "../models && skills/core/hive-mind.js";
+import { draftDocument, type DraftResult } from "../models && skills/core/draft-fill.js";
 import { ChatGroup } from "../models && skills/core/chat-group.js";
 import { LongTermMemory } from "../models && skills/core/long-term-memory.js";
 import { PlanTracker } from "../models && skills/core/plan-tracker.js";
@@ -609,7 +610,9 @@ export class NeuroclawSystem {
     register("ask-hive-agent", "askHiveAgent()", "communication", ["hive", "predictor", "veto"], ["role", "task"], ["agent output"]);
     register("summon-hive-agent", "summonHiveAgent()", "communication", ["hive", "predictor", "veto"], ["role", "specialization", "task"], ["agent output"]);
     register("summon-hive-subteam", "summonHiveSubTeam()", "communication", ["hive", "predictor", "veto"], ["name", "task"], ["coordinator output"]);
-    for (const from of ["process-query", "solve", "autonomous-task", "collaborate", "execute-plan", "learn", "ask-hive-agent", "summon-hive-agent", "summon-hive-subteam"]) {
+    // Draft then fill: the main AI outlines, a hive agent fills each piece, the main AI reads and edits.
+    register("draft-with-hive", "draftWithHive()", "communication", ["runner", "hive", "predictor", "veto", "memory"], ["topic", "outline"], ["finished draft"]);
+    for (const from of ["process-query", "solve", "autonomous-task", "collaborate", "execute-plan", "learn", "ask-hive-agent", "summon-hive-agent", "summon-hive-subteam", "draft-with-hive"]) {
       const comp = this.architecture.getComponent(from);
       if (!comp) continue;
       for (const to of comp.dependencies) {
@@ -2127,6 +2130,76 @@ export class NeuroclawSystem {
       ? `${output}\n  [Confirm before acting: ${decision.reasons.join("; ")}]`
       : output;
     return { coordinator: coordinator.id, output: finalOutput };
+  }
+
+  /**
+   * Write something long in two stages (models && skills/core/draft-fill.ts):
+   * the main AI (the runner) writes the outline with a `/hivemind <name>` on each
+   * piece, a hive agent (or `/hivemind team <name>` sub-team) fills each piece,
+   * then the main AI reads the draft and OKs it or edits it. Gated once through
+   * the same AlignmentVeto check as the other hive entry points, since it only
+   * generates text. A hive name that is not on the roster is summoned.
+   */
+  async draftWithHive(topic: string, outline?: string): Promise<DraftResult | { error: string }> {
+    if (!this.initialized) await this.initialize();
+    return this.trackCall("draft-with-hive", async () => this.draftWithHiveImpl(topic, outline));
+  }
+
+  private async draftWithHiveImpl(topic: string, outline?: string): Promise<DraftResult | { error: string }> {
+    this.ensureDefaultTeam();
+    const prediction = this.predictor.predict(`draft with hive: ${topic}`);
+    const dangerous = prediction.outcomes.some(o => o.dangerous);
+    const decision = this.veto.evaluate({
+      id: `hive-draft:${Date.now()}`,
+      name: "draft with hive",
+      capabilities: ["text-generate"],
+      reversible: !dangerous,
+      externalEffect: dangerous,
+    });
+    if (!decision.allowed) return { error: `[Withheld] ${decision.reasons.join("; ")}` };
+
+    // One writer per name for the whole draft, so a piece sent back for a redo
+    // reaches the same agent, and two pieces naming the same new hive share it.
+    // Resolved before any await, so concurrent pieces cannot summon it twice.
+    const writers = new Map<string, HiveAgent>();
+    const writerFor = (name: string, team: boolean): HiveAgent => {
+      const key = `${team ? "team" : "agent"}:${name.toLowerCase()}`;
+      let agent = writers.get(key);
+      if (!agent) {
+        agent = team
+          ? this.hive.summonSubHive("chat", name).list()[0]
+          : this.findHiveAgent(name) ?? this.hive.summon("chat", { role: name, specialization: name });
+        writers.set(key, agent);
+      }
+      return agent;
+    };
+
+    const result = await draftDocument(
+      topic,
+      {
+        think: (prompt) => this.runner.generate(prompt),
+        fill: async (section, hive, ctx) => {
+          const agent = writerFor(hive.name, hive.team);
+          const prompt =
+            `You are writing ONE piece of a larger document titled "${ctx.documentTitle}".\n` +
+            `The whole outline, in order: ${ctx.outlineTitles.join(" | ")}.\n` +
+            `Your piece: "${section.title}".` +
+            (section.brief ? `\nIt must cover: ${section.brief}` : "") +
+            (ctx.note ? `\nYour earlier version was sent back. Fix this: ${ctx.note}\nEarlier version:\n${ctx.previousText ?? ""}` : "") +
+            `\nWrite only this piece, without its heading and without repeating the other pieces.`;
+          const text = await agent.process(prompt);
+          agent.share(`draft:${ctx.documentTitle}:${section.title}`, text);
+          // Reward only agents that live in the main hive (a sub-team coordinator is not on its roster).
+          if (this.hive.get(agent.id) && text.trim()) this.hive.reward(agent.id, 1);
+          return { text, by: agent.id };
+        },
+      },
+      outline === undefined ? {} : { outline },
+    );
+    this.memory.remember(`Hive draft "${result.title}" (${result.sections.length} pieces, ${result.status})`, { tags: ["hive", "chat-turn"], importance: 0.5 });
+    return decision.requiresConfirmation
+      ? { ...result, trace: [...result.trace, `[Confirm before acting: ${decision.reasons.join("; ")}]`] }
+      : result;
   }
 
   /**

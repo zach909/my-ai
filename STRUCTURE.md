@@ -84,7 +84,8 @@ of the upstream `github.com/ollama/ollama` project has been removed.
 JavaScript/TypeScript AI models, skills, and self-improvement modules.
 
 #### `/plugin_manager/`
-Plugin management system with SDK and registry.
+Plugin management system with SDK and registry. `host.ts` is the kernel plugin host (dependency-ordered start, services,
+routes, owner-only guarded plugins); see `docs/PLUGIN_HOST.md`.
 
 #### `/plugins/`
 System plugins for various functionalities (browser, camera, email, etc.).

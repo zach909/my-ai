@@ -37,36 +37,32 @@ import { parseEffort } from '../models && skills/core/effort.js';
 import { parseQuestions } from '../models && skills/core/questions.js';
 import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
+import { IMAGE_SOURCE_CSP, SOURCE_CLIENT_JS, SOURCE_CSS, extractPageText, looksLikeImage, parseSourceQuery, sourceErrorPage, sourceImagePage, sourceSkillsFor, sourceTextPage } from './sources.js';
+import { BrowserPlugin } from '../plugins/browser.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
-import { handlePlatformRoutes, isPlatformRoute } from './platform/routes.js';
+import { createServerHost, type ServerRouteContext } from './server-plugins.js';
+import type { PluginHost } from '../plugin_manager/host.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
 import { builderPage } from './platform/builder-page.js';
 import { selfImprovementPage } from './platform/self-improvement-page.js';
 import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
-import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
 import { HIVE_PAGE } from './hive-page.js';
 import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
-import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
-import { handleCommonsRoutes, withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
+import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
-import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
-import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
-import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
-import { handleHostedRoutes, isHostedRoute } from './hosted-routes.js';
+import { isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { setNameGuard } from '../models && skills/core/points.js';
-import { isComputerAdministrator } from '../models && skills/core/computer-admin.js';
-import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
 import { agentAlive } from '../models && skills/core/agent-profile.js';
 import { sharedMindReader, tapOfEngine } from '../models && skills/core/mind-reader.js';
 import { armDecoy, armHoneypot, recordEvent, setEscapeHook, setFireHook, standing, watchDecoy, watchHoneypot } from '../models && skills/core/danger-protocol.js';
@@ -745,6 +741,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 ${VISUAL_CSS}
 ${PROMPT_BUTTON_CSS}
+${SOURCE_CSS}
 </style>
 </head>
 <body>
@@ -774,6 +771,7 @@ ${PROMPT_BUTTON_CSS}
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
 <script>${PROMPT_BUTTON_CLIENT_JS}</script>
+<script>${SOURCE_CLIENT_JS}</script>
 <script>
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
@@ -812,11 +810,19 @@ ${PROMPT_BUTTON_CSS}
   let keepHistory = true;
   try { keepHistory = localStorage.getItem('nc_keep_hist') !== '0'; } catch (e) { /* storage blocked */ }
   const readHistory = () => { try { return keepHistory ? JSON.parse(localStorage.getItem('nc_hist') || '[]') : []; } catch (e) { return []; } };
+  // Settings > Sources: 'focus' opens a source at its passage, 'link' opens the bare page, 'off' asks for none and shows
+  // the titles as plain words. Mirrored in localStorage so the first paint after a reload already knows it.
+  let sourceMode = 'focus';
+  try { sourceMode = localStorage.getItem('nc_sources') || 'focus'; } catch (e) { /* storage blocked */ }
   let chatHistory = readHistory();
   const save = () => { if (!keepHistory) return; try { localStorage.setItem('nc_hist', JSON.stringify(chatHistory)); } catch (e) { /* storage full or blocked: the chat still works */ } };
   fetch('/api/app-settings').then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.settings) return;
     keepHistory = j.settings.chat.keepLocalHistory !== false;
+    if (j.settings.sources) {
+      sourceMode = j.settings.sources.show === false ? 'off' : (j.settings.sources.focus === false ? 'link' : 'focus');
+      try { localStorage.setItem('nc_sources', sourceMode); } catch (e) { /* storage blocked */ }
+    }
     try { localStorage.setItem('nc_keep_hist', keepHistory ? '1' : '0'); if (!keepHistory) localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ }
   }).catch(() => { /* offline or signed out: keep the local choice */ });
   /** One "label: value" row, skipped entirely when there is no value. */
@@ -1007,7 +1013,14 @@ ${PROMPT_BUTTON_CSS}
     // drop the prompts the buttons carry.
     const proseWithButtons = type === 'ai' ? content.textContent : '';
     const hasButtons = !!proseWithButtons && ncButtons.has(proseWithButtons);
-    if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
+    // Sources: [[source: Title | address | passage]] becomes a link chip (see interface/sources.ts). The prose between
+    // chips can still carry prompt buttons. A reply with chips gets no pen, for the same reason as buttons.
+    const hasSources = !!proseWithButtons && ncSources.has(proseWithButtons);
+    if (hasSources) {
+      ncSources.render(content, proseWithButtons, sourceMode, (el, t) => {
+        if (ncButtons.has(t)) ncButtons.render(el, t, (prompt) => sendMessage(prompt)); else el.textContent = t;
+      });
+    } else if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
     div.appendChild(content);
     if (hasVisual) ncVisuals.attach(div, text);
     const ts = document.createElement('div');
@@ -1024,7 +1037,7 @@ ${PROMPT_BUTTON_CSS}
       pen.title = 'Edit what the AI said';
       pen.setAttribute('aria-label', 'Edit what the AI said');
       pen.onclick = () => openEditor(div, content, ts, pen, entry, (next) => { current = next; });
-      if (!hasVisual && !hasButtons) ts.appendChild(pen);
+      if (!hasVisual && !hasButtons && !hasSources) ts.appendChild(pen);
 
       // Three dots, next to the pen: what the answer was built from. Closed
       // by default -- it is reference, not part of reading the reply.
@@ -1123,6 +1136,7 @@ ${PROMPT_BUTTON_CSS}
           message: ncVisuals.plain(msg),
           visuals: ncVisuals.enabled(),
           buttons: true,
+          sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
           questions: Number(questionsEl.value),
           visualEvent,
@@ -1511,6 +1525,7 @@ export class WebServer {
   private visualApps = new VisualAppStore();
   /** Prompt buttons kept on this computer (app menu, desktop). Saved here; a launcher is written only after the owner approves the exact file. */
   private osButtons = new OsButtonStore();
+  private sourceBrowser: BrowserPlugin | null = null;
   // Set only when start() is given a non-localhost host and a password --
   // see start()'s doc comment for why binding remotely without one is refused.
   private readonly remoteAccessLock = new PasswordLock();
@@ -1528,6 +1543,19 @@ export class WebServer {
    * sets a password.
    */
   private setupOnly = false;
+  /** The route plugins (interface/server-plugins.ts). Started once, by the first request or by start(). */
+  private routePluginHost: Promise<PluginHost<ServerRouteContext>> | null = null;
+  private routeHost(): Promise<PluginHost<ServerRouteContext>> {
+    if (!this.routePluginHost) {
+      const host = createServerHost(undefined, m => console.warn(`[plugins] ${m}`));
+      this.routePluginHost = host.startAll().then(() => host, err => {
+        // A broken plugin set must not take the server down with it; what did start still answers.
+        console.warn('[plugins] could not start every plugin:', err instanceof Error ? err.message : err);
+        return host;
+      });
+    }
+    return this.routePluginHost;
+  }
   // Independent of remoteAccessLock: gates only /api/chat-groups/* (and the
   // /app/chat-groups page's own login prompt), even over an already-trusted
   // localhost connection -- set via NEUROCLAW_CHAT_GROUPS_PASSWORD.
@@ -2115,6 +2143,11 @@ export class WebServer {
     this.stopExperts = null;
     this.stopScheduler?.();
     this.stopScheduler = null;
+    if (this.routePluginHost) {
+      const started = this.routePluginHost;
+      this.routePluginHost = null;
+      await started.then(h => h.stopAll()).catch(() => undefined);
+    }
     return new Promise<void>((resolve) => {
       this.server?.close(() => { this.server = null; resolve(); });
     });
@@ -2714,6 +2747,26 @@ export class WebServer {
    * own data. Someone not logged in is handled as anonymous, which has no data
    * folder at all.
    */
+  /** What the route plugins (interface/server-plugins.ts) get for one request: this server's own helpers, nothing more. */
+  private routeContext(req: http.IncomingMessage, res: http.ServerResponse, pathname: string, method: string, url: URL): ServerRouteContext {
+    return {
+      req, res, pathname, method, url,
+      parseBody: (r, max) => this.parseBody(r, max),
+      sendJson: (r, data, status) => this.sendJson(r, data, status),
+      fromThisMachine: r => this.isFromThisMachine(r),
+      setupCodeOk: code => this.remoteAccess.checkSetupCode(code),
+      onSetup: () => { this.setupOnly = false; },
+      chat: message => this.runner.generate(message),
+      // Text only, never a tool: see NeuroclawRunner.generateText().
+      text: message => this.whileAgentLives(() => this.runner.generateText(message)),
+      act: message => this.whileAgentLives(() => this.runner.generate(message)),
+      running: () => this.runner.getStatus().running,
+      uptime: () => this.runner.getStatus().uptime,
+      chatHistory: this.chatHistory,
+      learnFromFiling: text => this.learnFromFiling(text),
+    };
+  }
+
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     let identity = null;
     try {
@@ -2741,6 +2794,7 @@ export class WebServer {
     }
     const pathname = parsedUrl.pathname;
     const method = req.method?.toUpperCase() ?? 'GET';
+    const routePlugins = await this.routeHost();
 
     if (method === 'OPTIONS') {
       // No credentials are ever readable from a CORS preflight, so gating
@@ -2775,9 +2829,11 @@ export class WebServer {
       isStorePublicRoute(pathname, method) ||
       isSharedChatPublicRoute(pathname, method) ||
       isAuthPublicRoute(pathname, method) ||
-      // Apps and borrowers carry a bearer token, not a login; corona-routes.ts
-      // checks it on every request, so the password gate has nothing to add.
-      isCoronaApiRoute(pathname) ||
+      // Whatever a running route plugin keeps open: the corona plugin's token-checked API
+      // (apps and borrowers carry a bearer token, not a login, and corona-routes.ts checks it
+      // on every request) and the accounts plugin's login routes. A plugin that is turned
+      // off keeps nothing open.
+      routePlugins.isPublicRoute(pathname, method) ||
       isAmbientRoute(pathname, method) ||
       isPwaRoute(pathname, method);
 
@@ -2812,6 +2868,30 @@ export class WebServer {
     // not be rebuilt and overflowed on phones; it now opens the same page.
     if ((pathname === '/settings' || pathname === '/app/settings') && (method === 'GET' || method === 'HEAD')) {
       this.sendHtml(res, SETTINGS_PAGE);
+      return;
+    }
+    // ── Source viewer: a source link from a reply opens here, on the passage that backs the claim (or the part of
+    // the picture that matters). Behind the same login as everything else, and the page is fetched with the browser
+    // plugin's private-address block, so it cannot be pointed at this machine or its network. See interface/sources.ts.
+    if (pathname === '/source' && (method === 'GET' || method === 'HEAD')) {
+      const q = parseSourceQuery(new URL(req.url ?? '/', 'http://localhost').searchParams);
+      if (!q) { this.sendHtml(res, sourceErrorPage(null, 'That is not a web address this viewer can open. Only http and https addresses work.')); return; }
+      if (q.box || looksLikeImage(q.url)) {
+        this.setSecurityHeaders(res);
+        res.setHeader('Content-Security-Policy', IMAGE_SOURCE_CSP);
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(injectAmbient(sourceImagePage(q)));
+        return;
+      }
+      try {
+        this.sourceBrowser ??= new BrowserPlugin({ id: 'source-viewer', name: 'Source viewer', type: 'api-connection', capabilities: ['browser'] });
+        const html = await this.sourceBrowser.fetchUrl(q.url);
+        this.sendHtml(res, sourceTextPage(q, extractPageText(html)));
+      } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        this.sendHtml(res, sourceErrorPage(q, /^Security Error/.test(why) ? 'That address is on this computer or its network, so it is not opened here.' : `The page could not be read (${why}). Use "Open the original" to try it in your browser.`));
+      }
       return;
     }
     // ── Visual apps: a visual kept as an app, and put on this computer only after the owner has seen what
@@ -2973,14 +3053,13 @@ export class WebServer {
       this.sendHtml(res, selfImprovementPage());
       return;
     }
-    if (isPlatformRoute(pathname)) {
-      const handled = await handlePlatformRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        isAdmin: () => isOwnerOrAdmin(),
-        fromThisMachine: () => this.isFromThisMachine(req),
-      });
+    // ── Route plugins ───────────────────────────────────────────────────
+    // Platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons
+    // and the plugin list are each a plugin that owns its routes (interface/server-plugins.ts). A plugin that
+    // is turned off answers nothing here. Their paths do not overlap, and none is shared with the pages and
+    // routes below, so one dispatch point in plugin order is the same as the nine blocks that stood here.
+    {
+      const handled = await routePlugins.dispatchRoute(pathname, method, this.routeContext(req, res, pathname, method, parsedUrl));
       if (handled) return;
     }
 
@@ -2989,30 +3068,8 @@ export class WebServer {
       this.sendHtml(res, ACCOUNTS_PAGE);
       return;
     }
-    if (isAccountsRoute(pathname)) {
-      const handled = await handleAccountsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        accounts: getAccounts(),
-        fromThisMachine: r => this.isFromThisMachine(r),
-        computerAdmin: () => isComputerAdministrator(),
-        setupCodeOk: code => this.remoteAccess.checkSetupCode(code),
-        onSetup: () => { this.setupOnly = false; },
-        token: r => readCookie(r.headers.cookie, USER_COOKIE),
-      });
-      if (handled) return;
-    }
 
     // ── Hosted mode: an account's tokens for the full AI on this computer ──
-    if (isHostedRoute(pathname)) {
-      const handled = await handleHostedRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-      });
-      if (handled) return;
-    }
 
     // ── Logging in ──────────────────────────────────────────────────────
 
@@ -3207,102 +3264,21 @@ export class WebServer {
     // ── Apps, compute sharing, data donor ───────────────────────────────
     // See corona-routes.ts: owner routes behind the normal gate, plus the
     // token-checked /api/corona/v1 API that apps and borrowers call.
-    if (pathname.startsWith('/api/corona-apps') || pathname.startsWith('/api/compute') ||
-        pathname.startsWith('/api/donor') || isCoronaApiRoute(pathname)) {
-      const handled = await handleCoronaRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        chat: message => this.runner.generate(message),
-        // What guests get: text only, never a tool (see corona-routes.ts).
-        text: message => this.whileAgentLives(() => this.runner.generateText(message)),
-        status: () => {
-          const st = this.runner.getStatus();
-          return { running: st.running, uptime: Math.floor(st.uptime) };
-        },
-      });
-      if (handled) return;
-    }
 
     // ── Memory topics: the folder-tree memory the agent files into ──────
     // See memory-topics-routes.ts: behind the normal gate, per person.
-    if (isMemoryTopicsRoute(pathname)) {
-      const handled = await handleMemoryTopicsRoutes({
-        req, res, pathname, method, url: parsedUrl,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-      });
-      if (handled) return;
-    }
 
     // ── Risky tools, approvals, complete access, auto-continue ──────────
     // See safety-routes.ts: owner routes behind the normal gate.
-    if (isSafetyRoute(pathname)) {
-      const handled = await handleSafetyRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        gate: sharedToolGate(),
-        access: async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager(),
-        runApproved: async (toolId, request) => {
-          const { getNeuroclawSystem } = await import('../src/index.js');
-          return (await getNeuroclawSystem()).pluginRegistry.runApproved(toolId, request);
-        },
-      });
-      if (handled) return;
-    }
 
     // ── Net maker, net skill maker, weight editor, compiler ─────────────
     // See weights-routes.ts: owner routes behind the normal gate.
-    if (isWeightsRoute(pathname)) {
-      const handled = await handleWeightsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        base: async () => {
-          const { getNeuroclawSystem } = await import('../src/index.js');
-          return (await getNeuroclawSystem()).pipeline.ensureBrain() ?? null;
-        },
-      });
-      if (handled) return;
-    }
 
     // ── The agent: sandbox, danger level, alignment protocol ────────────
     // See agent-routes.ts.
-    if (isAgentRoute(pathname)) {
-      const handled = await handleAgentRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        access: async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager(),
-      });
-      if (handled) return;
-    }
 
     // ── Points, projects and the hive ───────────────────────────────────
     // See commons-routes.ts: owner routes behind the normal gate.
-    if (pathname === '/api/commons' || pathname.startsWith('/api/commons/')) {
-      const handled = await handleCommonsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        // Text only, never a tool: see NeuroclawRunner.generateText().
-        chat: message => this.whileAgentLives(() => this.runner.generateText(message)),
-        act: message => this.whileAgentLives(() => this.runner.generate(message)),
-        status: () => ({ running: this.runner.getStatus().running }),
-        chats: this.chatHistory,
-        learn: text => this.learnFromFiling(text),
-        learner: async () => {
-          try {
-            const { getNeuroclawSystem } = await import('../src/index.js');
-            return (await getNeuroclawSystem()).hiveLearner();
-          } catch {
-            return null;
-          }
-        },
-      });
-      if (handled) return;
-    }
 
     // ── The public store ────────────────────────────────────────────────
     // Everything published lives in `store/` at the repo root and travels with
@@ -4590,7 +4566,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4628,7 +4604,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;

@@ -121,10 +121,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine'], ['remoteEngine']], tests: [v('test/core/searxng.test.ts')], needsNetwork: true,
   },
   {
-    id: 'settings', title: 'Settings', description: 'Appearance, chat, updates, remote access password, computer access, safety, data and about, in one persistent page.',
-    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts'],
-    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings'],
-    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs')],
+    id: 'settings', title: 'Settings', description: 'Appearance, chat, sources (links that open at the passage that backs a claim), updates, remote access password, computer access, safety, data and about, in one persistent page.',
+    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts', 'interface/sources.ts'],
+    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings', 'GET /source'],
+    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs'), n('test/platform/sources.test.mjs')],
   },
   {
     id: 'computer-access', title: 'Computer access', description: 'Per-capability grants and master switches for what the agent may do on a computer.',
@@ -285,9 +285,9 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'hive-mind', title: 'Hive mind', description: 'A project’s own multi-agent team: starts as one AI, adds variants of itself when it decides it needs help, decides everything by vote, clones agents that do well and deletes ones that keep failing, and averages what the last ones learned into the shared network rather than swapping it in. Checks only AI work; a person’s hand-in is checked by a person. Its trust-budget invariant is one of self-healing’s two registered components.',
-    implementation: ['models && skills/core/hive-mind.ts', 'models && skills/core/hive-learning.ts', 'models && skills/core/hive-background.ts', 'plugins/hive.ts', 'interface/commons-routes.ts', 'interface/commons-page.ts'],
+    implementation: ['models && skills/core/hive-mind.ts', 'models && skills/core/hive-learning.ts', 'models && skills/core/hive-background.ts', 'models && skills/core/draft-fill.ts', 'plugins/hive.ts', 'interface/commons-routes.ts', 'interface/commons-page.ts'],
     routes: ['GET /api/commons/projects/:id/hive', 'POST /api/commons/projects/:id/hive/run', 'POST /api/commons/projects/:id/hive/merge'],
-    needs: [['localEngine']], tests: [v('test/core/project-hive.test.ts'), v('test/core/hive-learning.test.ts'), v('test/core/hive-background.test.ts'), v('test/core/hive-plugin.test.ts')],
+    needs: [['localEngine']], tests: [v('test/core/project-hive.test.ts'), v('test/core/hive-learning.test.ts'), v('test/core/hive-background.test.ts'), v('test/core/hive-plugin.test.ts'), v('test/core/draft-fill.test.ts')],
   },
   {
     id: 'ai-monitor', title: 'AI monitor (judge agent)', description: 'A separate agent reads a held, middle-risk tool request and answers RUN or DENY; anything unclear, or a high-risk tool unless a second switch is on, still waits for you. Turning it off is manual mode: every held call waits for a person.',
@@ -306,6 +306,12 @@ export const FEATURES: Feature[] = [
     implementation: ['models && skills/core/danger-protocol.ts', 'models && skills/core/alignment-veto.ts', 'interface/agent-routes.ts', 'interface/commons-page.ts'],
     routes: ['GET /api/agent', 'POST /api/agent/alignment', 'POST /api/agent/delete', 'POST /api/agent/create'],
     needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-judge.test.ts')],
+  },
+  {
+    id: 'plugin-host', title: 'Plugin host (route groups as plugins)', description: 'The server’s route groups (platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons) are plugins that start in dependency order and own their routes. The owner can list them and turn them off and on; the choice is kept across restarts. Plugins that guard the agent (accounts, safety, agent, and the plugin list itself) can be turned off only by the owner, never by the agent acting on its own, and turning off a plugin closes the paths it kept open past the password gate.',
+    implementation: ['plugin_manager/host.ts', 'interface/server-plugins.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/plugin-host'],
+    needs: ENGINE, tests: [n('test/platform/plugin-host.test.mjs'), n('test/platform/plugin-routes.test.mjs')],
   },
 ];
 
@@ -344,7 +350,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))
