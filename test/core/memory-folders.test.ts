@@ -187,6 +187,102 @@ describe('search', () => {
   })
 })
 
+describe('summaries', () => {
+  it('stores a summary in the note under the heading, and shows it on read and in the tree', () => {
+    const s = store()
+    const n = s.write('projects/garden/plan', 'Tomatoes in May.', 'Raised beds on the south fence; planting schedule.')
+    expect(n.hasSummary).toBe(true)
+    expect(n.summary).toBe('Raised beds on the south fence; planting schedule.')
+    expect(readFileSync(path.join(root(), 'projects', 'garden', 'plan.md'), 'utf-8')).toBe(
+      '# Plan\n\n> Summary: Raised beds on the south fence; planting schedule.\n\nTomatoes in May.\n',
+    )
+    expect(s.tree().folders[0].folders[0].notes[0].summary).toBe(n.summary)
+  })
+
+  it('falls back to the start of the note, without writing it, when there is no summary', () => {
+    const s = store()
+    const n = s.write('people/alex', 'Alex is allergic to peanuts.')
+    expect(n.hasSummary).toBe(false)
+    expect(n.summary).toBe('Alex is allergic to peanuts.')
+    expect(readFileSync(path.join(root(), 'people', 'alex.md'), 'utf-8')).not.toMatch(/Summary:/)
+  })
+
+  it('setSummary sets and then replaces the line without touching the rest of the note', () => {
+    const s = store()
+    s.write('a/note', '# Title\n\nFirst line.\n\nSecond line.')
+    s.setSummary('a/note', 'one')
+    const n = s.setSummary('a/note', 'Summary: two\nlines')
+    expect(n.summary).toBe('two lines')
+    const text = readFileSync(path.join(root(), 'a', 'note.md'), 'utf-8')
+    expect(text.match(/Summary:/g)).toHaveLength(1)
+    expect(text).toBe('# Title\n\n> Summary: two lines\n\nFirst line.\n\nSecond line.\n')
+    expect(() => s.setSummary('a/note', '   ')).toThrow(/needs some text/)
+    expect(() => s.setSummary('a/missing', 'x')).toThrow(/no note/)
+  })
+
+  it('caps the length, and replacing a note without a summary drops the old one', () => {
+    const s = store()
+    expect(s.write('a/b', 'text', 'x'.repeat(1000)).summary).toHaveLength(300)
+    expect(s.write('a/b', 'new text').hasSummary).toBe(false)
+  })
+
+  it('keeps the summary when a line is added to the note', () => {
+    const s = store()
+    s.write('a/b', 'Body.', 'About b.')
+    const n = s.append('a/b', 'More.')
+    expect(n.summary).toBe('About b.')
+    expect(n.content).toContain('More.')
+  })
+
+  it('search finds a note by what its summary says, not only by its words', () => {
+    const s = store()
+    s.write('notes/one', 'Lots of detail about nothing relevant.', 'Allergy information for the family')
+    s.write('notes/two', 'Remember to buy milk.')
+    const hits = s.search('allergy family')
+    expect(hits.map(h => h.path)).toEqual(['notes/one'])
+    expect(hits[0].summary).toBe('Allergy information for the family')
+    expect(hits[0].score).toBeGreaterThan(0)
+    expect(hits[0].score).toBeLessThanOrEqual(1)
+  })
+
+  it('a summary hit outranks a passing mention in the body, and is not counted twice as body', () => {
+    const s = store()
+    s.write('a/mention', 'We once talked about kayaks.')
+    s.write('a/about', 'Gear list.', 'Kayak trip planning')
+    expect(s.search('kayaks').map(h => h.path)).toEqual(['a/mention'])
+    expect(s.search('kayak').map(h => h.path)).toEqual(['a/about'])
+    // Two summary words at 1.5 each: 3 / (2 words * 6) = 0.25.
+    expect(s.search('kayak trip')[0].score).toBe(0.25)
+  })
+
+  it('digest shows the summary instead of the matching line when there is one', () => {
+    store().write('people/alex', 'Alex is allergic to peanuts.', 'Alex: health and diet notes')
+    expect(store().digest('peanuts')).toEqual(['memory/people/alex: Alex — Alex: health and diet notes'])
+  })
+
+  it('lists the notes that still need a summary', () => {
+    const s = store()
+    s.write('a/done', 'x', 'Done.')
+    s.write('a/todo', 'y')
+    expect(s.unsummarized().map(n => n.path)).toEqual(['a/todo'])
+    s.setSummary('a/todo', 'Now done.')
+    expect(s.unsummarized()).toEqual([])
+  })
+
+  it('works through the plugin: nudges for a summary, writes it, and search shows it', async () => {
+    const plugin = new MemoryTopicsPlugin({ id: 'memory-topics', name: 'Memory Topics', type: 'api-connection', capabilities: ['memory-topics'] } as never)
+    const say = async (m: string) => ((await plugin.onMessage(m)) as { result: string }).result
+    expect(await say('memory save pets/dog: Biscuit hates thunder.')).toContain('memory summary pets/dog')
+    expect(await say('memory summaries')).toContain('pets/dog')
+    expect(await say('memory search thunder')).toContain('(no summary yet)')
+    expect(await say('memory summary pets/dog: Biscuit the dog: fears and habits')).toBe('Summary saved for pets/dog: Biscuit the dog: fears and habits')
+    expect(await say('memory add pets/dog: Also hates vacuums.')).toContain('may be out of date')
+    expect(await say('memory search habits')).toBe('pets/dog — Dog: Biscuit the dog: fears and habits')
+    expect(await say('memory summaries')).toBe('Every note has a summary.')
+    expect(await say('memory summary pets/dog')).toContain('Format:')
+  })
+})
+
 describe('moving and forgetting', () => {
   it('moves a note, then a whole folder, and tidies up empty folders left behind', () => {
     const s = store()
@@ -255,7 +351,7 @@ describe('the plugin the agent uses', () => {
 
   it('files, updates, finds, reads, moves and forgets through plain commands', async () => {
     expect((await say('memory save projects/garden/plan: Tomatoes in May, beans in June.'))!.result).toMatch(/^Saved projects\/garden\/plan/)
-    expect((await say('memory add projects/garden/plan: Bought seeds today.'))!.result).toBe('Added to projects/garden/plan.')
+    expect((await say('memory add projects/garden/plan: Bought seeds today.'))!.result).toMatch(/^Added to projects\/garden\/plan\./)
     expect((await say('memory tree'))!.result).toBe('projects/\n  garden/\n    plan  (Plan)')
     const found = (await say('memory search when do I plant tomatoes'))!.result
     expect(found).toContain('projects/garden/plan')
