@@ -37,6 +37,8 @@ import { parseEffort } from '../models && skills/core/effort.js';
 import { parseQuestions } from '../models && skills/core/questions.js';
 import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
+import { IMAGE_SOURCE_CSP, SOURCE_CLIENT_JS, SOURCE_CSS, extractPageText, looksLikeImage, parseSourceQuery, sourceErrorPage, sourceImagePage, sourceSkillsFor, sourceTextPage } from './sources.js';
+import { BrowserPlugin } from '../plugins/browser.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
@@ -739,6 +741,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   }
 ${VISUAL_CSS}
 ${PROMPT_BUTTON_CSS}
+${SOURCE_CSS}
 </style>
 </head>
 <body>
@@ -768,6 +771,7 @@ ${PROMPT_BUTTON_CSS}
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
 <script>${PROMPT_BUTTON_CLIENT_JS}</script>
+<script>${SOURCE_CLIENT_JS}</script>
 <script>
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
@@ -806,11 +810,19 @@ ${PROMPT_BUTTON_CSS}
   let keepHistory = true;
   try { keepHistory = localStorage.getItem('nc_keep_hist') !== '0'; } catch (e) { /* storage blocked */ }
   const readHistory = () => { try { return keepHistory ? JSON.parse(localStorage.getItem('nc_hist') || '[]') : []; } catch (e) { return []; } };
+  // Settings > Sources: 'focus' opens a source at its passage, 'link' opens the bare page, 'off' asks for none and shows
+  // the titles as plain words. Mirrored in localStorage so the first paint after a reload already knows it.
+  let sourceMode = 'focus';
+  try { sourceMode = localStorage.getItem('nc_sources') || 'focus'; } catch (e) { /* storage blocked */ }
   let chatHistory = readHistory();
   const save = () => { if (!keepHistory) return; try { localStorage.setItem('nc_hist', JSON.stringify(chatHistory)); } catch (e) { /* storage full or blocked: the chat still works */ } };
   fetch('/api/app-settings').then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.settings) return;
     keepHistory = j.settings.chat.keepLocalHistory !== false;
+    if (j.settings.sources) {
+      sourceMode = j.settings.sources.show === false ? 'off' : (j.settings.sources.focus === false ? 'link' : 'focus');
+      try { localStorage.setItem('nc_sources', sourceMode); } catch (e) { /* storage blocked */ }
+    }
     try { localStorage.setItem('nc_keep_hist', keepHistory ? '1' : '0'); if (!keepHistory) localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ }
   }).catch(() => { /* offline or signed out: keep the local choice */ });
   /** One "label: value" row, skipped entirely when there is no value. */
@@ -1001,7 +1013,14 @@ ${PROMPT_BUTTON_CSS}
     // drop the prompts the buttons carry.
     const proseWithButtons = type === 'ai' ? content.textContent : '';
     const hasButtons = !!proseWithButtons && ncButtons.has(proseWithButtons);
-    if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
+    // Sources: [[source: Title | address | passage]] becomes a link chip (see interface/sources.ts). The prose between
+    // chips can still carry prompt buttons. A reply with chips gets no pen, for the same reason as buttons.
+    const hasSources = !!proseWithButtons && ncSources.has(proseWithButtons);
+    if (hasSources) {
+      ncSources.render(content, proseWithButtons, sourceMode, (el, t) => {
+        if (ncButtons.has(t)) ncButtons.render(el, t, (prompt) => sendMessage(prompt)); else el.textContent = t;
+      });
+    } else if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
     div.appendChild(content);
     if (hasVisual) ncVisuals.attach(div, text);
     const ts = document.createElement('div');
@@ -1018,7 +1037,7 @@ ${PROMPT_BUTTON_CSS}
       pen.title = 'Edit what the AI said';
       pen.setAttribute('aria-label', 'Edit what the AI said');
       pen.onclick = () => openEditor(div, content, ts, pen, entry, (next) => { current = next; });
-      if (!hasVisual && !hasButtons) ts.appendChild(pen);
+      if (!hasVisual && !hasButtons && !hasSources) ts.appendChild(pen);
 
       // Three dots, next to the pen: what the answer was built from. Closed
       // by default -- it is reference, not part of reading the reply.
@@ -1117,6 +1136,7 @@ ${PROMPT_BUTTON_CSS}
           message: ncVisuals.plain(msg),
           visuals: ncVisuals.enabled(),
           buttons: true,
+          sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
           questions: Number(questionsEl.value),
           visualEvent,
@@ -1505,6 +1525,7 @@ export class WebServer {
   private visualApps = new VisualAppStore();
   /** Prompt buttons kept on this computer (app menu, desktop). Saved here; a launcher is written only after the owner approves the exact file. */
   private osButtons = new OsButtonStore();
+  private sourceBrowser: BrowserPlugin | null = null;
   // Set only when start() is given a non-localhost host and a password --
   // see start()'s doc comment for why binding remotely without one is refused.
   private readonly remoteAccessLock = new PasswordLock();
@@ -2847,6 +2868,30 @@ export class WebServer {
     // not be rebuilt and overflowed on phones; it now opens the same page.
     if ((pathname === '/settings' || pathname === '/app/settings') && (method === 'GET' || method === 'HEAD')) {
       this.sendHtml(res, SETTINGS_PAGE);
+      return;
+    }
+    // ── Source viewer: a source link from a reply opens here, on the passage that backs the claim (or the part of
+    // the picture that matters). Behind the same login as everything else, and the page is fetched with the browser
+    // plugin's private-address block, so it cannot be pointed at this machine or its network. See interface/sources.ts.
+    if (pathname === '/source' && (method === 'GET' || method === 'HEAD')) {
+      const q = parseSourceQuery(new URL(req.url ?? '/', 'http://localhost').searchParams);
+      if (!q) { this.sendHtml(res, sourceErrorPage(null, 'That is not a web address this viewer can open. Only http and https addresses work.')); return; }
+      if (q.box || looksLikeImage(q.url)) {
+        this.setSecurityHeaders(res);
+        res.setHeader('Content-Security-Policy', IMAGE_SOURCE_CSP);
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(injectAmbient(sourceImagePage(q)));
+        return;
+      }
+      try {
+        this.sourceBrowser ??= new BrowserPlugin({ id: 'source-viewer', name: 'Source viewer', type: 'api-connection', capabilities: ['browser'] });
+        const html = await this.sourceBrowser.fetchUrl(q.url);
+        this.sendHtml(res, sourceTextPage(q, extractPageText(html)));
+      } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        this.sendHtml(res, sourceErrorPage(q, /^Security Error/.test(why) ? 'That address is on this computer or its network, so it is not opened here.' : `The page could not be read (${why}). Use "Open the original" to try it in your browser.`));
+      }
       return;
     }
     // ── Visual apps: a visual kept as an app, and put on this computer only after the owner has seen what
@@ -4521,7 +4566,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4559,7 +4604,7 @@ export class WebServer {
         let response: string;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;
