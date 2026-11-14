@@ -185,6 +185,8 @@ describe('borrowing', () => {
     expect(() => addPeer({ name: 'A', baseUrl: 'ftp://x', leaseToken: 'cl_a' }, file)).toThrow(/http/)
     expect(() => addPeer({ name: 'A', baseUrl: 'http://u:p@x', leaseToken: 'cl_a' }, file)).toThrow(/password/)
     expect(() => addPeer({ name: 'A', baseUrl: 'http://x', leaseToken: 'nope' }, file)).toThrow(/lease token/)
+    // A hosted server's token (hosted.ts) is added the same way.
+    expect(addPeer({ name: 'Host', baseUrl: 'https://ai.example.org', leaseToken: 'nch_abc' }, file).baseUrl).toBe('https://ai.example.org')
     const p = addPeer({ name: 'A', baseUrl: 'http://x', leaseToken: 'cl_secret' }, file)
     expect(JSON.stringify(computeSummary(file))).not.toContain('cl_secret')
     expect(removePeer(p.id, file)).toBe(true)
