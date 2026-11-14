@@ -24,3 +24,23 @@ Limits, stated plainly:
   (`learnText`, corpus capped at 200,000 chars); nothing here is saved as a model file.
 - Gutenberg texts are public domain in the USA only. Wikipedia summaries are CC BY-SA 4.0 (ShareAlike).
 - The corpus has no refusal/pressure-test examples (ALIGNMENT.md §8.2); those still need writing.
+
+## Re-measured 2026-11-14 (corpus of 2026-11-13)
+
+Corpus: the 47 cited files listed in `manifest.json` and `CITATIONS.md` (14 Project Gutenberg books, public domain
+in the USA; 15 Wikipedia summaries and 18 full articles, CC BY-SA 4.0, revision ids in the manifest). Every file's
+SHA-256 was re-checked against `manifest.json` before this run, and the knowledge extension built from them
+(`open-corpus-knowledge 1.0.0`, id `kx-66eff051e3e8703d`, 10,101 passages) verified against the same files with
+`node extension-builder/build-corpus-extension.mjs --verify`.
+
+Run: `node scripts/train-open-corpus.mjs <chars> "<absolute path to dist/models && skills>"` (the default relative
+`dist` path is read by Node as a package name and fails). `train-open-corpus.mjs` still reads only `gutenberg/` and
+`wikipedia/`; `wikipedia_full/` is cited and in the extension but not trained on. Company and brand names are blanked
+by `scrubNames` before training. Same held-out set as above (8,060 characters).
+
+| Training text | Train time | Top-1 before | Top-1 after (other / same books) | Perplexity before | Perplexity after (other / same books) |
+|---|---|---|---|---|---|
+| 300,013 chars | 12.8 s | 16.9% | 53.5% / 61.0% | 96 | 6.03 / 4.07 |
+| 1,381,669 chars | 75.6 s | 16.9% | 58.0% / 63.5% | 134 | 4.90 / 3.49 |
+
+Same limits as above: a character-prediction score, not reasoning or alignment; weights are kept in memory only.
