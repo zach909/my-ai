@@ -17,6 +17,7 @@
 
 ### Foreground (Processing)
 - [[MoE|MoE]]
+- [[Auto Route|Auto-Route]]
 - [[Neuron Mesh|Neuron-Mesh]]
 - [[Hyperdimensional|Hyperdimensional]]
 - [[Zip I/O|Zip-IO]]

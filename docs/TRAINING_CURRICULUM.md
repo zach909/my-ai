@@ -195,6 +195,24 @@ say back), and, from rung C up, "who is being called".
 signal systems with *re-rolled* rules (a new made-up species), which tests whether it learned "how
 signal systems work" rather than one system.
 
+**The roster (owner, 2026-11-15).** The owner gave the full list of animals whose sounds the mesh is to be
+trained on: 333 entries, 332 once the repeated "Dove" is dropped. It is stored verbatim, in the owner's order,
+in `training_data/animal_species.json` (invertebrates through to cetaceans, human included). The file is the
+roster only. It does not rank the animals and it does not say how any of them sounds.
+
+Two things the roster does not settle, so they are open for the owner:
+
+- **Where the sound comes from.** The ground rules above forbid downloaded or third-party recordings, and the
+  plan is that the hand-written synth makes every sound with the truth known. A species name on this list
+  then needs a written, checkable description of how that animal really signals (a click train, a stridulated
+  chirp, a low-frequency rumble, a song with repeats), and several entries have no vocal sound at all
+  (sponge, coral, jellyfish, starfish, sea urchin); they need a rule for what "its sound" is, such as the
+  noise it makes when it moves or feeds, or they are left out. Until that is written, the roster is a list of
+  names and rungs A-F above are still the only generators.
+- **How to split 332 labels.** One label per species is a very large decode task for a mesh that
+  today holds about five small tasks (see the capacity section). Suggest grouping by signal type first
+  (clicks, chirps, songs, calls, rumbles) and only splitting into species once a group is passed.
+
 **The unproven bet:** that going through animal-like signal systems makes human language easier. Nobody
 knows. Test it, do not assume it: train one copy of the mesh with stage 3 and one without it, then
 compare how fast and how well they get through stages 5 and 6. If there is no gap, say so and shorten
