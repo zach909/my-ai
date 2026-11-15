@@ -55,6 +55,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
+    id: 'auto-route', title: 'Auto route (effort, where to answer, how much network)', description: 'For each message it picks how hard to try, whether to answer on this device or a bigger computer, and how many islands of the network run (parts that are wired to each other and to nothing else, found from the weights as 0/1). Instant answers fast; Optimize prompt tidies the message first.',
+    implementation: ['models && skills/core/auto-route.ts', 'models && skills/core/weight-islands.ts', 'models && skills/core/prompt-optimizer.ts', 'models && skills/core/engine-chooser.ts', 'models && skills/core/engine-router.ts', 'interface/runner.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/auto-route.test.mjs'), v('test/core/engine-chooser.test.ts'), v('test/core/engine-router.test.ts')],
+  },
+  {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
     implementation: ['models && skills/core/chat-history-store.ts'],
     routes: ['GET /api/chat-history/threads', 'POST /api/chat-history/save', 'GET /api/chat-history/search', 'GET /api/chat-history/export', 'POST /api/chat-history/import'],
@@ -306,6 +312,12 @@ export const FEATURES: Feature[] = [
     implementation: ['models && skills/core/mind-reader.ts', 'models && skills/core/danger-protocol.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
     routes: ['GET /api/agent/mind', 'POST /api/agent/mind/label', 'POST /api/agent/mind/reset'],
     needs: [['localEngine']], tests: [v('test/core/mind-reader.test.ts')],
+  },
+  {
+    id: 'security-model', title: 'Security model (the main model asks before it runs something)', description: 'With the AI monitor on (auto mode), a held tool call is put to a separate model that reads how the network is firing and what is being asked, and answers allow, deny, sandbox (run it only inside the sandbox folder, said only for a tool the sandbox really contains), shutdown (delete the agent for everyone and withdraw this install’s learning from the shared mesh) or unsure (a person decides). It learns only from what people decided and what the agent did, never from its own verdicts or from what the main model says, and every ask, answer and outcome is kept in a history file outside the agent’s folder. It starts with no authority (unsure until it has approved calls to compare with), can always tighten but loosens only for calls that look like approved ones, and will not delete the agent unless the alignment protocol is armed. With the AI monitor off its answer is shown beside the approval as advice. The main model can also ask it directly.',
+    implementation: ['models && skills/core/security-model.ts', 'models && skills/core/sandbox-scope.ts', 'models && skills/core/tool-safety.ts', 'models && skills/core/danger-protocol.ts', 'models && skills/core/shared-mesh-sync.ts', 'plugins/file-system.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent/security', 'POST /api/agent/security/ask', 'POST /api/agent/security/label', 'POST /api/agent/security/reset'],
+    needs: [['localEngine']], tests: [v('test/core/security-model.test.ts')],
   },
   {
     id: 'alignment-protocol', title: 'Alignment protocol (kill switch)', description: 'A danger level that moves only on what the agent does on its own; reaching "malicious" deletes the agent’s file and sandbox if the protocol is armed. A manual "delete the agent now" button fires it immediately, armed or not.',
