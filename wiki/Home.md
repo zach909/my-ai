@@ -37,6 +37,7 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 - [[Net Maker|Net-Maker]] - Make a network or a skill from a program, edit its weights, compile code
 - [[Task Training|Task-Training]] - Train AIs on tasks: alone, as a hive, separately, or silently together
 - [[Net Search|Net-Search]] - Deep learning-powered neuron search
+- [[Format Converter|Format-Converter]] - Any file format to any other (picture to text drawing, picture to code, table to data), and training pairs from it
 
 ### System Features
 - [[Platform Support|Platforms]] - Mac, Windows, and Linux compatibility
