@@ -23,6 +23,7 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 
 ### Foreground Systems (Processing & Reasoning)
 - [[Mixture of Experts|MoE]] - Efficient routing to specialized processing units
+- [[Auto Route|Auto-Route]] - Picks effort, where to answer and how many network islands run, per message; Instant and Optimize prompt
 - [[All-to-All Connectivity|Neuron-Mesh]] - Infinite context through full connectivity
 - [[Hyper-Dimensional Thinking|Hyperdimensional]] - Multi-ball neuron states
 - [[Zip I/O Loop|Zip-IO]] - Extended context capacity through looped inputs/outputs
