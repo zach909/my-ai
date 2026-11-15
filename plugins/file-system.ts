@@ -4,6 +4,8 @@ import { spawn } from "child_process";
 import type { PluginDefinition } from "../plugin_manager/types.js";
 import { BasePlugin } from "../plugin_manager/sdk.js";
 import { registerAttachment } from "../models && skills/core/chat-attachments.js";
+import { inSandboxScope } from "../models && skills/core/sandbox-scope.js";
+import { ensureSandbox } from "../models && skills/core/agent-profile.js";
 
 /**
  * The command that hands a file to whatever program the OS has registered
@@ -110,6 +112,8 @@ export class FileSystemPlugin extends BasePlugin {
    */
   async openFile(filePath: string): Promise<{ opened: boolean; reason?: string }> {
     const fullPath = this.resolvePath(filePath);
+    // Starting another program is not something the sandbox folder can contain.
+    if (inSandboxScope()) return { opened: false, reason: "Opening a file starts another program, which the sandbox does not allow." };
     if (!fs.existsSync(fullPath)) {
       return { opened: false, reason: `No file at ${filePath}.` };
     }
@@ -164,7 +168,11 @@ export class FileSystemPlugin extends BasePlugin {
         `Security Error: Null byte injection detected in path: ${relativePath}`
       );
     }
-    const absoluteRoot = path.resolve(this.rootDir);
+    // Inside a one-call sandbox (the security model said "run it in the sandbox") the root is the
+    // sandbox folder, whatever root the plugin was given, and links are followed so a link inside
+    // the folder cannot lead out of it.
+    const sandboxed = inSandboxScope();
+    const absoluteRoot = sandboxed ? path.resolve(ensureSandbox()) : path.resolve(this.rootDir);
     const fullPath = path.resolve(absoluteRoot, relativePath);
 
     const relative = path.relative(absoluteRoot, fullPath);
@@ -172,6 +180,17 @@ export class FileSystemPlugin extends BasePlugin {
       throw new Error(
         `Security Error: Path traversal detected for path: ${relativePath}`
       );
+    }
+    if (sandboxed) {
+      const realRoot = fs.realpathSync(absoluteRoot);
+      // The deepest part of the path that exists is the part a link could be hiding in.
+      let probe = fullPath;
+      while (!fs.existsSync(probe) && path.dirname(probe) !== probe) probe = path.dirname(probe);
+      const realProbe = fs.realpathSync(probe);
+      const inside = path.relative(realRoot, realProbe);
+      if (inside.startsWith("..") || path.isAbsolute(inside)) {
+        throw new Error(`Security Error: ${relativePath} leads outside the sandbox`);
+      }
     }
     return fullPath;
   }

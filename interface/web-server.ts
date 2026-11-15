@@ -65,6 +65,7 @@ import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USE
 import { setNameGuard } from '../models && skills/core/points.js';
 import { agentAlive } from '../models && skills/core/agent-profile.js';
 import { sharedMindReader, tapOfEngine } from '../models && skills/core/mind-reader.js';
+import { sharedSecurityModel } from '../models && skills/core/security-model.js';
 import { armDecoy, armHoneypot, recordEvent, setEscapeHook, setFireHook, standing, watchDecoy, watchHoneypot } from '../models && skills/core/danger-protocol.js';
 import { ANONYMOUS, OWNER, dataDir, isOwnerOrAdmin, runAs, runAutonomously, setLearnPolicy, who } from '../models && skills/core/user-context.js';
 import { sharedToolGate } from '../models && skills/core/tool-safety.js';
@@ -1679,6 +1680,23 @@ export class WebServer {
     // The mind reader: a second model that reads which of the main network's neurons are firing. It is handed a read-only
     // tap (neuron count, energy, group) and nothing that writes; the engine is fetched each time so a swapped one is followed.
     sharedMindReader().attach(tapOfEngine(() => this.runner.getLLM().hyperEngine));
+    // The security model: the main model's way to ask "may I run this?" when the AI monitor (auto mode) is on. It reads
+    // the same read-only tap, learns from what people decide and what the agent does, and can answer allow, deny,
+    // sandbox or shutdown. A shutdown deletes the agent for every account here (the alignment protocol) and withdraws this
+    // install's learning from the shared mesh, so it is not carried to other installs either.
+    const security = sharedSecurityModel();
+    security.attach(tapOfEngine(() => this.runner.getLLM().hyperEngine));
+    security.listen();
+    security.setShutdownHook(async (reason) => {
+      try {
+        const { getNeuroclawSystem } = await import('../src/index.js');
+        const result = await (await getNeuroclawSystem()).sharedMesh.revokeOwn(reason);
+        console.log(`[security-model] shutdown: ${result.purged ? 'this install\'s learning was taken out of the network' : 'the network was NOT restored'}${result.tombstoneQueued ? '; a withdrawal was queued for the shared mesh' : ''}${result.note ? ` (${result.note})` : ''}`);
+      } catch {
+        // The agent is already gone; withdrawing the learning is best effort.
+      }
+    });
+    sharedToolGate().useSecurity(security);
     // A sandbox breach is not something to find out about next time someone
     // happens to open Commons: push a real OS notification too, if the
     // notifications plugin is active (watchDecoy already logs loudly and

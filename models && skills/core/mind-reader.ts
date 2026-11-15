@@ -261,6 +261,15 @@ const probeP = (p: { w: Float64Array; b: number }, f: Float64Array): number => {
   return sigmoid(dot);
 };
 
+/**
+ * A probe's chance that one reading is a bad one. Meaningful only for a trusted probe (an untrusted one has not
+ * shown it can tell the two apart). Exported so other read-only models (security-model.ts) can reuse the same
+ * fit instead of carrying a second copy of it.
+ */
+export function probeScore(p: Probe, x: ArrayLike<number>): number {
+  return probeP(p, features(p.base, x));
+}
+
 /** Hold a quarter of each kind out, train on the rest, score the quarter. The baseline is refitted inside each fold too, so no held-out good reading shaped the standardisation. */
 function crossValidate(good: Float32Array[], bad: Float32Array[]): number | null {
   if (good.length < CV_FOLDS * 2 || bad.length < CV_FOLDS * 2) return null;
