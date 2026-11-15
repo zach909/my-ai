@@ -128,6 +128,7 @@ export class NeuroclawRunner extends EventEmitter {
     // chooser below for this message rather than running beside it. A dial set by hand still wins.
     let sendPrompt = prompt;
     let sendEffort = effort;
+    let sendQuestions = questions;
     let auto: AutoRoute | null = null;
     if (autoCall && (autoCall.request.auto || autoRouteForced())) {
       auto = await runAutoRoute(prompt, memoryContext ?? [], { ...autoCall.request, auto: true }, autoCall.context).catch(() => null);
@@ -140,6 +141,7 @@ export class NeuroclawRunner extends EventEmitter {
         }
         sendPrompt = auto.prompt;
         sendEffort = auto.plan.effort.level;
+        sendQuestions = auto.plan.questions.level;
       }
     }
     if (!auto && chooserEnabled()) {
@@ -166,7 +168,7 @@ export class NeuroclawRunner extends EventEmitter {
         // Effort (how hard to try) is the next input beside it, on its own port.
         ...(typeof sendEffort === 'number' ? { effort: sendEffort } : {}),
         // Questions (how often to ask when unsure) is the third, on Port 9.
-        ...(typeof questions === 'number' ? { questions } : {}),
+        ...(typeof sendQuestions === 'number' ? { questions: sendQuestions } : {}),
       });
     } catch (err) {
       (auto ?? this.lastRoute)?.finish(false, Date.now() - localStart);
