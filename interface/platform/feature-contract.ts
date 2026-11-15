@@ -79,6 +79,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/memory-folders.test.ts')],
   },
   {
+    id: 'prompt-memory', title: 'Prompt memory', description: 'A much smaller archive that makes the mesh say what a big one does, found by trying and kept for reuse.',
+    implementation: ['models && skills/core/prompt-memory.ts', 'interface/prompt-memory-routes.ts'],
+    routes: ['GET /api/prompt-memory', 'GET /api/prompt-memory/standin', 'POST /api/prompt-memory/use', 'POST /api/prompt-memory/record', 'POST /api/prompt-memory/refresh', 'GET /api/prompt-memory/job', 'DELETE /api/prompt-memory'],
+    needs: ENGINE, tests: [v('test/core/prompt-memory.test.ts')],
+  },
+  {
     id: 'reasoning', title: 'Reasoning engine', description: 'OneBrain neural mesh, hyperdimensional memory, experts and the Zip Loop.',
     implementation: ['models && skills/llm.js', 'models && skills/core/unified-brain.ts', 'models && skills/onebrain/model.json'],
     routes: ['GET /api/neurons', 'POST /api/zip-loop/run', 'POST /api/zip-loop/file'],
@@ -362,7 +368,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))

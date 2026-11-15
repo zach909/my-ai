@@ -60,6 +60,7 @@ import { WEIGHTS_PAGE } from './weights-page.js';
 import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
+import { PromptMemory } from '../models && skills/core/prompt-memory.js';
 import { isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
@@ -4131,7 +4132,8 @@ export class WebServer {
     }
 
     // DELETE /api/memory/all — forget everything: every remembered item,
-    // every AI Chat thread, and every shared chat room.
+    // every topic note, every prompt-memory stand-in, every AI Chat thread,
+    // and every shared chat room.
     //
     // Never public, and it never can be. It is behind the blanket gate above
     // like all destruction, and it is deliberately not one of the
@@ -4153,9 +4155,10 @@ export class WebServer {
         const system = await getNeuroclawSystem();
         const memories = system.memory.forgetAll();
         const topicNotes = new MemoryFolders().forgetAll();
+        const standIns = new PromptMemory().forgetAll();
         const threads = this.chatHistory.deleteAllThreads();
         const rooms = getSharedChatStore().deleteAllRooms();
-        this.sendJson(res, { memories, topicNotes, threads, rooms });
+        this.sendJson(res, { memories, topicNotes, standIns, threads, rooms });
       } catch (err) {
         this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
       }
