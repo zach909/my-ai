@@ -45,6 +45,7 @@ and the permissions each OS prompts for.
 | Feature | Windows | Linux | macOS | ChromeOS / Chromebook | Android | iOS |
 | --- | --- | --- | --- | --- | --- | --- |
 | Chat | yes | yes | yes | yes | yes | yes |
+| Auto route (effort, where to answer, how much network) | yes | yes | yes | yes | yes | yes |
 | Chat history | yes | yes | yes | yes | yes | yes |
 | Memory | yes | yes | yes | yes | yes | yes |
 | Memory topics | yes | yes | yes | yes | yes | yes |

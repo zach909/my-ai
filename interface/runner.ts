@@ -7,6 +7,15 @@ import type { NeuroPipeline, PipelineResult } from "../models && skills/core/pip
 import type { PluginRegistry } from "../plugin_manager/registry.js";
 import { embedTranscript, formatTurn, type Speaker } from "../models && skills/core/neuro-lang.js";
 import { chooserEnabled, routeMessage, type Route } from "../models && skills/core/engine-router.js";
+import { autoRouteForced, routeSummary, runAutoRoute, type AutoRoute, type AutoRouteContext, type AutoRouteRequest, type RouteSummary } from "../models && skills/core/auto-route.js";
+
+/** Auto routing for one message: the switches, and where to report what it decided (per call, so two chats never share a result). */
+export interface AutoRouteCall {
+  request: AutoRouteRequest;
+  onPlan?: (summary: RouteSummary) => void;
+  /** Islands and region scores when a clean partition is known. Without them the whole network runs. */
+  context?: AutoRouteContext;
+}
 
 export class NeuroclawRunner extends EventEmitter {
   private llm: NeuroclawLLM;
@@ -81,6 +90,7 @@ export class NeuroclawRunner extends EventEmitter {
     neurons?: number | null,
     effort?: number | null,
     questions?: number | null,
+    autoCall?: AutoRouteCall | null,
   ): Promise<string> {
     if (!this.running) await this.start();
 
@@ -112,7 +122,27 @@ export class NeuroclawRunner extends EventEmitter {
     // does not, or that computer fails, this device answers below exactly as
     // before, so turning it on can only add an answerer, never remove one.
     this.lastRoute = null;
-    if (chooserEnabled()) {
+
+    // Auto route (models && skills/core/auto-route.ts): picks effort, where to answer and how much of the network
+    // to run for this one message, and applies the two switches (instant, optimize prompt). It replaces the
+    // chooser below for this message rather than running beside it. A dial set by hand still wins.
+    let sendPrompt = prompt;
+    let sendEffort = effort;
+    let auto: AutoRoute | null = null;
+    if (autoCall && (autoCall.request.auto || autoRouteForced())) {
+      auto = await runAutoRoute(prompt, memoryContext ?? [], { ...autoCall.request, auto: true }, autoCall.context).catch(() => null);
+      if (auto) {
+        autoCall.onPlan?.(routeSummary(auto.plan, auto.prompt));
+        this.emit('auto-route', auto.plan);
+        if (auto.answer !== null) {
+          this.injectInput(auto.answer, 'ai');
+          return auto.answer;
+        }
+        sendPrompt = auto.prompt;
+        sendEffort = auto.plan.effort.level;
+      }
+    }
+    if (!auto && chooserEnabled()) {
       const route = await routeMessage(prompt, memoryContext).catch(() => null);
       this.lastRoute = route;
       if (route && route.answer !== null) {
@@ -127,22 +157,22 @@ export class NeuroclawRunner extends EventEmitter {
     const localStart = Date.now();
     let response: string;
     try {
-      response = await this.llm.generate(prompt, {
+      response = await this.llm.generate(sendPrompt, {
         ...(memoryContext && memoryContext.length ? { memoryContext } : {}),
         // Prompting skills go into the Zip Loop with the prompt (llm.generate).
         ...(promptingSkills && promptingSkills.length ? { promptingSkills } : {}),
         // Neurons (how confident to act) is its own Zip Loop input beside the prompt.
         ...(typeof neurons === 'number' ? { neurons } : {}),
         // Effort (how hard to try) is the next input beside it, on its own port.
-        ...(typeof effort === 'number' ? { effort } : {}),
+        ...(typeof sendEffort === 'number' ? { effort: sendEffort } : {}),
         // Questions (how often to ask when unsure) is the third, on Port 9.
         ...(typeof questions === 'number' ? { questions } : {}),
       });
     } catch (err) {
-      this.lastRoute?.finish(false, Date.now() - localStart);
+      (auto ?? this.lastRoute)?.finish(false, Date.now() - localStart);
       throw err;
     }
-    this.lastRoute?.finish(true, Date.now() - localStart);
+    (auto ?? this.lastRoute)?.finish(true, Date.now() - localStart);
     // The loop only ever saw one side of the conversation: prompts went in and
     // the agent's own answers did not, so it could never learn that an answer
     // follows a question -- there were no answers in it.

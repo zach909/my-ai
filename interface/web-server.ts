@@ -34,6 +34,7 @@ import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
 import { parseNeurons } from '../models && skills/core/neurons.js';
 import { parseEffort } from '../models && skills/core/effort.js';
+import { parseAutoRoute, type RouteSummary } from '../models && skills/core/auto-route.js';
 import { parseQuestions } from '../models && skills/core/questions.js';
 import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
@@ -615,6 +616,12 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   #neurons, #questions { width: 96px; accent-color: #ff9a84; }
   #neurons-out, #questions-out { min-width: 2.2em; opacity: 0.8; }
   @media (max-width: 600px) { #neurons-wrap, #questions-wrap { display: none; } }
+  /* Auto routing: Auto picks effort, where to answer and how much of the network runs; Instant answers fast; Optimize tidies the prompt. */
+  #route-wrap { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; font-size: 12px; }
+  .route-opt { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+  .route-opt input { accent-color: #ff9a84; margin: 0; }
+  .route-opt input:disabled + span { opacity: 0.4; }
+  @media (max-width: 600px) { #input-area { flex-wrap: wrap; } #route-wrap { order: 9; flex: 1 0 100%; justify-content: center; } }
   #send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -768,6 +775,11 @@ ${SOURCE_CSS}
     <input type="range" id="questions" min="0" max="100" step="5" value="50" aria-label="Questions, how often the AI asks when it is not sure, 0 to 100" aria-valuetext="50, sometimes">
     <output id="questions-out" for="questions">50</output>
   </label>
+  <span id="route-wrap" role="group" aria-label="How the AI picks effort and processor">
+    <label class="route-opt" for="route-auto" title="Auto: for each message it picks how hard to try, whether to answer on this device or a bigger computer, and how much of its network to run."><input type="checkbox" id="route-auto" checked><span>Auto</span></label>
+    <label class="route-opt" for="route-instant" title="Instant: answer fast. Lowest effort, the lightest engine, and only the most relevant part of the network."><input type="checkbox" id="route-instant"><span>Instant</span></label>
+    <label class="route-opt" for="route-optimize" title="Optimize prompt: tidy the message before it is sent (filler and repeats out, nothing added). Not used with Instant."><input type="checkbox" id="route-optimize"><span>Optimize prompt</span></label>
+  </span>
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
@@ -803,6 +815,26 @@ ${SOURCE_CSS}
   try { const savedQ = localStorage.getItem('nc-questions'); if (savedQ !== null && savedQ !== '') questionsEl.value = savedQ; } catch (e) { /* storage may be blocked */ }
   showQuestions();
   questionsEl.addEventListener('input', function () { showQuestions(); try { localStorage.setItem('nc-questions', questionsEl.value); } catch (e) { /* not saved */ } });
+  // Auto routing switches. Auto is on unless it was turned off; Instant and Optimize start off. Kept in this browser only.
+  const routeAutoEl = document.getElementById('route-auto');
+  const routeInstantEl = document.getElementById('route-instant');
+  const routeOptimizeEl = document.getElementById('route-optimize');
+  function loadRoute(el, key, fallback) {
+    let v = fallback;
+    try { const saved = localStorage.getItem(key); if (saved === '1' || saved === '0') v = saved === '1'; } catch (e) { /* storage may be blocked */ }
+    el.checked = v;
+    el.addEventListener('change', function () { showRoute(); try { localStorage.setItem(key, el.checked ? '1' : '0'); } catch (e) { /* not saved */ } });
+  }
+  // Instant answers at once, so it needs Auto's picking and has no use for a tidy-up first.
+  function showRoute() {
+    if (routeInstantEl.checked) routeAutoEl.checked = true;
+    routeAutoEl.disabled = routeInstantEl.checked;
+    routeOptimizeEl.disabled = routeInstantEl.checked;
+  }
+  loadRoute(routeAutoEl, 'nc-route-auto', true);
+  loadRoute(routeInstantEl, 'nc-route-instant', false);
+  loadRoute(routeOptimizeEl, 'nc-route-optimize', false);
+  showRoute();
   const clearBtn = document.getElementById('clear-btn');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
@@ -861,6 +893,13 @@ ${SOURCE_CSS}
 
     const dl = document.createElement('dl');
     if (d.route) row(dl, 'routed to', d.route.capability + ' (confidence ' + d.route.confidence + ')');
+    if (d.autoRoute) {
+      const r = d.autoRoute;
+      row(dl, 'effort', r.effort.level + ' (' + r.effort.mode + ', ' + (r.effort.source === 'auto' ? 'picked for this message' : r.effort.source === 'manual' ? 'set by hand' : 'instant') + ')');
+      row(dl, 'answered', (r.where === 'cloud' ? 'on a bigger computer' : 'on this device') + ' (' + r.engine + ')');
+      row(dl, 'processor', r.compute.islandsTotal ? Math.round(r.compute.share * 100) + '%: ' + r.compute.islandsRun.length + ' of ' + r.compute.islandsTotal + ' islands run' : 'whole network (no islands found yet)');
+      if (r.prompt.optimized) row(dl, 'prompt tidied', r.prompt.changes.join(', '));
+    }
     if (d.emotion) row(dl, 'read as', 'valence ' + d.emotion.valence + ', arousal ' + d.emotion.arousal);
     if (d.mesh) row(dl, 'mesh', d.mesh.neurons + ' neurons x ' + d.mesh.dimensions + ' dimensions');
     if (d.zipBytes) row(dl, 'zip loop', d.zipBytes + ' archive bytes through the bit neurons');
@@ -1140,6 +1179,9 @@ ${SOURCE_CSS}
           sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
           questions: Number(questionsEl.value),
+          auto: routeAutoEl.checked,
+          instant: routeInstantEl.checked,
+          optimize: routeOptimizeEl.checked && !routeInstantEl.checked,
           visualEvent,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
@@ -4584,7 +4626,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; auto?: unknown; instant?: unknown; optimize?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4620,9 +4662,12 @@ export class WebServer {
         if (isOwnerOrAdmin()) await profileWithMemory().catch(() => undefined); // the owner's profile is the owner's
         const activity = activityStart(`Chat: ${clip(message, 80)}`, clip(message));
         let response: string;
+        // What auto routing decided for this message (effort, where, how much of the network), reported by the runner.
+        let autoRoute: RouteSummary | undefined;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions),
+            { request: parseAutoRoute(body), onPlan: (summary) => { autoRoute = summary; } });
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;
@@ -4638,6 +4683,8 @@ export class WebServer {
           const { getNeuroclawSystem } = await import('../src/index.js');
           details = (await getNeuroclawSystem()).lastTurnDetails ?? undefined;
         } catch { /* the details are not the answer; never fail the reply for them */ }
+        // The routing decision rides in the same panel as the rest of "how this answer was built".
+        if (autoRoute) details = { ...(details && typeof details === 'object' ? details as object : {}), autoRoute };
         this.sendJson(res, { response, details, timestamp: Date.now() });
       } catch (err) {
         this.sendError(res, err);
