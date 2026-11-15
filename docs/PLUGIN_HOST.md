@@ -18,6 +18,7 @@ This is separate from `PluginRegistry` (`plugin_manager/registry.ts`), which run
 | `hosted-routes` | hosted mode (needs `accounts-routes`) | no |
 | `corona-routes` | apps, compute sharing, data donor, the token-checked `/api/corona/v1` API | no |
 | `memory-topics-routes` | the folder-tree memory | no |
+| `prompt-memory-routes` | small stand-in archives for big ones (`/api/prompt-memory`) | no |
 | `safety-routes` | risky tools, approvals, complete access, auto-continue | yes |
 | `weights-routes` | net maker, net skill maker, weight editor, compiler | no |
 | `agent-routes` | sandbox, danger level, alignment protocol | yes |
