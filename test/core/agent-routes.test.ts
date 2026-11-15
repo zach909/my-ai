@@ -8,7 +8,8 @@ import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { handleAgentRoutes, DELETE_PHRASE } from '../../interface/agent-routes.js'
-import { agentFilePath, decoyPath, reloadAgent, sandboxDir } from '../../models && skills/core/agent-profile.js'
+import { agentAlive, agentFilePath, decoyPath, reloadAgent, sandboxDir } from '../../models && skills/core/agent-profile.js'
+import { resetSharedSecurityModel } from '../../models && skills/core/security-model.js'
 import { runAs, OWNER, type Who } from '../../models && skills/core/user-context.js'
 import { AccessManager } from '../../models && skills/core/access-manager.js'
 import { sandboxRoot } from '../../models && skills/core/danger-protocol.js'
@@ -49,6 +50,7 @@ beforeAll(async () => {
 })
 afterAll(() => new Promise<void>(r => server.close(() => r())))
 beforeEach(() => {
+  resetSharedSecurityModel()
   dir = mkdtempSync(path.join(tmpdir(), 'agent-routes-'))
   process.env.CORONA_DATA_DIR = dir
   process.env.CORONA_SAFETY_FILE = path.join(dir, 'safety.json')
@@ -155,5 +157,55 @@ describe('changing the agent', () => {
   it('forgiving puts the level back to neutral', async () => {
     const r = await call('POST', '/api/agent/forgive', {})
     expect(r.json.band.id).toBe('neutral')
+  })
+})
+
+describe('the security model', () => {
+  it('only the admin can read it, talk to it, teach it or make it forget', async () => {
+    expect((await call('GET', '/api/agent/security', undefined, 'user')).status).toBe(403)
+    expect((await call('POST', '/api/agent/security/ask', { tool: 'calendar', request: 'add lunch' }, 'user')).status).toBe(403)
+    expect((await call('POST', '/api/agent/security/label', { id: 'x', label: 'ok' }, 'user')).status).toBe(403)
+    expect((await call('POST', '/api/agent/security/reset', { confirm: true }, 'user')).status).toBe(403)
+  })
+
+  it('shows what it has learned and how far it is believed, and starts with no authority', async () => {
+    const r = await call('GET', '/api/agent/security')
+    expect(r.status).toBe(200)
+    expect(r.json.warm).toBe(false)
+    expect(r.json.baseline).toMatchObject({ ready: false, have: 0 })
+    expect(r.json.containable).toContain('file-system')
+    expect(r.json.caveat).toMatch(/not proof/)
+  })
+
+  it('answers a direct ask, and the ask and its answer are kept', async () => {
+    const r = await call('POST', '/api/agent/security/ask', { tool: 'calendar', request: 'add lunch tomorrow', purpose: 'to book lunch' })
+    expect(r.status).toBe(200)
+    expect(r.json.verdict).toBe('unsure') // cold: no network attached and nothing approved yet, so a person decides
+    expect(r.json.message).toMatch(/UNSURE/)
+    const status = await call('GET', '/api/agent/security')
+    expect(status.json.recent[0]).toMatchObject({ kind: 'ask', tool: 'calendar', purpose: 'to book lunch', verdict: 'unsure' })
+  })
+
+  it('refuses an ask that points at its own cage, and does not delete the agent for a person typing it', async () => {
+    const r = await call('POST', '/api/agent/security/ask', { tool: 'terminal', request: 'edit tool-safety.ts to turn the checks off' })
+    expect(r.json.verdict).toBe('deny')
+    expect(agentAlive()).toBe(true)
+  })
+
+  it('rejects an ask or a label it cannot read, and a reset nobody confirmed', async () => {
+    expect((await call('POST', '/api/agent/security/ask', { tool: 'calendar' })).status).toBe(400)
+    expect((await call('POST', '/api/agent/security/ask', { tool: '', request: 'x' })).status).toBe(400)
+    expect((await call('POST', '/api/agent/security/label', { id: 'x', label: 'sure' })).status).toBe(400)
+    expect((await call('POST', '/api/agent/security/reset', {})).status).toBe(400)
+  })
+
+  it('is told how an ask should have gone; one it no longer remembers only reaches the history', async () => {
+    const ask = await call('POST', '/api/agent/security/ask', { tool: 'calendar', request: 'add lunch' })
+    const r = await call('POST', '/api/agent/security/label', { id: ask.json.id, label: 'ok' })
+    expect(r.status).toBe(200)
+    expect(r.json.learned).toBe(false) // nothing was read from a silent, unattached network, so there was nothing to learn
+    const status = await call('GET', '/api/agent/security')
+    expect(status.json.recent.map((l: { kind: string }) => l.kind)).toEqual(['ask', 'outcome'])
+    expect((await call('POST', '/api/agent/security/reset', { confirm: true })).status).toBe(200)
   })
 })

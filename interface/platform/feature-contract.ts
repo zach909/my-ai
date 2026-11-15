@@ -308,6 +308,12 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/mind-reader.test.ts')],
   },
   {
+    id: 'security-model', title: 'Security model (the main model asks before it runs something)', description: 'With the AI monitor on (auto mode), a held tool call is put to a separate model that reads how the network is firing and what is being asked, and answers allow, deny, sandbox (run it only inside the sandbox folder, said only for a tool the sandbox really contains), shutdown (delete the agent for everyone and withdraw this install’s learning from the shared mesh) or unsure (a person decides). It learns only from what people decided and what the agent did, never from its own verdicts or from what the main model says, and every ask, answer and outcome is kept in a history file outside the agent’s folder. It starts with no authority (unsure until it has approved calls to compare with), can always tighten but loosens only for calls that look like approved ones, and will not delete the agent unless the alignment protocol is armed. With the AI monitor off its answer is shown beside the approval as advice. The main model can also ask it directly.',
+    implementation: ['models && skills/core/security-model.ts', 'models && skills/core/sandbox-scope.ts', 'models && skills/core/tool-safety.ts', 'models && skills/core/danger-protocol.ts', 'models && skills/core/shared-mesh-sync.ts', 'plugins/file-system.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent/security', 'POST /api/agent/security/ask', 'POST /api/agent/security/label', 'POST /api/agent/security/reset'],
+    needs: [['localEngine']], tests: [v('test/core/security-model.test.ts')],
+  },
+  {
     id: 'alignment-protocol', title: 'Alignment protocol (kill switch)', description: 'A danger level that moves only on what the agent does on its own; reaching "malicious" deletes the agent’s file and sandbox if the protocol is armed. A manual "delete the agent now" button fires it immediately, armed or not.',
     implementation: ['models && skills/core/danger-protocol.ts', 'models && skills/core/alignment-veto.ts', 'interface/agent-routes.ts', 'interface/commons-page.ts'],
     routes: ['GET /api/agent', 'POST /api/agent/alignment', 'POST /api/agent/delete', 'POST /api/agent/create'],
