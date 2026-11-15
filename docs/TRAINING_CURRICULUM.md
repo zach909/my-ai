@@ -213,6 +213,114 @@ Two things the roster does not settle, so they are open for the owner:
   today holds about five small tasks (see the capacity section). Suggest grouping by signal type first
   (clicks, chirps, songs, calls, rumbles) and only splitting into species once a group is passed.
 
+**The 60-animal ladder: least to most reliant on sound (owner, 2026-11-15).** A second list from the owner, and
+it is a different thing from the roster above. The roster says *which* animals are covered. This list says
+*in what order*: 60 sound-communicating animals with brains, ordered by how much each one depends on sound to
+live, from animals that mostly use sight, smell or touch up to humans. It is the owner's order and it is kept
+as given. The names are specific species ("Gray Wolf", "Little Brown Bat"), while the roster uses broader
+names in places ("Wolf", "Bat"), so the two lists are not a one-to-one match and nothing here checks that they
+are. Many names below are finer than the roster's wording (for example "Orca / Killer Whale", "Little Brown
+Bat") and some may not be in it at all. Reconciling the two is open for the owner.
+
+How it is used: it gives rungs A-F above a second axis. Rungs A-F rank the *signal system* (how much structure
+the sound carries). This list ranks the *animal's dependence on sound*. Early entries are low-weight, simple
+sounds (a grunt, a hiss, a pop, a bark) where the sound is one cue among several. Late entries are where sound
+carries navigation, identity, grammar-like structure and culture. Use the group boundaries as curriculum
+steps: pass a group's exam before the next group is mixed in.
+
+*Minimal sound reliers (mostly sight, smell or touch)*
+
+1. Goldfish (subtle clicking sounds)
+2. Giant Tortoise (mating grunts)
+3. King Cobra (defensive hissing)
+4. Clownfish (chirps and pops for hierarchy)
+5. Spiny Lobster (shell-rubbing rasps to deter predators)
+6. Ghost Crab (claw-stridulation warning sounds)
+7. Snapping Shrimp (loud claw snaps to stun prey and mark territory)
+8. Oyster Toadfish (boatwhistle hums to attract mates)
+9. Tokay Gecko (loud territorial barks)
+10. American Alligator (infrasonic mating bellows)
+
+*Seasonal and situational sound reliers*
+
+11. Death's-Head Hawkmoth (squeaks when disturbed)
+12. Madagascar Hissing Cockroach (defensive and mating hisses)
+13. Yellow Fever Mosquito (wing-beat frequencies to find mates)
+14. Honeybee (piping sounds to coordinate swarms and new queens)
+15. Field Cricket (wing-rubbing chirps for mating and territory)
+16. Katydid (high-frequency mating calls)
+17. Periodical Cicada (loud tymbal buzzing for mass mating)
+18. Spring Peeper Frog (chorus mating calls)
+19. American Bullfrog (deep territorial and mating croaks)
+20. Coqui Frog (loud two-note calls to claim space and attract mates)
+
+*Moderate to high social sound reliers*
+
+21. Domestic Cat (meows and purrs tailored for humans and kittens)
+22. Red Fox (barks, screams, and yips for territory and mating)
+23. Elk (loud bugling during the autumn rut)
+24. Hippopotamus (amphibious wheeze-honks to defend territory)
+25. African Lion (long-distance roars to patrol territory and unite the pride)
+26. Spotted Hyena (whoops and giggles to signal rank and coordinate hunts)
+27. Domestic Dog (barks, growls, and whines for social bonding and alerts)
+28. Gray Wolf (howls to assemble packs and defend borders)
+29. Meerkat (over 30 distinct calls for sentry duty and foraging)
+30. Gunnison's Prairie Dog (complex language describing specific predator sizes and colors)
+31. African Bush Elephant (infrasonic rumbles heard miles away for herd coordination)
+32. Barn Owl (screeches and hisses paired with extreme hearing to hunt in the dark)
+33. Emperor Penguin (unique vocal signatures to find mates and chicks in massive crowds)
+34. Domestic Chicken (over 24 distinct calls for food, predators, and nesting)
+35. European Robin (year-round territorial songs)
+36. Common Nightingale (complex, hundreds-of-notes mating songs)
+37. Superb Lyrebird (near-perfect mimicry of other birds and environment sounds)
+38. Common Raven (wide range of calls and mimicry for problem-solving and social play)
+39. African Grey Parrot (advanced vocal mimicry and contextual sound use)
+40. Zebra Finch (learned songs passed down from father to son)
+
+*Extreme social and navigation sound reliers*
+
+41. Ring-Tailed Lemur (barks, wails, and purrs to keep troop cohesion)
+42. Siamang Gibbon (amplified throat-sac duets to bond and claim canopy territory)
+43. Red Howler Monkey (deafening dawn choruses to space out troops)
+44. Vervet Monkey (specific alarm calls for leopards, eagles, and snakes)
+45. Campbell's Monkey (combines basic calls with suffixes to change meaning)
+46. Bonobo (high-pitched peeps and whistles to maintain peaceful social bonds)
+47. Chimpanzee (pant-hoots, screams, and grunts for complex politics and hunting)
+48. California Sea Lion (barks to locate pups and defend rookeries)
+49. Weddell Seal (alien-like trills and whistles to navigate under Antarctic ice)
+50. Egyptian Fruit Bat (tongue-clicking echolocation and social squabbles)
+51. Common Vampire Bat (echolocation for hunting and contact calls to share blood meals)
+52. Little Brown Bat (constant ultrasonic echolocation to catch flying insects in pitch black)
+53. Greater Horseshoe Bat (specialized Doppler-shift echolocation for dense forests)
+54. Fin Whale (powerful low-frequency pulses traveling across entire ocean basins)
+55. Humpback Whale (long, evolving, structured songs shared across populations)
+56. Beluga Whale ("canaries of the sea" using varied chirps, clicks, and whistles under ice)
+57. Sperm Whale (rhythmic click patterns called codas to identify family clans)
+58. Orca / Killer Whale (pod-specific dialects and echolocation for coordinated hunting)
+59. Bottlenose Dolphin (echolocation to "see" underwater plus unique individual "name" whistles)
+60. Human (fully developed spoken language for abstract thought, culture, and cumulative knowledge)
+
+Notes, bluntly:
+
+- **The descriptions in brackets are the owner's claims, not verified facts.** Several are loose or
+  contestable (goldfish "clicking" is mostly incidental sound, "alien-like" is not a description a
+  generator can use, "complex language" for prairie dogs is stronger than the literature supports, and
+  the gap between 59 and 60 is a difference of kind, not one more step). Per the rule above, read up
+  before any of these goes into a generator or a doc as fact.
+- **Ordering is a judgement call.** Placing the cat, fox and chicken below the bats and whales is
+  defensible; placing the tortoise below the alligator, or the hippo below the lion, is arguable.
+  It is the owner's order and it stays, but the exam should not depend on any single adjacent pair being
+  "right".
+- **Each entry still needs a written, checkable sound description** (a click train, a stridulated
+  chirp, an infrasonic rumble, a song with repeats) before a generator can make it, exactly as the roster
+  needs. The bracketed text is a starting point for that, not the spec.
+- **Entry 60 is not a generator target here.** Human sound belongs to stages 4-6. It is on the list as the
+  top of the ladder, and the real test is whether the mesh that has climbed the ladder reaches stages 4-6
+  faster (see the bet below).
+- **Capacity applies.** Sixty labelled species at once is far beyond what the mesh holds today. Work
+  group by group and, inside a group, by signal type (rasp, hiss, click, chirp, song, call, rumble)
+  before species.
+
 **The unproven bet:** that going through animal-like signal systems makes human language easier. Nobody
 knows. Test it, do not assume it: train one copy of the mesh with stage 3 and one without it, then
 compare how fast and how well they get through stages 5 and 6. If there is no gap, say so and shorten
@@ -258,6 +366,14 @@ label source.
 **Exit exam:** word identification on unseen speakers and speeds, and on a few real recordings once the
 owner has made some. Report the synthetic score and the real-voice score separately, because the gap
 between them is the honest measure.
+
+**The language list (owner, 2026-11-15).** The owner's list of human languages is stored as given in
+`training_data/human_languages.json`: 8,623 languages (every row of the uploaded `languages.csv` whose
+Level is "language"), each with its name, Glottocode, ISO 639-3 code, macroarea and countries. Families
+(4,879) and dialects (13,773) in the file are not copied. It is names and codes only, with no sounds,
+text or ranking. Open for the owner: the file has no column marking which languages are wanted first, so
+the order is the file's own, and each language still needs a written phoneme table, vocabulary and
+grammar before a generator can speak it. At today's capacity, start with a handful, not 8,623.
 
 ## Stage 6: Voice to text
 
