@@ -1,5 +1,7 @@
 # Training curriculum: from music to chips
 
+> **2026-11-14: the owner narrowed the focus.** Research, writing code, writing skills, the extension builder and plugins, and reasoning/retrying/fixing mistakes come first; the rest of this plan is not the priority. See `docs/TRAINING_FOCUS.md`.
+
 A plan for what the mesh is trained on, in what order, and how we know each step worked.
 **This is a plan, not built code.** Nothing described under "Generators" exists yet except the
 drill generators noted below. `train.md` is about how to train *reasoning*; this file is about
