@@ -170,6 +170,11 @@ export class PluginRegistry {
     return this.definitions.get(pluginId);
   }
 
+  /** Every registered plugin definition, in registration order. */
+  listDefinitions(): PluginDefinition[] {
+    return [...this.definitions.values()];
+  }
+
   getPluginInstance(pluginId: string): BasePlugin | undefined {
     return this.plugins.get(pluginId);
   }
