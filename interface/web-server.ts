@@ -11,6 +11,7 @@ import { AppLauncher } from './app-launcher.js';
 import { EncryptionManager } from './encryption.js';
 import { ChatHistoryStore, type ChatSource } from '../models && skills/core/chat-history-store.js';
 import { exportChats, importChats } from '../models && skills/core/chat-archive.js';
+import { buildResponseBundle } from './response-bundle.js';
 import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
@@ -1101,6 +1102,41 @@ ${SOURCE_CSS}
         dots.setAttribute('aria-expanded', 'true');
       };
       ts.appendChild(dots);
+
+      // Zip, next to the dots: this reply as response/, plugins/ and prompts/ (interface/response-bundle.ts).
+      const zip = document.createElement('button');
+      zip.className = 'dots-btn';
+      zip.textContent = 'Zip';
+      zip.title = 'Download this reply as a zip: the response, the plugins it used and prompts to send next';
+      zip.setAttribute('aria-label', 'Download this reply as a zip');
+      zip.onclick = async () => {
+        let question = '';
+        if (entry) {
+          const at = chatHistory.indexOf(entry);
+          for (let i = at - 1; i >= 0; i--) {
+            if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
+        zip.disabled = true;
+        try {
+          const r = await fetch('/api/chat/bundle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details })
+          });
+          if (!r.ok) throw new Error('no zip');
+          const url = URL.createObjectURL(await r.blob());
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'neuroclaw-reply.zip';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch { zip.textContent = 'Zip failed'; setTimeout(() => { zip.textContent = 'Zip'; }, 2000); }
+        finally { zip.disabled = false; }
+      };
+      ts.appendChild(zip);
     }
     const stamp = document.createElement('span');
     stamp.textContent = time || new Date().toLocaleTimeString();
@@ -4721,6 +4757,29 @@ export class WebServer {
           prompt: typeof body?.prompt === 'string' ? body.prompt : undefined,
         });
         this.sendJson(res, result);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle — one reply as a zip: response/, plugins/ and prompts/ (see interface/response-bundle.ts).
+    // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
+    if (pathname === '/api/chat/bundle' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
+          return;
+        }
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details });
+        this.setSecurityHeaders(res);
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="neuroclaw-reply-${new Date().toISOString().slice(0, 10)}.zip"`,
+          'Content-Length': zip.length,
+        });
+        res.end(zip);
       } catch (err) {
         this.sendError(res, err);
       }
