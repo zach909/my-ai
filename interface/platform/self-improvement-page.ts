@@ -175,12 +175,31 @@ export function selfImprovementPage(): string {
 </main>
 
 <script>
-  document.querySelectorAll('.tab-button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      e.target.classList.add('active');
-      const tabName = e.target.dataset.tab;
+  var TABS = ['overview', 'skills', 'reasoning', 'history'];
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pct(v) { return v == null ? 'no data yet' : v + '%'; }
+  function stat(label, value) {
+    return '<div class="stat-box"><div class="stat-label">' + esc(label) + '</div><div class="stat-value">' + esc(value) + '</div></div>';
+  }
+  function meter(title, valueText, label, percent) {
+    var w = percent == null ? 0 : Math.max(0, Math.min(100, percent));
+    return '<div class="metric"><h2>' + esc(title) + '</h2><div class="metric-value">' + esc(valueText) + '</div>'
+      + '<div class="metric-label">' + esc(label) + '</div>'
+      + '<div class="progress-bar"><div class="progress-fill" style="width: ' + w + '%"></div></div></div>';
+  }
+  function empty(text) { return '<div class="metric"><div class="metric-label">' + esc(text) + '</div></div>'; }
+
+  document.querySelectorAll('.tab-button').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      var tabName = e.currentTarget.dataset.tab;
+      document.querySelectorAll('.tab-button').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+      e.currentTarget.classList.add('active');
       document.getElementById(tabName).classList.add('active');
       loadTabContent(tabName);
     });
@@ -189,141 +208,65 @@ export function selfImprovementPage(): string {
   loadTabContent('overview');
 
   async function loadTabContent(tab) {
+    var target = document.getElementById(tab + '-content');
     try {
-      const res = await fetch('/api/self-improvement?tab=' + tab);
-      if (!res.ok) throw new Error('Failed to load data');
-      const data = await res.json();
-      if (tab === 'overview') {
-        displayOverview(data);
-      } else if (tab === 'skills') {
-        displaySkills(data);
-      } else if (tab === 'reasoning') {
-        displayReasoning(data);
-      } else if (tab === 'history') {
-        displayHistory(data);
+      var res = await fetch('/api/self-improvement?tab=' + encodeURIComponent(tab));
+      if (!res.ok) {
+        var why = '';
+        try { why = (await res.json()).error || ''; } catch (e) { /* not JSON */ }
+        throw new Error('Could not load this tab (HTTP ' + res.status + (why ? ': ' + why : '') + ')');
       }
+      var data = await res.json();
+      var show = { overview: displayOverview, skills: displaySkills, reasoning: displayReasoning, history: displayHistory }[tab];
+      target.innerHTML = show(data);
     } catch (e) {
-      document.getElementById(tab + '-content').innerHTML = '<div style="color: #e3a99d;">' + e.message + '</div>';
+      target.innerHTML = '<div style="color: #e3a99d;">' + esc(e.message) + '</div>';
     }
   }
 
-  function displayOverview(data) {
-    const html = \`
-      <div class="metric">
-        <h2>Skills Improved</h2>
-        <div class="metric-value">\${data.skillsImproved || 47}</div>
-        <div class="metric-label">Skills upgraded this session</div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: \${(data.skillsImproved || 47) / 100 * 100}%"></div>
-        </div>
-      </div>
-
-      <div class="metric">
-        <h2>Reasoning Accuracy</h2>
-        <div class="metric-value">\${data.reasoningAccuracy || 92.3}%</div>
-        <div class="metric-label">Improvement in task accuracy</div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: \${data.reasoningAccuracy || 92.3}%"></div>
-        </div>
-      </div>
-
-      <div class="metric">
-        <h2>Learning Rate</h2>
-        <div class="metric-value">\${data.learningRate || 1.8}x</div>
-        <div class="metric-label">vs. baseline performance</div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: \${(data.learningRate || 1.8) * 36}%"></div>
-        </div>
-      </div>
-
-      <div class="metric">
-        <h2>Key Metrics</h2>
-        <div class="grid">
-          <div class="stat-box">
-            <div class="stat-label">Tasks Completed</div>
-            <div class="stat-value">\${data.tasksCompleted || 324}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Avg Accuracy</div>
-            <div class="stat-value">\${data.avgAccuracy || 89}%</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Errors Fixed</div>
-            <div class="stat-value">\${data.errorsFixed || 156}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Optimizations</div>
-            <div class="stat-value">\${data.optimizations || 73}</div>
-          </div>
-        </div>
-      </div>
-    \`;
-    document.getElementById('overview-content').innerHTML = html;
+  function displayOverview(d) {
+    var a = d.directAnswers, r = d.drills, x = d.experiments;
+    if (!a.attempts && !r.total && !x.attempts) {
+      return empty('Nothing recorded yet. This fills in as you chat, as skill drills run and as improvement experiments run on this machine.');
+    }
+    return meter('Direct answers', pct(a.ratePercent), a.matched + ' of ' + a.attempts + ' chat messages were answered straight from a trained skill', a.ratePercent)
+      + meter('Skill drills that improved', r.finished ? Math.round((r.improved / r.finished) * 100) + '%' : 'no data yet',
+          r.improved + ' of ' + r.finished + ' finished drills raised held-out accuracy', r.finished ? (r.improved / r.finished) * 100 : null)
+      + '<div class="metric"><h2>Counts</h2><div class="grid">'
+      + stat('Drills run', r.total) + stat('Skills drilled', r.skillsDrilled)
+      + stat('Experiment targets', x.targets) + stat('Experiment attempts', x.attempts)
+      + stat('Sandbox failures', x.sandboxFailures) + stat('Chat messages tracked', a.attempts)
+      + '</div></div>';
   }
 
-  function displaySkills(data) {
-    const skills = data || [];
-    const html = skills.map(skill => \`
-      <div class="metric">
-        <h2>\${skill.name}</h2>
-        <div class="metric-value">\${skill.improvement || 0}%</div>
-        <div class="metric-label">Performance improvement</div>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: \${skill.improvement || 0}%"></div>
-        </div>
-      </div>
-    \`).join('') || '<div>No skill improvements recorded yet</div>';
-    document.getElementById('skills-content').innerHTML = html;
+  function displaySkills(list) {
+    if (!list.length) return empty('No skill has been drilled yet.');
+    return list.map(function (s) {
+      var line = s.lastBefore != null && s.lastAfter != null ? 'last drill: ' + s.lastBefore + '% to ' + s.lastAfter + '%' : 'no finished drill yet';
+      return meter(s.name, s.improvedDrills + ' of ' + s.drills + ' drills improved', line, s.drills ? (s.improvedDrills / s.drills) * 100 : null);
+    }).join('');
   }
 
-  function displayReasoning(data) {
-    const html = \`
-      <div class="metric">
-        <h2>Reasoning Performance</h2>
-        <p style="color: rgba(248, 237, 233, 0.75);">
-          The engine continuously improves its reasoning through:
-        </p>
-        <ul style="color: rgba(248, 237, 233, 0.75); margin: 12px 0 0; padding-left: 20px;">
-          <li>Pattern recognition and analysis</li>
-          <li>Logic chain optimization</li>
-          <li>Error correction and learning</li>
-          <li>Multi-step problem solving</li>
-          <li>Contextual understanding</li>
-        </ul>
-      </div>
-
-      <div class="metric">
-        <h2>Latest Improvements</h2>
-        <div class="grid">
-          <div class="stat-box">
-            <div class="stat-label">Logic Chains Optimized</div>
-            <div class="stat-value">234</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Pattern Matches Found</div>
-            <div class="stat-value">1,847</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Inferences Made</div>
-            <div class="stat-value">456</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Reasoning Chains</div>
-            <div class="stat-value">89</div>
-          </div>
-        </div>
-      </div>
-    \`;
-    document.getElementById('reasoning-content').innerHTML = html;
+  function displayReasoning(d) {
+    if (!d.attempts) return empty('No chat messages have been tracked yet. Each one is logged as a live test of whether a trained skill can answer it directly.');
+    var html = meter('Direct-answer rate, all time', pct(d.ratePercent), d.matched + ' of ' + d.attempts + ' messages', d.ratePercent)
+      + meter('Direct-answer rate, latest ' + d.recentCount, pct(d.recentRatePercent), 'the most recent messages only', d.recentRatePercent)
+      + '<div class="metric"><h2>Match quality</h2><div class="grid">'
+      + stat('Average similarity', d.averageSimilarity == null ? 'no data yet' : d.averageSimilarity)
+      + stat('Messages tracked', d.attempts) + '</div></div>';
+    if (d.topSkills.length) {
+      html += '<div class="metric"><h2>Skills that answered most</h2><div class="grid">'
+        + d.topSkills.map(function (s) { return stat(s.name, s.count); }).join('') + '</div></div>';
+    }
+    return html;
   }
 
-  function displayHistory(data) {
-    const html = \`
-      <div style="color: rgba(248, 237, 233, 0.75);">
-        <p>Learning history and improvement timeline coming soon.</p>
-      </div>
-    \`;
-    document.getElementById('history-content').innerHTML = html;
+  function displayHistory(events) {
+    if (!events.length) return empty('No drills or experiments have run yet.');
+    return events.map(function (e) {
+      return '<div class="metric"><h2>' + esc(e.label) + '</h2><div class="metric-label">'
+        + esc(e.kind) + ' &middot; ' + esc(new Date(e.at).toLocaleString()) + ' &middot; ' + esc(e.detail) + '</div></div>';
+    }).join('');
   }
 </script>`;
 }

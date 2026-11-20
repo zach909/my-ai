@@ -195,9 +195,9 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',
-    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs'],
-    routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],
-    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts')],
+    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'interface/self-improvement-data.ts', 'interface/platform/self-improvement-page.ts'],
+    routes: ['GET /api/self-improvement', 'GET /api/self-improvement/history', 'GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],
+    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts'), n('test/platform/self-improvement-page.test.mjs')],
   },
   {
     id: 'desktop-control', title: 'Desktop control', description: 'See and drive windows through the OS, natively on each: X11 and Wayland on Linux, PowerShell with user32 on Windows, osascript and screencapture on macOS. Only windows of programs the agent started itself can be driven.',
