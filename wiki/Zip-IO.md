@@ -73,6 +73,7 @@ await zip.restore();                  // reload both loops from their last disk 
 - [[Privacy]] - Encryption at rest for persisted memory
 - [[RLM]] - The reasoning ledger, which persists alongside memory the same way
 - [[Neuron-Mesh]] - The mesh's own continuous-state carry-over between calls (§9), a related but separate mechanism
+- [[Prompt-Memory]] - A much smaller archive that makes the mesh say what a big one does, so the big one need not be fed again
 
 ---
 

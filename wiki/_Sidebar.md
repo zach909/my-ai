@@ -27,11 +27,13 @@
 - [[Builder|Builder]]
 - [[Plugins|Plugins]]
 - [[Memory-Topics|Memory Topics]]
+- [[Prompt-Memory|Prompt Memory]]
 - [[Skills|Skills]]
 - [[Code-to-Net|Code-to-Net]]
 - [[Net Maker|Net-Maker]]
 - [[Task Training|Task-Training]]
 - [[Net Search|Net-Search]]
+- [[Format Converter|Format-Converter]]
 
 ## Reference
 - [[NeuroLang|NeuroLang]]

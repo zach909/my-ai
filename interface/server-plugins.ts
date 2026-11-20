@@ -1,7 +1,7 @@
 /**
  * The HTTP server's route groups, as plugins.
  *
- * Each group (platform, accounts, hosted, corona, memory topics, safety, weights, agent, commons) used to be
+ * Each group (platform, accounts, hosted, corona, memory topics, prompt memory, safety, weights, agent, commons) used to be
  * wired into web-server.ts by hand: an `if (isXRoute(path))` block, one per group, each building its own context.
  * Now each is a KernelPlugin (plugin_manager/host.ts) that owns its routes. The server builds one
  * ServerRouteContext per request and offers it to whichever plugins are running; a plugin that is turned off
@@ -23,6 +23,7 @@ import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './
 import { handleHostedRoutes, isHostedRoute } from './hosted-routes.js';
 import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
+import { handlePromptMemoryRoutes, isPromptMemoryRoute } from './prompt-memory-routes.js';
 import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
 import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
 import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
@@ -145,6 +146,41 @@ const memoryTopics: Plugin = {
   routes: [{
     match: (p) => isMemoryTopicsRoute(p),
     handle: (c) => handleMemoryTopicsRoutes({ ...base(c), url: c.url }),
+  }],
+  start: () => undefined,
+};
+
+const promptMemory: Plugin = {
+  id: 'prompt-memory-routes',
+  description: 'Small stand-in archives that make the mesh say what a big one does.',
+  order: 55,
+  routes: [{
+    match: (p) => isPromptMemoryRoute(p),
+    handle: (c) => handlePromptMemoryRoutes({
+      ...base(c),
+      url: c.url,
+      // The live mesh, held for the whole search: every trial drives the same doorway chat and learning use.
+      withRunner: async (work) => {
+        const { PromptMemoryError, doorwayRunner } = await import('../models && skills/core/prompt-memory.js');
+        const { ZipLoopInterface, zipLoopIdsFor } = await import('../models && skills/core/onebrain.js');
+        const system = await liveSystem();
+        system.pipeline.ensureReady();
+        const engine = system.pipeline.getHyperEngine();
+        if (!engine) throw new PromptMemoryError('The network has not run yet, so there is no mesh to try archives on. Ask it something first.', 409);
+        return system.promptFeed.lock().run(() => work(doorwayRunner({
+          doorway: new ZipLoopInterface(engine, zipLoopIdsFor(engine)),
+          capture: () => engine.captureNetworkState(),
+          restore: (snapshot) => engine.restoreNetworkState(snapshot as Parameters<typeof engine.restoreNetworkState>[0]),
+        })));
+      },
+      fingerprint: async () => {
+        try {
+          const { meshFingerprint } = await import('../models && skills/core/prompt-memory.js');
+          const engine = (await liveSystem()).pipeline.getHyperEngine();
+          return engine ? meshFingerprint(engine.captureNetworkState()) : null;
+        } catch { return null; }
+      },
+    }),
   }],
   start: () => undefined,
 };
@@ -277,6 +313,6 @@ export function fileEnabledStore(override?: string): PluginEnabledStore {
 /** The server's plugin host, with every route plugin registered and not yet started. */
 export function createServerHost(store: PluginEnabledStore = fileEnabledStore(), log?: (m: string) => void): PluginHost<ServerRouteContext> {
   const host = new PluginHost<ServerRouteContext>(store, log);
-  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, safety, weights, agent, commons]) host.register(p);
+  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, agent, commons]) host.register(p);
   return host;
 }

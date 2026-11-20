@@ -1,5 +1,6 @@
 import { NetSkillRouter } from './net-skill-router.js';
 import { SkillAccuracyLedger } from './net-skill-accuracy.js';
+import { ElasticDistricts } from './elastic-district.js';
 import { HyperDimensionalEngine } from './onebrain.js';
 import { RLMTrainer } from './rlm.js';
 import { ValueRangeAllocator } from './value-range.js';
@@ -46,6 +47,13 @@ export interface PipelineConfig {
    * neurons.
    */
   useElasticCore?: boolean;
+  /**
+   * Elastic districts (elastic-district.ts): islands of neurons that learn
+   * faster when the input is about their subject and slower when it is not.
+   * On unless this is false; off, every neuron learns at the rate the value
+   * budget gives it, exactly as before.
+   */
+  elasticDistricts?: boolean;
 }
 
 export interface PipelineStep {
@@ -65,6 +73,8 @@ export interface PipelineResult {
   alignment: VetoDecision;
   /** Section 3.3: 1 if live correction fired on this tick's hyperdimensional settle, else 0. */
   liveCorrections: number;
+  /** Elastic districts that were asked this tick (best first), by id. Empty when none was, or when districts are off. */
+  openDistricts: string[];
   /** Per-elastic-core-neuron movement from this tick, keyed by neuron id. */
   /** Per-neuron state change this tick, from the one network. */
   networkStateDeltas: Map<number, number>;
@@ -96,6 +106,8 @@ export class NeuroPipeline {
   private quantumNet: QuantumNeuralNet | null = null;
   private zipIO: ZipIOSystem | null = null;
   private alignmentVeto: AlignmentVeto | null = null;
+  /** Islands of neurons with a subject; they scale learning rates by whether the input is about it. */
+  private districts: ElasticDistricts | null = null;
 
   // Elastic value budget: how many neuron slots it covers, and whether
   // initializeNeurons() has been called yet for this pipeline instance.
@@ -283,6 +295,34 @@ export class NeuroPipeline {
     }
     this.valueBudgetSize = Math.max(this.valueBudgetSize, this.hyperEngine.getNeuronCount());
 
+    // Elastic districts: every expert's neurons are already an island with a
+    // subject, so each is a district from the start. They grow through
+    // growNetwork() so a neuron a district asks for is enrolled in the value
+    // budget like any other.
+    if (this.config.elasticDistricts !== false) {
+      const engine = this.hyperEngine;
+      this.districts = new ElasticDistricts({
+        getNeuronCount: () => engine.getNeuronCount(),
+        neuronGroupsOf: (id) => engine.neuronGroupsOf(id),
+        setNeuronGroup: (id, group) => engine.setNeuronGroup(id, group),
+        clearNeuronGroup: (id, group) => engine.clearNeuronGroup(id, group),
+        addNeurons: (count) => {
+          const ids: number[] = [];
+          for (let i = 0; i < count; i++) {
+            const id = this.growNetwork();
+            if (id >= 0) ids.push(id);
+          }
+          return ids;
+        },
+        tuneNeuronTo: (id, from, toward) => engine.tuneNeuronTo(id, from, toward),
+        getDimensions: () => engine.getDimensions(),
+      });
+      this.districts.setSubjects(this.skillRouter!.listRegions());
+      for (const [expertId, neuronIds] of this.expertNeuronRegistry) {
+        this.districts.define(expertId, neuronIds, { regionId: expertId, text: this.expertMeaning.get(expertId) ?? expertId });
+      }
+    }
+
     this.rlm = new RLMTrainer({
       hiddenDim: this.config.hiddenDim,
       stateDim: this.config.hiddenDim,
@@ -437,9 +477,12 @@ export class NeuroPipeline {
     // there is one, otherwise the embedding itself).
     const inputVec = this.resizeVector(embedding, this.config.embeddingDim);
     let selectedPlugins: string[] = [];
+    let routerScores = new Map<string, number>();
     {
       const t0 = Date.now();
-      selectedPlugins = this.skillRouter!.select(inputText && inputText.trim() ? inputText : inputVec).ids;
+      const selection = this.skillRouter!.select(inputText && inputText.trim() ? inputText : inputVec);
+      selectedPlugins = selection.ids;
+      routerScores = selection.scores;
       steps.push({
         name: 'net-skill-router',
         inputShape: [this.config.embeddingDim],
@@ -466,14 +509,24 @@ export class NeuroPipeline {
     let hyperOutput: number[];
     let liveCorrections = 0;
     let networkStateDeltas = new Map<number, number>();
+    let openDistricts: string[] = [];
     {
       const t0 = Date.now();
       const networkInput = this.resizeArray(Array.from(this.resizeVector(inputVec, this.config.hiddenDim)), this.config.hyperDimensions);
       const activeGroups = selectedPlugins.length > 0 ? new Set(selectedPlugins) : undefined;
       const driven = this.neuronIdsForExperts(selectedPlugins);
+      // The router has said which subjects the input is about; districts
+      // turn that into who learns: the asked islands faster, the rest less.
+      // No districts, or nothing asked, leaves every rate as the value
+      // budget set it.
+      const budgetRates = this.getValueLearningRates();
+      const districtPlan = this.districts
+        ? this.districts.shape(inputText && inputText.trim() ? inputText : inputVec, budgetRates, routerScores)
+        : null;
+      openDistricts = districtPlan ? districtPlan.open.map((o) => o.id) : [];
       const hyperResult = this.hyperEngine!.process(
         networkInput,
-        this.getValueLearningRates(),
+        districtPlan ? districtPlan.rates : budgetRates,
         driven.size > 0 ? driven : new Set([0]),
         this.getValeFractions(),
         { activeGroups },
@@ -482,6 +535,9 @@ export class NeuroPipeline {
       liveCorrections = hyperResult.liveCorrections;
       networkStateDeltas = new Map(hyperResult.stateDeltas);
       this.feedbackToValueBudget(hyperResult.stateDeltas);
+      // How surprised each asked island was decides whether it stiffens,
+      // stretches back, or grows a neuron.
+      this.districts?.observe(hyperResult.stateDeltas);
       const durationMs = Date.now() - t0;
       steps.push({
         name: 'hyper-dimensional',
@@ -633,6 +689,7 @@ export class NeuroPipeline {
       steps,
       totalDurationMs,
       selectedPlugins,
+      openDistricts,
       alignment,
       liveCorrections,
       networkStateDeltas,
@@ -680,6 +737,7 @@ export class NeuroPipeline {
     this.rlm = null;
     this.valueRange = null;
     this.expertNeuronRegistry.clear();
+    this.districts = null;
     this.quantumNet = null;
     this.zipIO = null;
     this.valueInitialized = false;
@@ -747,6 +805,16 @@ export class NeuroPipeline {
     if (!this.skillRouter!.has(id)) this.expertPluginMap.set(this.expertPluginMap.size, id);
     this.expertMeaning.set(id, meaning);
     this.skillRouter!.register({ id, name, meaning });
+    // A grafted skill's neurons are an island with a subject too.
+    if (this.districts && this.hyperEngine) {
+      this.districts.setSubjects(this.skillRouter!.listRegions());
+      this.districts.define(id, this.hyperEngine.neuronsInGroup(id), { regionId: id, text: meaning });
+    }
+  }
+
+  /** The elastic districts, once the pipeline has built them. Null when they are switched off. */
+  getDistricts(): ElasticDistricts | null {
+    return this.districts;
   }
 
   getZipIO(): ZipIOSystem | null {
