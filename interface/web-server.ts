@@ -14,6 +14,9 @@ import { exportChats, importChats } from '../models && skills/core/chat-archive.
 import { buildResponseBundle, bundleEntries, reviewStep } from './response-bundle.js';
 import { ORB_CLIENT_JS, ORB_CSS, orbMedia } from './voice-orb.js';
 import { ZipError, readZip } from '../models && skills/core/zip-archive.js';
+import { buildResponseBundle, reviewStep } from './response-bundle.js';
+import { resolvePrediction, scorePrediction } from './response-prediction.js';
+import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
 import {
@@ -43,6 +46,7 @@ import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkills
 import { IMAGE_SOURCE_CSP, SOURCE_CLIENT_JS, SOURCE_CSS, extractPageText, looksLikeImage, parseSourceQuery, sourceErrorPage, sourceImagePage, sourceSkillsFor, sourceTextPage } from './sources.js';
 import { BrowserPlugin } from '../plugins/browser.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
+import { UPLOAD_CLIENT_JS, UPLOAD_CSS, UPLOAD_HEADER, buildAttachmentNote, isBatchId, storeUpload } from './uploads.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
@@ -553,13 +557,15 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     background: rgba(20, 23, 28, 0.4);
     backdrop-filter: blur(30px);
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 12px;
     position: relative;
   }
 
   #input {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 220px;
+    min-width: 220px;
     background: rgba(11, 13, 16, 0.5);
     border: 1px solid var(--border);
     color: var(--text);
@@ -754,6 +760,7 @@ ${VISUAL_CSS}
 ${ORB_CSS}
 ${PROMPT_BUTTON_CSS}
 ${SOURCE_CSS}
+${UPLOAD_CSS}
 </style>
 </head>
 <body>
@@ -790,6 +797,7 @@ ${SOURCE_CSS}
 <script>${ORB_CLIENT_JS}</script>
 <script>${PROMPT_BUTTON_CLIENT_JS}</script>
 <script>${SOURCE_CLIENT_JS}</script>
+<script>${UPLOAD_CLIENT_JS}</script>
 <script>
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
@@ -1144,12 +1152,20 @@ ${SOURCE_CSS}
             if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
           }
         }
+        // The message the person sent after this reply, if there is one: the guess in prediction/ is scored against it.
+        let actualNext = undefined;
+        if (entry) {
+          const here = chatHistory.indexOf(entry);
+          for (let i = here + 1; i < chatHistory.length; i++) {
+            if (chatHistory[i].role === 'user') { actualNext = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
         zip.disabled = true;
         try {
           const r = await fetch('/api/chat/bundle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details })
+            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details, prediction: (entry && entry.prediction) || undefined, actualNext })
           });
           if (!r.ok) throw new Error('no zip');
           const url = URL.createObjectURL(await r.blob());
@@ -1228,6 +1244,8 @@ ${SOURCE_CSS}
   // dropped (the panel is told it is busy) rather than queued behind a screen the user has already moved past.
   let inFlight = false;
   async function sendMessage(msg, visualEvent) {
+    const hasFiles = !visualEvent && ncUploads.pending() > 0;
+    if (hasFiles && !msg.trim()) msg = 'Here is what I attached.';
     if (!msg.trim() || inFlight) return;
     inFlight = true;
     ncVisuals.setBusy(true);
@@ -1240,6 +1258,12 @@ ${SOURCE_CSS}
     sendBtn.disabled = true;
     addThinking();
     try {
+      // Files and folders waiting in the tray go up first; the turn then carries their batch.
+      let attachments = null;
+      if (hasFiles) {
+        try { attachments = await ncUploads.send(); }
+        catch (e) { throw Object.assign(e, {upload: true}); }
+      }
       // The code of a panel stays on this page: the server gets "[visual]" in its place, in the message and in
       // the history, and for a panel's event it gets the event itself.
       const res = await fetch('/api/chat', {
@@ -1256,22 +1280,27 @@ ${SOURCE_CSS}
           instant: routeInstantEl.checked,
           optimize: routeOptimizeEl.checked && !routeInstantEl.checked,
           visualEvent,
+          attachments,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
       });
       const data = await res.json();
       removeThinking();
+      if (attachments) ncUploads.clear();
       if (data.response) {
         const aiTime = new Date().toLocaleTimeString();
         // The entry is pushed BEFORE the message is rendered, and handed to
         // it: the pen edits this object in place, so it has to be the same
         // object the transcript is saved from.
-        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details};
+        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details, prediction: data.prediction};
         chatHistory.push(entry);
         addMessage('ai', data.response, aiTime, entry);
         save();
       } else if (data.error) { addMessage('error', 'Error: ' + data.error); }
-    } catch { removeThinking(); addMessage('error', 'Error: Unable to reach server'); }
+    } catch (e) {
+      removeThinking();
+      addMessage('error', e && e.upload ? 'Error: ' + e.message : 'Error: Unable to reach server');
+    }
     finally {
       inFlight = false;
       ncVisuals.setBusy(false);
@@ -1287,6 +1316,7 @@ ${SOURCE_CSS}
     send: (text) => sendMessage(text),
     onEvent: (name, data) => sendMessage('▸ ' + name + (data === null ? '' : ' ' + JSON.stringify(data)), {name, data})
   });
+  ncUploads.install({ area: document.getElementById('input-area'), before: sendBtn });
   const clearChat = () => {
     if (confirm('Clear chat history?')) {
       chat.innerHTML = '';
@@ -2287,6 +2317,22 @@ export class WebServer {
   }
 
   getPort(): number { return this.port; }
+
+  /**
+   * What the mesh currently expects the user to say next (ContinuousLearner.currentPrediction), as a prediction record's
+   * input, or null if it has none or cannot be asked quickly. Never throws and never waits long: the reply does not depend on it.
+   */
+  private async currentNextMessageGuess(): Promise<{ predicted: string; source: 'mesh' } | null> {
+    try {
+      const guess = await Promise.race([
+        (async () => (await (await import('../src/index.js')).getNeuroclawSystem()).continuousLearner.currentPrediction())(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 2000)),
+      ]);
+      return typeof guess === 'string' ? { predicted: guess, source: 'mesh' } : null;
+    } catch {
+      return null;
+    }
+  }
 
   private setSecurityHeaders(res: http.ServerResponse): void {
     // Security: Restricted CORS and standard security headers
@@ -4703,7 +4749,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; auto?: unknown; instant?: unknown; optimize?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; auto?: unknown; instant?: unknown; optimize?: unknown; visualEvent?: unknown; attachments?: { batch?: unknown; files?: unknown }; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4712,9 +4758,14 @@ export class WebServer {
           this.sendJson(res, { error: 'Bad visual event' }, 400);
           return;
         }
-        const message = visualEvent
+        let message = visualEvent
           ? visualEventMessage(visualEvent)
           : (typeof body?.message === 'string' ? plainText(body.message) : body?.message);
+        // Files and folders attached on the page were uploaded first (POST /api/uploads); their text, or
+        // their names and sizes, ride in this turn.
+        if (typeof message === 'string' && body?.attachments && isBatchId(body.attachments.batch)) {
+          message += buildAttachmentNote(dataDir(), body.attachments.batch, body.attachments.files);
+        }
         if (!message || typeof message !== 'string') {
           this.sendJson(res, { error: 'Missing message field' }, 400);
           return;
@@ -4762,7 +4813,33 @@ export class WebServer {
         } catch { /* the details are not the answer; never fail the reply for them */ }
         // The routing decision rides in the same panel as the rest of "how this answer was built".
         if (autoRoute) details = { ...(details && typeof details === 'object' ? details as object : {}), autoRoute };
-        this.sendJson(res, { response, details, timestamp: Date.now() });
+        // What the mesh expects the user to say next, so the reply can carry it (prediction/ in the reply zip) and it can be scored.
+        const prediction = await this.currentNextMessageGuess();
+        this.sendJson(res, { response, details, prediction, timestamp: Date.now() });
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/uploads?batch=<hex>&path=<relative path> — one attached file, or one file of a folder.
+    // The body IS the file (raw bytes, streamed to disk, never held in memory) and lands in the current
+    // user's data folder under uploads/<batch>/<path>. The page sends one request per file, then names the
+    // batch in the chat turn. Needs the X-NC-Upload header, which a foreign page cannot send without a
+    // preflight this server never grants.
+    if (pathname === '/api/uploads' && method === 'POST') {
+      try {
+        if (!req.headers[UPLOAD_HEADER]) {
+          this.sendJson(res, { error: 'Missing upload header.' }, 400);
+          return;
+        }
+        const batch = parsedUrl.searchParams.get('batch') ?? '';
+        if (!isBatchId(batch)) {
+          this.sendJson(res, { error: 'Bad batch id.' }, 400);
+          return;
+        }
+        const r = await storeUpload(req, dataDir(), batch, parsedUrl.searchParams.get('path') ?? '');
+        this.sendJson(res, r.ok ? { ok: true, path: r.path, bytes: r.bytes } : { error: r.error }, r.status);
       } catch (err) {
         this.sendError(res, err);
       }
@@ -4805,12 +4882,12 @@ export class WebServer {
     // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
     if (pathname === '/api/chat/bundle' && method === 'POST') {
       try {
-        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown } | null;
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; prediction?: unknown; actualNext?: unknown } | null;
         if (!body || typeof body.response !== 'string' || !body.response) {
           this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
           return;
         }
-        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits });
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits, prediction: body.prediction ?? (typeof body.actualNext === 'string' && body.actualNext.trim() ? null : await this.currentNextMessageGuess()), actualNext: body.actualNext });
         this.setSecurityHeaders(res);
         res.writeHead(200, {
           'Content-Type': 'application/zip',
@@ -4835,6 +4912,17 @@ export class WebServer {
           return;
         }
         this.sendJson(res, orbMedia(bundleEntries({ message: body.message, response: body.response, details: body.details, formats: false })));
+    // POST /api/chat/bundle/prediction — score the guess at the next message against the message that really came
+    // (see interface/response-prediction.ts). { response, prediction, actual } -> { prediction } with its outcome.
+    // One guess, one score: a prediction already scored keeps its first outcome.
+    if (pathname === '/api/chat/bundle/prediction' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 256 * 1024) as { response?: unknown; prediction?: unknown; actual?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || typeof body.actual !== 'string' || !body.actual.trim()) {
+          this.sendJson(res, { error: 'Send { "response": "...", "prediction": ..., "actual": "<the next message>" }.' }, 400);
+          return;
+        }
+        this.sendJson(res, { prediction: scorePrediction(resolvePrediction(body.prediction, body.response), body.actual) });
       } catch (err) {
         this.sendError(res, err);
       }
