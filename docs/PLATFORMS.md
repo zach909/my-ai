@@ -46,9 +46,12 @@ and the permissions each OS prompts for.
 | --- | --- | --- | --- | --- | --- | --- |
 | Chat | yes | yes | yes | yes | yes | yes |
 | Auto route (effort, where to answer, how much network) | yes | yes | yes | yes | yes | yes |
+| Coding jobs (write, explain, debug, technical) | yes | yes | yes | yes | yes | yes |
+| Tool scripts (a script that runs features and tools) | yes | yes | yes | no | partly | partly |
 | Chat history | yes | yes | yes | yes | yes | yes |
 | Memory | yes | yes | yes | yes | yes | yes |
 | Memory topics | yes | yes | yes | yes | yes | yes |
+| Prompt memory | yes | yes | yes | yes | yes | yes |
 | Reasoning engine | yes | yes | yes | yes | yes | yes |
 | Skills | yes | yes | yes | yes | yes | yes |
 | App skills (the auto skill maker reads each app's commands) | yes | yes | yes | yes | yes | yes |
