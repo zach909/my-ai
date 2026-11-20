@@ -89,6 +89,49 @@ describe('HivePlugin dispatch', () => {
     expect(result.result).toContain('chat.hive1.coordinator')
   })
 
+  const draftResult = (over: Record<string, unknown> = {}) => ({
+    title: 'Trees',
+    markdown: '# Trees\n\n## Intro\n\nHello.\n',
+    sections: [],
+    status: 'approved',
+    rounds: 1,
+    failed: [] as string[],
+    usedFallbackOutline: false,
+    trace: ['main AI wrote the outline', 'read 1: main AI said OK'],
+    ...over,
+  })
+
+  it('"hive draft <topic>" lets the main AI outline it, and shows the draft plus how it was made', async () => {
+    const draftWithHive = vi.fn().mockResolvedValue(draftResult())
+    const plugin = pluginWithSystem({ draftWithHive })
+    const result = (await plugin.onMessage('hive draft an essay on trees in cities')) as { tool: string; result: string }
+    expect(draftWithHive).toHaveBeenCalledWith('an essay on trees in cities', undefined)
+    expect(result.result).toContain('# Trees')
+    expect(result.result).toContain('the main AI approved it')
+    expect(result.result).toContain('- read 1: main AI said OK')
+  })
+
+  it('"hive draft" with a /hivemind outline under the topic line passes the outline through and skips the outline step', async () => {
+    const draftWithHive = vi.fn().mockResolvedValue(draftResult())
+    const plugin = pluginWithSystem({ draftWithHive })
+    await plugin.onMessage('hive draft: trees\n## Intro\n/hivemind writer\n## End')
+    expect(draftWithHive).toHaveBeenCalledWith('trees', '## Intro\n/hivemind writer\n## End')
+  })
+
+  it('a draft the main AI never approved, or with pieces that failed, says so instead of presenting itself as finished', async () => {
+    const draftWithHive = vi.fn().mockResolvedValue(draftResult({ status: 'max-rounds', failed: ['Evidence'] }))
+    const plugin = pluginWithSystem({ draftWithHive })
+    const result = (await plugin.onMessage('hive draft trees')) as { tool: string; result: string }
+    expect(result.result).toContain('NOT approved')
+    expect(result.result).toContain('could not write: Evidence')
+  })
+
+  it('a withheld draft returns the veto reason', async () => {
+    const plugin = pluginWithSystem({ draftWithHive: vi.fn().mockResolvedValue({ error: '[Withheld] nope' }) })
+    const result = (await plugin.onMessage('hive draft trees')) as { tool: string; result: string }
+    expect(result.result).toBe('[Withheld] nope')
+  })
+
   it('reports "unavailable in fallback mode" instead of throwing when there is no live system', async () => {
     const plugin = pluginWithSystem(null)
     const result = (await plugin.onMessage('hive team')) as { tool: string; result: string }

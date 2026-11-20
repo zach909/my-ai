@@ -60,3 +60,5 @@ tasks.named("preBuild") { dependsOn(copyOneBrain, copyPhoneServer) }
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
 }
+
+// Debug APK build: pushed from the cloud session so CI produces an installable .apk.

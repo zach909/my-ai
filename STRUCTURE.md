@@ -84,7 +84,8 @@ of the upstream `github.com/ollama/ollama` project has been removed.
 JavaScript/TypeScript AI models, skills, and self-improvement modules.
 
 #### `/plugin_manager/`
-Plugin management system with SDK and registry.
+Plugin management system with SDK and registry. `host.ts` is the kernel plugin host (dependency-ordered start, services,
+routes, owner-only guarded plugins); see `docs/PLUGIN_HOST.md`.
 
 #### `/plugins/`
 System plugins for various functionalities (browser, camera, email, etc.).
@@ -117,6 +118,12 @@ Test files including core tests and integration tests. `test/platform/` holds th
 #### `/tests/`
 Additional test suites:
 - `security/` - Security-focused tests
+
+#### `/training/`
+Everything that is only for training. `training/simulation/` is a Minecraft-like voxel world (gravity, water, sand,
+fire, particles, adjustable resolution) where AIs live together: harm to another AI is punished, kindness is not, and
+they build a small society with courts and jail. Node built-ins only. Run with `npm run train:sim`, test with
+`npm run test:training`. See `training/README.md`.
 
 #### `/training_data/`
 Training data assets used to seed or fine-tune skills.
