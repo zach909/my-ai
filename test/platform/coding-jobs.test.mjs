@@ -1,6 +1,6 @@
 /**
- * Code mode: telling a coding message from any other, which of the four jobs it is, and how hard it looks
- * (models && skills/core/code-mode.ts), and what that does to auto route's effort (core/auto-route.ts).
+ * Coding jobs: telling a coding message from any other, which of the four jobs it is, and how hard it looks
+ * (models && skills/core/coding-jobs.ts), and what that does to auto route's effort (core/auto-route.ts).
  * Pure logic against the compiled modules, Node built-ins only; nothing is mocked except the device.
  */
 import { test } from 'node:test';
@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { ensureBuilt, dist } from './helpers.mjs';
 
 ensureBuilt();
-const C = await import(dist('models && skills/core/code-mode.js'));
+const C = await import(dist('models && skills/core/coding-jobs.js'));
 const A = await import(dist('models && skills/core/auto-route.js'));
 
 const GB = 1024 ** 3;
@@ -176,7 +176,7 @@ test('auto route: a hard debugging message gets the top of the dial and says why
   assert.equal(plan.effort.tryAnother, true, 'at the top the mesh tries a second way and compares');
   assert.equal(plan.effort.source, 'auto');
   assert.ok(plan.effort.estimated < plan.effort.level, 'the raw estimate is kept beside the adjusted level');
-  assert.ok(plan.reasons.some((r) => /code mode: debug in python, complex/.test(r)));
+  assert.ok(plan.reasons.some((r) => /coding job: debug in python, complex/.test(r)));
   assert.ok(plan.reasons.some((r) => /effort raised/.test(r)));
 });
 
@@ -212,14 +212,14 @@ test('auto route: pasted code does not make a plain question a big job, but a ma
 test('auto route: a message that is not code has no code entry and the same effort as before', () => {
   const plan = route('hello');
   assert.equal(plan.code, null);
-  assert.ok(!plan.reasons.some((r) => /code mode/.test(r)));
+  assert.ok(!plan.reasons.some((r) => /coding job/.test(r)));
   assert.ok(plan.effort.level < 15);
   const plain = route('what time is it in Tokyo?');
   assert.equal(plain.code, null);
   assert.equal(plain.effort.level, plain.effort.estimated);
 });
 
-test('auto route: engine and the secret rule are not changed by code mode', () => {
+test('auto route: engine and the secret rule are not changed by the coding-jobs reader', () => {
   const secret = HARD_BUG + '\nmy api key is sk-live_abcdefghijklmnop1234567890';
   const plan = route(secret, { remote: { available: true } });
   assert.notEqual(plan.engine, 'remote');

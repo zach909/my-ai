@@ -46,7 +46,7 @@ and the permissions each OS prompts for.
 | --- | --- | --- | --- | --- | --- | --- |
 | Chat | yes | yes | yes | yes | yes | yes |
 | Auto route (effort, where to answer, how much network) | yes | yes | yes | yes | yes | yes |
-| Code mode (write, explain, debug, technical) | yes | yes | yes | yes | yes | yes |
+| Coding jobs (write, explain, debug, technical) | yes | yes | yes | yes | yes | yes |
 | Chat history | yes | yes | yes | yes | yes | yes |
 | Memory | yes | yes | yes | yes | yes | yes |
 | Memory topics | yes | yes | yes | yes | yes | yes |

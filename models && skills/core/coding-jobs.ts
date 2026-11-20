@@ -1,5 +1,5 @@
 /**
- * Code mode: tell a coding message from any other, say what kind of coding job it is, and say how hard it looks.
+ * Coding jobs: tell a coding message from any other, say what kind of coding job it is, and say how hard it looks.
  *
  * Four jobs, the same four the chat is asked to do every day:
  *   write      make code: a function, a script, a query, a test, a refactor

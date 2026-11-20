@@ -61,10 +61,10 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [n('test/platform/auto-route.test.mjs'), v('test/core/engine-chooser.test.ts'), v('test/core/engine-router.test.ts')],
   },
   {
-    id: 'code-mode', title: 'Code mode (write, explain, debug, technical)', description: 'Reads each message to see whether it is a coding job (write code, explain code, debug an error or a stack trace, or an engineering question) and how hard it looks. A hard job, debugging most of all, gets more of the effort dial (more checks, and at the top a second way tried and compared); a plain one is held at a steady setting. A dial set by hand, or instant, is never adjusted, and it does not change which engine answers. Counts and patterns only, no model and no outside code.',
-    implementation: ['models && skills/core/code-mode.ts', 'models && skills/core/auto-route.ts', 'interface/web-server.ts'],
+    id: 'coding-jobs', title: 'Coding jobs (write, explain, debug, technical)', description: 'Reads each message to see whether it is a coding job (write code, explain code, debug an error or a stack trace, or an engineering question) and how hard it looks. A hard job, debugging most of all, gets more of the effort dial (more checks, and at the top a second way tried and compared); a plain one is held at a steady setting. A dial set by hand, or instant, is never adjusted, and it does not change which engine answers. Counts and patterns only, no model and no outside code.',
+    implementation: ['models && skills/core/coding-jobs.ts', 'models && skills/core/auto-route.ts', 'interface/web-server.ts'],
     routes: ['POST /api/chat'],
-    needs: ENGINE, tests: [n('test/platform/code-mode.test.mjs'), n('test/platform/auto-route.test.mjs')],
+    needs: ENGINE, tests: [n('test/platform/coding-jobs.test.mjs'), n('test/platform/auto-route.test.mjs')],
   },
   {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',

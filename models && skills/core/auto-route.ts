@@ -32,7 +32,7 @@ import { chooserEnabled, defaultDeps, type RouterDeps } from "./engine-router.js
 import { parseEffort, planEffort, type EffortPlan } from "./effort.js";
 import { planIslands, scoreIslands, type IslandInfo, type IslandPlan } from "./weight-islands.js";
 import { optimizePrompt, type OptimizedPrompt } from "./prompt-optimizer.js";
-import { adjustEffortForCode, askOf, detectCodeIntent, type CodeIntent } from "./code-mode.js";
+import { adjustEffortForCode, askOf, detectCodeIntent, type CodeIntent } from "./coding-jobs.js";
 
 /* ---------------------------------------------------------------- request */
 
@@ -138,7 +138,7 @@ export interface RoutePlan {
   /** local-* answers here; remote is the bigger computer. */
   where: "local" | "cloud";
   choice: Choice;
-  /** What code mode made of the message, or null when it is not a coding message. */
+  /** What the coding-jobs reader made of the message, or null when it is not a coding message. */
   code: CodeIntent | null;
   compute: ComputeShare & {
     /** Null when the whole answer runs somewhere else, or there is no clean partition to gate on. */
@@ -162,7 +162,7 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
 
   // 2. Effort: instant, then a dial set by hand, then the estimate.
   const estimate = estimateEffort(used, historyChars);
-  // Code mode (core/code-mode.ts): what kind of coding job this is, if it is one. It is read for every message so the
+  // Coding jobs (core/coding-jobs.ts): what kind of coding job this is, if it is one. It is read for every message so the
   // details panel can show it, but it only moves the effort when the effort is an estimate: a dial set by hand and
   // instant are the person's own choice and are never adjusted.
   const code = detectCodeIntent(used);
@@ -176,7 +176,7 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
     reasons.push(`effort ${level}: ${estimate.reasons.join(", ")}`);
     if (adjusted.note) reasons.push(adjusted.note);
   }
-  if (code) reasons.push(`code mode: ${code.task}${code.language ? ` in ${code.language}` : ""}, ${code.difficulty} (${code.reasons.join("; ")})`);
+  if (code) reasons.push(`coding job: ${code.task}${code.language ? ` in ${code.language}` : ""}, ${code.difficulty} (${code.reasons.join("; ")})`);
   const effort = { ...planEffort(level), estimated: estimate.level, source };
 
   // 3. Where. The chooser sees the message as it was typed, so a secret is never missed by a tidy-up.
