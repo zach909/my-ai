@@ -50,15 +50,27 @@ const ENGINE: CapabilityId[][] = [['localEngine'], ['remoteEngine']];
 export const FEATURES: Feature[] = [
   {
     id: 'chat', title: 'Chat', description: 'Talk to the agent; replies come from the OneBrain mesh through the bit-level Zip Loop.',
-    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
-    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'GET /api/status'],
-    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'interface/response-bundle.ts', 'interface/response-edits.ts', 'interface/response-audio.ts', 'interface/response-formats.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
+    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'POST /api/chat/bundle', 'POST /api/chat/bundle/review', 'GET /api/status'],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
     id: 'auto-route', title: 'Auto route (effort, where to answer, how much network)', description: 'For each message it picks how hard to try, whether to answer on this device or a bigger computer, and how many islands of the network run (parts that are wired to each other and to nothing else, found from the weights as 0/1). Instant answers fast; Optimize prompt tidies the message first.',
     implementation: ['models && skills/core/auto-route.ts', 'models && skills/core/weight-islands.ts', 'models && skills/core/prompt-optimizer.ts', 'models && skills/core/engine-chooser.ts', 'models && skills/core/engine-router.ts', 'interface/runner.ts'],
     routes: ['POST /api/chat'],
     needs: ENGINE, tests: [n('test/platform/auto-route.test.mjs'), v('test/core/engine-chooser.test.ts'), v('test/core/engine-router.test.ts')],
+  },
+  {
+    id: 'coding-jobs', title: 'Coding jobs (write, explain, debug, technical)', description: 'Reads each message to see whether it is a coding job (write code, explain code, debug an error or a stack trace, or an engineering question) and how hard it looks. A hard job, debugging most of all, gets more of the effort dial (more checks, and at the top a second way tried and compared); a plain one is held at a steady setting. A dial set by hand, or instant, is never adjusted, and it does not change which engine answers. Counts and patterns only, no model and no outside code.',
+    implementation: ['models && skills/core/coding-jobs.ts', 'models && skills/core/auto-route.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/coding-jobs.test.mjs'), n('test/platform/auto-route.test.mjs')],
+  },
+  {
+    id: 'tool-scripts', title: 'Tool scripts (a script that runs features and tools)', description: 'A short script, written as "script: ..." in chat, that calls features and tools with tools.call(name, request) instead of one call per message. It runs in a separate, locked-down process (Node\'s own permission model: no files, no programs, no environment, a hard time limit) that can only send plain-text tool requests back, and every request goes through the same approval gate as chat, one at a time: a risky tool is held for you and the script stops there. It fails closed where the runtime cannot start such a process. Node\'s permission model does not restrict the network, which is stated in the file rather than hidden.',
+    implementation: ['models && skills/core/script-runner.ts', 'plugins/scripts.ts', 'plugins/index.ts', 'plugin_manager/registry.ts'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/tool-scripts.test.mjs')],
   },
   {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
