@@ -27,6 +27,7 @@
 import type http from "node:http";
 import { AccountError, MAX_PASSWORD_LENGTH, SESSION_TTL_MS, USER_COOKIE, type AccountsStore } from "../models && skills/core/accounts.js";
 import { isOwnerOrAdmin, who as currentWho, type Who } from "../models && skills/core/user-context.js";
+import { hostedService } from "./hosted-routes.js";
 
 export interface AccountsContext {
   req: http.IncomingMessage;
@@ -166,7 +167,10 @@ async function route(ctx: AccountsContext): Promise<boolean> {
     const b = await body();
     if (m[2] === "disable" || m[2] === "enable") return send({ user: accounts.setDisabled(m[1], m[2] === "disable") });
     if (m[2] === "password") return send({ user: await accounts.resetPassword(m[1], str(b.password, MAX_PASSWORD_LENGTH + 1)) });
-    return send({ deleted: accounts.deleteUser(m[1], b.purge === true) });
+    const deleted = accounts.deleteUser(m[1], b.purge === true);
+    // A removed account's hosted tokens and usage go with it. Hosted mode may be off or locked; that is not this route's problem.
+    if (deleted) { try { hostedService().forgetAccount(m[1]); } catch { /* nothing to forget */ } }
+    return send({ deleted });
   }
   return false;
 }

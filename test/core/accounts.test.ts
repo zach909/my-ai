@@ -253,7 +253,7 @@ describe('working out who is asking', () => {
 })
 
 describe('what a regular user may reach', () => {
-  const yes = ['/', '/commons', '/api/chat', '/api/chat-history/threads', '/api/chat-history/export', '/api/chat-history/threads/abc', '/api/chat-history/threads/abc/pin', '/api/agent', '/api/commons', '/api/commons/projects', '/api/commons/projects/weather/tasks/t1/claim', '/api/commons/folders/organize', '/api/commons/experts', '/api/commons/schedules', '/api/commons/league', '/api/accounts/me', '/api/auth/logout']
+  const yes = ['/', '/commons', '/api/chat', '/api/chat/bundle', '/api/chat-history/threads', '/api/chat-history/export', '/api/chat-history/threads/abc', '/api/chat-history/threads/abc/pin', '/api/agent', '/api/commons', '/api/commons/projects', '/api/commons/projects/weather/tasks/t1/claim', '/api/commons/folders/organize', '/api/commons/experts', '/api/commons/schedules', '/api/commons/league', '/api/accounts/me', '/api/auth/logout']
   const no = [
     '/api/terminals', '/api/apps/launch', '/api/apps/list', '/api/memory', '/api/memory/all', '/api/profile', '/api/system/install', '/api/access/switch', '/api/settings/brain',
     '/api/store/install', '/api/store/uninstall', '/api/updates/apply', '/api/github/publish', '/api/extension/build', '/api/train', '/api/phone-sync', '/api/captures',

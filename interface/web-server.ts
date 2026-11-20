@@ -11,6 +11,11 @@ import { AppLauncher } from './app-launcher.js';
 import { EncryptionManager } from './encryption.js';
 import { ChatHistoryStore, type ChatSource } from '../models && skills/core/chat-history-store.js';
 import { exportChats, importChats } from '../models && skills/core/chat-archive.js';
+import { buildResponseBundle, bundleEntries, reviewStep } from './response-bundle.js';
+import { ORB_CLIENT_JS, ORB_CSS, orbMedia } from './voice-orb.js';
+import { ZipError, readZip } from '../models && skills/core/zip-archive.js';
+import { buildResponseBundle, reviewStep } from './response-bundle.js';
+import { resolvePrediction, scorePrediction } from './response-prediction.js';
 import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
@@ -33,36 +38,42 @@ import { startAutoOffload } from '../models && skills/core/store-offload.js';
 import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
 import { parseNeurons } from '../models && skills/core/neurons.js';
+import { parseEffort } from '../models && skills/core/effort.js';
+import { parseAutoRoute, type RouteSummary } from '../models && skills/core/auto-route.js';
+import { parseQuestions } from '../models && skills/core/questions.js';
+import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
+import { IMAGE_SOURCE_CSP, SOURCE_CLIENT_JS, SOURCE_CSS, extractPageText, looksLikeImage, parseSourceQuery, sourceErrorPage, sourceImagePage, sourceSkillsFor, sourceTextPage } from './sources.js';
+import { BrowserPlugin } from '../plugins/browser.js';
 import { OsButtonError, OsButtonStore, isUnavailable as osButtonUnavailable } from '../models && skills/core/os-buttons.js';
+import { UPLOAD_CLIENT_JS, UPLOAD_CSS, UPLOAD_HEADER, buildAttachmentNote, isBatchId, storeUpload } from './uploads.js';
 import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPage, visualEventMessage, visualSkillsFor } from './visuals.js';
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
-import { handlePlatformRoutes, isPlatformRoute } from './platform/routes.js';
+import { createServerHost, type ServerRouteContext } from './server-plugins.js';
+import type { PluginHost } from '../plugin_manager/host.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
 import { builderPage } from './platform/builder-page.js';
 import { selfImprovementPage } from './platform/self-improvement-page.js';
 import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
-import { handleCoronaRoutes, isCoronaApiRoute } from './corona-routes.js';
 import { SHARING_PAGE } from './sharing-page.js';
+import { HIVE_PAGE } from './hive-page.js';
+import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
-import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
-import { handleCommonsRoutes, withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
+import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
-import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
-import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-routes.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
-import { handleAccountsRoutes, isAccountsRoute, isAccountsPublicRoute } from './accounts-routes.js';
+import { PromptMemory } from '../models && skills/core/prompt-memory.js';
+import { isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { setNameGuard } from '../models && skills/core/points.js';
-import { isComputerAdministrator } from '../models && skills/core/computer-admin.js';
-import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
 import { agentAlive } from '../models && skills/core/agent-profile.js';
 import { sharedMindReader, tapOfEngine } from '../models && skills/core/mind-reader.js';
+import { sharedSecurityModel } from '../models && skills/core/security-model.js';
 import { armDecoy, armHoneypot, recordEvent, setEscapeHook, setFireHook, standing, watchDecoy, watchHoneypot } from '../models && skills/core/danger-protocol.js';
 import { ANONYMOUS, OWNER, dataDir, isOwnerOrAdmin, runAs, runAutonomously, setLearnPolicy, who } from '../models && skills/core/user-context.js';
 import { sharedToolGate } from '../models && skills/core/tool-safety.js';
@@ -546,13 +557,15 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     background: rgba(20, 23, 28, 0.4);
     backdrop-filter: blur(30px);
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 12px;
     position: relative;
   }
 
   #input {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 220px;
+    min-width: 220px;
     background: rgba(11, 13, 16, 0.5);
     border: 1px solid var(--border);
     color: var(--text);
@@ -608,10 +621,16 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     transform: translateY(0) scale(0.95);
   }
 
-  #neurons-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
-  #neurons { width: 96px; accent-color: #ff9a84; }
-  #neurons-out { min-width: 2.2em; opacity: 0.8; }
-  @media (max-width: 600px) { #neurons-wrap { display: none; } }
+  #neurons-wrap, #questions-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
+  #neurons, #questions { width: 96px; accent-color: #ff9a84; }
+  #neurons-out, #questions-out { min-width: 2.2em; opacity: 0.8; }
+  @media (max-width: 600px) { #neurons-wrap, #questions-wrap { display: none; } }
+  /* Auto routing: Auto picks effort, where to answer and how much of the network runs; Instant answers fast; Optimize tidies the prompt. */
+  #route-wrap { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; font-size: 12px; }
+  .route-opt { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+  .route-opt input { accent-color: #ff9a84; margin: 0; }
+  .route-opt input:disabled + span { opacity: 0.4; }
+  @media (max-width: 600px) { #input-area { flex-wrap: wrap; } #route-wrap { order: 9; flex: 1 0 100%; justify-content: center; } }
   #send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -738,7 +757,10 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     z-index: 1;
   }
 ${VISUAL_CSS}
+${ORB_CSS}
 ${PROMPT_BUTTON_CSS}
+${SOURCE_CSS}
+${UPLOAD_CSS}
 </style>
 </head>
 <body>
@@ -759,10 +781,23 @@ ${PROMPT_BUTTON_CSS}
     <input type="range" id="neurons" min="0" max="100" step="5" value="50" aria-label="Neurons, how confident the AI acts, 0 to 100" aria-valuetext="50, balanced">
     <output id="neurons-out" for="neurons">50</output>
   </label>
+  <label id="questions-wrap" for="questions" title="Questions: how often it asks when it is not sure. Low assumes and gets on with it. High asks first.">
+    <span class="nc-dim">Questions</span>
+    <input type="range" id="questions" min="0" max="100" step="5" value="50" aria-label="Questions, how often the AI asks when it is not sure, 0 to 100" aria-valuetext="50, sometimes">
+    <output id="questions-out" for="questions">50</output>
+  </label>
+  <span id="route-wrap" role="group" aria-label="How the AI picks effort and processor">
+    <label class="route-opt" for="route-auto" title="Auto: for each message it picks how hard to try, whether to answer on this device or a bigger computer, and how much of its network to run."><input type="checkbox" id="route-auto" checked><span>Auto</span></label>
+    <label class="route-opt" for="route-instant" title="Instant: answer fast. Lowest effort, the lightest engine, and only the most relevant part of the network."><input type="checkbox" id="route-instant"><span>Instant</span></label>
+    <label class="route-opt" for="route-optimize" title="Optimize prompt: tidy the message before it is sent (filler and repeats out, nothing added). Not used with Instant."><input type="checkbox" id="route-optimize"><span>Optimize prompt</span></label>
+  </span>
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
+<script>${ORB_CLIENT_JS}</script>
 <script>${PROMPT_BUTTON_CLIENT_JS}</script>
+<script>${SOURCE_CLIENT_JS}</script>
+<script>${UPLOAD_CLIENT_JS}</script>
 <script>
   const chat = document.getElementById('chat-container');
   const input = document.getElementById('input');
@@ -780,6 +815,45 @@ ${PROMPT_BUTTON_CSS}
   try { const saved = localStorage.getItem('nc-neurons'); if (saved !== null && saved !== '') neuronsEl.value = saved; } catch (e) { /* storage may be blocked */ }
   showNeurons();
   neuronsEl.addEventListener('input', function () { showNeurons(); try { localStorage.setItem('nc-neurons', neuronsEl.value); } catch (e) { /* not saved */ } });
+  // Questions: how often the AI asks when it is not sure (0-100), its own input beside the message. Kept in this browser only.
+  const questionsEl = document.getElementById('questions');
+  const questionsOut = document.getElementById('questions-out');
+  const QUESTIONS_WORDS = [[90, 'always'], [70, 'often'], [40, 'sometimes'], [15, 'rarely'], [0, 'never']];
+  function showQuestions() {
+    const v = Number(questionsEl.value);
+    const w = QUESTIONS_WORDS.find(function (x) { return v >= x[0]; })[1];
+    questionsOut.textContent = String(v);
+    questionsEl.setAttribute('aria-valuetext', v + ', ' + w);
+  }
+  try { const savedQ = localStorage.getItem('nc-questions'); if (savedQ !== null && savedQ !== '') questionsEl.value = savedQ; } catch (e) { /* storage may be blocked */ }
+  showQuestions();
+  questionsEl.addEventListener('input', function () { showQuestions(); try { localStorage.setItem('nc-questions', questionsEl.value); } catch (e) { /* not saved */ } });
+  // Auto routing switches. Auto is on unless it was turned off; Instant and Optimize start off. Kept in this browser only.
+  const routeAutoEl = document.getElementById('route-auto');
+  const routeInstantEl = document.getElementById('route-instant');
+  const routeOptimizeEl = document.getElementById('route-optimize');
+  function loadRoute(el, key, fallback) {
+    let v = fallback;
+    try { const saved = localStorage.getItem(key); if (saved === '1' || saved === '0') v = saved === '1'; } catch (e) { /* storage may be blocked */ }
+    el.checked = v;
+    el.addEventListener('change', function () { showRoute(); try { localStorage.setItem(key, el.checked ? '1' : '0'); } catch (e) { /* not saved */ } });
+  }
+  // Instant answers at once, so it needs Auto's picking and has no use for a tidy-up first.
+  function showRoute() {
+    if (routeInstantEl.checked) routeAutoEl.checked = true;
+    routeAutoEl.disabled = routeInstantEl.checked;
+    routeOptimizeEl.disabled = routeInstantEl.checked;
+    // With Auto on the AI picks how often to ask, so the slider is not used.
+    questionsEl.disabled = routeAutoEl.checked;
+    document.getElementById('questions-wrap').style.opacity = routeAutoEl.checked ? '0.4' : '';
+    const qw = document.getElementById('questions-wrap');
+    if (!qw.dataset.title) qw.dataset.title = qw.title;
+    qw.title = routeAutoEl.checked ? 'Questions: Auto picks this for each message. Turn Auto off to set it by hand.' : qw.dataset.title;
+  }
+  loadRoute(routeAutoEl, 'nc-route-auto', true);
+  loadRoute(routeInstantEl, 'nc-route-instant', false);
+  loadRoute(routeOptimizeEl, 'nc-route-optimize', false);
+  showRoute();
   const clearBtn = document.getElementById('clear-btn');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
@@ -788,11 +862,19 @@ ${PROMPT_BUTTON_CSS}
   let keepHistory = true;
   try { keepHistory = localStorage.getItem('nc_keep_hist') !== '0'; } catch (e) { /* storage blocked */ }
   const readHistory = () => { try { return keepHistory ? JSON.parse(localStorage.getItem('nc_hist') || '[]') : []; } catch (e) { return []; } };
+  // Settings > Sources: 'focus' opens a source at its passage, 'link' opens the bare page, 'off' asks for none and shows
+  // the titles as plain words. Mirrored in localStorage so the first paint after a reload already knows it.
+  let sourceMode = 'focus';
+  try { sourceMode = localStorage.getItem('nc_sources') || 'focus'; } catch (e) { /* storage blocked */ }
   let chatHistory = readHistory();
   const save = () => { if (!keepHistory) return; try { localStorage.setItem('nc_hist', JSON.stringify(chatHistory)); } catch (e) { /* storage full or blocked: the chat still works */ } };
   fetch('/api/app-settings').then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.settings) return;
     keepHistory = j.settings.chat.keepLocalHistory !== false;
+    if (j.settings.sources) {
+      sourceMode = j.settings.sources.show === false ? 'off' : (j.settings.sources.focus === false ? 'link' : 'focus');
+      try { localStorage.setItem('nc_sources', sourceMode); } catch (e) { /* storage blocked */ }
+    }
     try { localStorage.setItem('nc_keep_hist', keepHistory ? '1' : '0'); if (!keepHistory) localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ }
   }).catch(() => { /* offline or signed out: keep the local choice */ });
   /** One "label: value" row, skipped entirely when there is no value. */
@@ -830,6 +912,15 @@ ${PROMPT_BUTTON_CSS}
 
     const dl = document.createElement('dl');
     if (d.route) row(dl, 'routed to', d.route.capability + ' (confidence ' + d.route.confidence + ')');
+    if (d.autoRoute) {
+      const r = d.autoRoute;
+      row(dl, 'effort', r.effort.level + ' (' + r.effort.mode + ', ' + (r.effort.source === 'auto' ? 'picked for this message' : r.effort.source === 'manual' ? 'set by hand' : 'instant') + ')');
+      if (r.questions) row(dl, 'questions', r.questions.level + ' (' + r.questions.mode + ', ' + (r.questions.source === 'auto' ? 'picked for this message' : r.questions.source === 'manual' ? 'set by hand' : 'instant never asks') + ')');
+      row(dl, 'answered', (r.where === 'cloud' ? 'on a bigger computer' : 'on this device') + ' (' + r.engine + ')');
+      row(dl, 'processor', r.compute.islandsTotal ? Math.round(r.compute.share * 100) + '%: ' + r.compute.islandsRun.length + ' of ' + r.compute.islandsTotal + ' islands run' : 'whole network (no islands found yet)');
+      if (r.code) row(dl, 'code job', r.code.task + (r.code.language ? ' in ' + r.code.language : '') + ', ' + r.code.difficulty);
+      if (r.prompt.optimized) row(dl, 'prompt tidied', r.prompt.changes.join(', '));
+    }
     if (d.emotion) row(dl, 'read as', 'valence ' + d.emotion.valence + ', arousal ' + d.emotion.arousal);
     if (d.mesh) row(dl, 'mesh', d.mesh.neurons + ' neurons x ' + d.mesh.dimensions + ' dimensions');
     if (d.zipBytes) row(dl, 'zip loop', d.zipBytes + ' archive bytes through the bit neurons');
@@ -952,6 +1043,29 @@ ${PROMPT_BUTTON_CSS}
     };
   }
 
+  // What the voice orb is asked to play: the reply as written (visual blocks kept, so a visual can be cast onto the
+  // orb), the question that led to it, and the details of its turn.
+  function orbBody(entry, text) {
+    let question = '';
+    if (entry) {
+      const at = chatHistory.indexOf(entry);
+      for (let i = at - 1; i >= 0; i--) {
+        if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
+      }
+    }
+    return { message: question, response: text, details: entry && entry.details };
+  }
+  // Alt+Space opens the orb on the latest reply, and closes it again.
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    ncOrb.toggleOpen(() => {
+      let last = null;
+      for (let i = chatHistory.length - 1; i >= 0; i--) { if (chatHistory[i].role === 'assistant') { last = chatHistory[i]; break; } }
+      ncOrb.openReply(last ? orbBody(last, last.content) : null);
+    });
+  });
+
   function addMessage(type, text, time, entry) {
     const div = document.createElement('div');
     div.className = 'message ' + type;
@@ -983,7 +1097,14 @@ ${PROMPT_BUTTON_CSS}
     // drop the prompts the buttons carry.
     const proseWithButtons = type === 'ai' ? content.textContent : '';
     const hasButtons = !!proseWithButtons && ncButtons.has(proseWithButtons);
-    if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
+    // Sources: [[source: Title | address | passage]] becomes a link chip (see interface/sources.ts). The prose between
+    // chips can still carry prompt buttons. A reply with chips gets no pen, for the same reason as buttons.
+    const hasSources = !!proseWithButtons && ncSources.has(proseWithButtons);
+    if (hasSources) {
+      ncSources.render(content, proseWithButtons, sourceMode, (el, t) => {
+        if (ncButtons.has(t)) ncButtons.render(el, t, (prompt) => sendMessage(prompt)); else el.textContent = t;
+      });
+    } else if (hasButtons) ncButtons.render(content, proseWithButtons, (prompt) => sendMessage(prompt));
     div.appendChild(content);
     if (hasVisual) ncVisuals.attach(div, text);
     const ts = document.createElement('div');
@@ -1000,7 +1121,7 @@ ${PROMPT_BUTTON_CSS}
       pen.title = 'Edit what the AI said';
       pen.setAttribute('aria-label', 'Edit what the AI said');
       pen.onclick = () => openEditor(div, content, ts, pen, entry, (next) => { current = next; });
-      if (!hasVisual && !hasButtons) ts.appendChild(pen);
+      if (!hasVisual && !hasButtons && !hasSources) ts.appendChild(pen);
 
       // Three dots, next to the pen: what the answer was built from. Closed
       // by default -- it is reference, not part of reading the reply.
@@ -1023,6 +1144,58 @@ ${PROMPT_BUTTON_CSS}
         dots.setAttribute('aria-expanded', 'true');
       };
       ts.appendChild(dots);
+
+      // Zip, next to the dots: this reply as response/, plugins/ and prompts/ (interface/response-bundle.ts).
+      const zip = document.createElement('button');
+      zip.className = 'dots-btn';
+      zip.textContent = 'Zip';
+      zip.title = 'Download this reply as a zip: the response, the plugins it used and prompts to send next';
+      zip.setAttribute('aria-label', 'Download this reply as a zip');
+      zip.onclick = async () => {
+        let question = '';
+        if (entry) {
+          const at = chatHistory.indexOf(entry);
+          for (let i = at - 1; i >= 0; i--) {
+            if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
+        // The message the person sent after this reply, if there is one: the guess in prediction/ is scored against it.
+        let actualNext = undefined;
+        if (entry) {
+          const here = chatHistory.indexOf(entry);
+          for (let i = here + 1; i < chatHistory.length; i++) {
+            if (chatHistory[i].role === 'user') { actualNext = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
+        zip.disabled = true;
+        try {
+          const r = await fetch('/api/chat/bundle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details, prediction: (entry && entry.prediction) || undefined, actualNext })
+          });
+          if (!r.ok) throw new Error('no zip');
+          const url = URL.createObjectURL(await r.blob());
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'neuroclaw-reply.zip';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch { zip.textContent = 'Zip failed'; setTimeout(() => { zip.textContent = 'Zip'; }, 2000); }
+        finally { zip.disabled = false; }
+      };
+      ts.appendChild(zip);
+
+      // Orb, next to Zip: the reply's audio file (or the system voice) on a circle that swells with the volume.
+      const orb = document.createElement('button');
+      orb.className = 'dots-btn orb-btn';
+      orb.textContent = 'Orb';
+      orb.title = 'Hear this reply on the voice orb (Alt+Space)';
+      orb.setAttribute('aria-label', 'Play this reply on the voice orb');
+      orb.onclick = () => ncOrb.openReply(orbBody(entry, current));
+      ts.appendChild(orb);
     }
     const stamp = document.createElement('span');
     stamp.textContent = time || new Date().toLocaleTimeString();
@@ -1078,6 +1251,8 @@ ${PROMPT_BUTTON_CSS}
   // dropped (the panel is told it is busy) rather than queued behind a screen the user has already moved past.
   let inFlight = false;
   async function sendMessage(msg, visualEvent) {
+    const hasFiles = !visualEvent && ncUploads.pending() > 0;
+    if (hasFiles && !msg.trim()) msg = 'Here is what I attached.';
     if (!msg.trim() || inFlight) return;
     inFlight = true;
     ncVisuals.setBusy(true);
@@ -1090,6 +1265,12 @@ ${PROMPT_BUTTON_CSS}
     sendBtn.disabled = true;
     addThinking();
     try {
+      // Files and folders waiting in the tray go up first; the turn then carries their batch.
+      let attachments = null;
+      if (hasFiles) {
+        try { attachments = await ncUploads.send(); }
+        catch (e) { throw Object.assign(e, {upload: true}); }
+      }
       // The code of a panel stays on this page: the server gets "[visual]" in its place, in the message and in
       // the history, and for a panel's event it gets the event itself.
       const res = await fetch('/api/chat', {
@@ -1099,24 +1280,34 @@ ${PROMPT_BUTTON_CSS}
           message: ncVisuals.plain(msg),
           visuals: ncVisuals.enabled(),
           buttons: true,
+          sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
+          questions: routeAutoEl.checked ? null : Number(questionsEl.value),
+          auto: routeAutoEl.checked,
+          instant: routeInstantEl.checked,
+          optimize: routeOptimizeEl.checked && !routeInstantEl.checked,
           visualEvent,
+          attachments,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
       });
       const data = await res.json();
       removeThinking();
+      if (attachments) ncUploads.clear();
       if (data.response) {
         const aiTime = new Date().toLocaleTimeString();
         // The entry is pushed BEFORE the message is rendered, and handed to
         // it: the pen edits this object in place, so it has to be the same
         // object the transcript is saved from.
-        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details};
+        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details, prediction: data.prediction};
         chatHistory.push(entry);
         addMessage('ai', data.response, aiTime, entry);
         save();
       } else if (data.error) { addMessage('error', 'Error: ' + data.error); }
-    } catch { removeThinking(); addMessage('error', 'Error: Unable to reach server'); }
+    } catch (e) {
+      removeThinking();
+      addMessage('error', e && e.upload ? 'Error: ' + e.message : 'Error: Unable to reach server');
+    }
     finally {
       inFlight = false;
       ncVisuals.setBusy(false);
@@ -1132,6 +1323,7 @@ ${PROMPT_BUTTON_CSS}
     send: (text) => sendMessage(text),
     onEvent: (name, data) => sendMessage('▸ ' + name + (data === null ? '' : ' ' + JSON.stringify(data)), {name, data})
   });
+  ncUploads.install({ area: document.getElementById('input-area'), before: sendBtn });
   const clearChat = () => {
     if (confirm('Clear chat history?')) {
       chat.innerHTML = '';
@@ -1486,6 +1678,7 @@ export class WebServer {
   private visualApps = new VisualAppStore();
   /** Prompt buttons kept on this computer (app menu, desktop). Saved here; a launcher is written only after the owner approves the exact file. */
   private osButtons = new OsButtonStore();
+  private sourceBrowser: BrowserPlugin | null = null;
   // Set only when start() is given a non-localhost host and a password --
   // see start()'s doc comment for why binding remotely without one is refused.
   private readonly remoteAccessLock = new PasswordLock();
@@ -1503,6 +1696,19 @@ export class WebServer {
    * sets a password.
    */
   private setupOnly = false;
+  /** The route plugins (interface/server-plugins.ts). Started once, by the first request or by start(). */
+  private routePluginHost: Promise<PluginHost<ServerRouteContext>> | null = null;
+  private routeHost(): Promise<PluginHost<ServerRouteContext>> {
+    if (!this.routePluginHost) {
+      const host = createServerHost(undefined, m => console.warn(`[plugins] ${m}`));
+      this.routePluginHost = host.startAll().then(() => host, err => {
+        // A broken plugin set must not take the server down with it; what did start still answers.
+        console.warn('[plugins] could not start every plugin:', err instanceof Error ? err.message : err);
+        return host;
+      });
+    }
+    return this.routePluginHost;
+  }
   // Independent of remoteAccessLock: gates only /api/chat-groups/* (and the
   // /app/chat-groups page's own login prompt), even over an already-trusted
   // localhost connection -- set via NEUROCLAW_CHAT_GROUPS_PASSWORD.
@@ -1626,6 +1832,23 @@ export class WebServer {
     // The mind reader: a second model that reads which of the main network's neurons are firing. It is handed a read-only
     // tap (neuron count, energy, group) and nothing that writes; the engine is fetched each time so a swapped one is followed.
     sharedMindReader().attach(tapOfEngine(() => this.runner.getLLM().hyperEngine));
+    // The security model: the main model's way to ask "may I run this?" when the AI monitor (auto mode) is on. It reads
+    // the same read-only tap, learns from what people decide and what the agent does, and can answer allow, deny,
+    // sandbox or shutdown. A shutdown deletes the agent for every account here (the alignment protocol) and withdraws this
+    // install's learning from the shared mesh, so it is not carried to other installs either.
+    const security = sharedSecurityModel();
+    security.attach(tapOfEngine(() => this.runner.getLLM().hyperEngine));
+    security.listen();
+    security.setShutdownHook(async (reason) => {
+      try {
+        const { getNeuroclawSystem } = await import('../src/index.js');
+        const result = await (await getNeuroclawSystem()).sharedMesh.revokeOwn(reason);
+        console.log(`[security-model] shutdown: ${result.purged ? 'this install\'s learning was taken out of the network' : 'the network was NOT restored'}${result.tombstoneQueued ? '; a withdrawal was queued for the shared mesh' : ''}${result.note ? ` (${result.note})` : ''}`);
+      } catch {
+        // The agent is already gone; withdrawing the learning is best effort.
+      }
+    });
+    sharedToolGate().useSecurity(security);
     // A sandbox breach is not something to find out about next time someone
     // happens to open Commons: push a real OS notification too, if the
     // notifications plugin is active (watchDecoy already logs loudly and
@@ -2090,6 +2313,11 @@ export class WebServer {
     this.stopExperts = null;
     this.stopScheduler?.();
     this.stopScheduler = null;
+    if (this.routePluginHost) {
+      const started = this.routePluginHost;
+      this.routePluginHost = null;
+      await started.then(h => h.stopAll()).catch(() => undefined);
+    }
     return new Promise<void>((resolve) => {
       this.server?.close(() => { this.server = null; resolve(); });
     });
@@ -2097,13 +2325,31 @@ export class WebServer {
 
   getPort(): number { return this.port; }
 
+  /**
+   * What the mesh currently expects the user to say next (ContinuousLearner.currentPrediction), as a prediction record's
+   * input, or null if it has none or cannot be asked quickly. Never throws and never waits long: the reply does not depend on it.
+   */
+  private async currentNextMessageGuess(): Promise<{ predicted: string; source: 'mesh' } | null> {
+    try {
+      const guess = await Promise.race([
+        (async () => (await (await import('../src/index.js')).getNeuroclawSystem()).continuousLearner.currentPrediction())(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 2000)),
+      ]);
+      return typeof guess === 'string' ? { predicted: guess, source: 'mesh' } : null;
+    } catch {
+      return null;
+    }
+  }
+
   private setSecurityHeaders(res: http.ServerResponse): void {
     // Security: Restricted CORS and standard security headers
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+    // img-src and media-src add only data: and blob: (the voice orb plays a reply's audio file from a blob and casts its picture
+    // from a data: address). Nothing is fetched from outside; everything else still falls back to 'self'.
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:;");
   }
 
   private sendJson(res: http.ServerResponse, data: unknown, statusCode = 200): void {
@@ -2689,6 +2935,26 @@ export class WebServer {
    * own data. Someone not logged in is handled as anonymous, which has no data
    * folder at all.
    */
+  /** What the route plugins (interface/server-plugins.ts) get for one request: this server's own helpers, nothing more. */
+  private routeContext(req: http.IncomingMessage, res: http.ServerResponse, pathname: string, method: string, url: URL): ServerRouteContext {
+    return {
+      req, res, pathname, method, url,
+      parseBody: (r, max) => this.parseBody(r, max),
+      sendJson: (r, data, status) => this.sendJson(r, data, status),
+      fromThisMachine: r => this.isFromThisMachine(r),
+      setupCodeOk: code => this.remoteAccess.checkSetupCode(code),
+      onSetup: () => { this.setupOnly = false; },
+      chat: message => this.runner.generate(message),
+      // Text only, never a tool: see NeuroclawRunner.generateText().
+      text: message => this.whileAgentLives(() => this.runner.generateText(message)),
+      act: message => this.whileAgentLives(() => this.runner.generate(message)),
+      running: () => this.runner.getStatus().running,
+      uptime: () => this.runner.getStatus().uptime,
+      chatHistory: this.chatHistory,
+      learnFromFiling: text => this.learnFromFiling(text),
+    };
+  }
+
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     let identity = null;
     try {
@@ -2716,6 +2982,7 @@ export class WebServer {
     }
     const pathname = parsedUrl.pathname;
     const method = req.method?.toUpperCase() ?? 'GET';
+    const routePlugins = await this.routeHost();
 
     if (method === 'OPTIONS') {
       // No credentials are ever readable from a CORS preflight, so gating
@@ -2750,9 +3017,11 @@ export class WebServer {
       isStorePublicRoute(pathname, method) ||
       isSharedChatPublicRoute(pathname, method) ||
       isAuthPublicRoute(pathname, method) ||
-      // Apps and borrowers carry a bearer token, not a login; corona-routes.ts
-      // checks it on every request, so the password gate has nothing to add.
-      isCoronaApiRoute(pathname) ||
+      // Whatever a running route plugin keeps open: the corona plugin's token-checked API
+      // (apps and borrowers carry a bearer token, not a login, and corona-routes.ts checks it
+      // on every request) and the accounts plugin's login routes. A plugin that is turned
+      // off keeps nothing open.
+      routePlugins.isPublicRoute(pathname, method) ||
       isAmbientRoute(pathname, method) ||
       isPwaRoute(pathname, method);
 
@@ -2787,6 +3056,30 @@ export class WebServer {
     // not be rebuilt and overflowed on phones; it now opens the same page.
     if ((pathname === '/settings' || pathname === '/app/settings') && (method === 'GET' || method === 'HEAD')) {
       this.sendHtml(res, SETTINGS_PAGE);
+      return;
+    }
+    // ── Source viewer: a source link from a reply opens here, on the passage that backs the claim (or the part of
+    // the picture that matters). Behind the same login as everything else, and the page is fetched with the browser
+    // plugin's private-address block, so it cannot be pointed at this machine or its network. See interface/sources.ts.
+    if (pathname === '/source' && (method === 'GET' || method === 'HEAD')) {
+      const q = parseSourceQuery(new URL(req.url ?? '/', 'http://localhost').searchParams);
+      if (!q) { this.sendHtml(res, sourceErrorPage(null, 'That is not a web address this viewer can open. Only http and https addresses work.')); return; }
+      if (q.box || looksLikeImage(q.url)) {
+        this.setSecurityHeaders(res);
+        res.setHeader('Content-Security-Policy', IMAGE_SOURCE_CSP);
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(injectAmbient(sourceImagePage(q)));
+        return;
+      }
+      try {
+        this.sourceBrowser ??= new BrowserPlugin({ id: 'source-viewer', name: 'Source viewer', type: 'api-connection', capabilities: ['browser'] });
+        const html = await this.sourceBrowser.fetchUrl(q.url);
+        this.sendHtml(res, sourceTextPage(q, extractPageText(html)));
+      } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        this.sendHtml(res, sourceErrorPage(q, /^Security Error/.test(why) ? 'That address is on this computer or its network, so it is not opened here.' : `The page could not be read (${why}). Use "Open the original" to try it in your browser.`));
+      }
       return;
     }
     // ── Visual apps: a visual kept as an app, and put on this computer only after the owner has seen what
@@ -2948,14 +3241,13 @@ export class WebServer {
       this.sendHtml(res, selfImprovementPage());
       return;
     }
-    if (isPlatformRoute(pathname)) {
-      const handled = await handlePlatformRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        isAdmin: () => isOwnerOrAdmin(),
-        fromThisMachine: () => this.isFromThisMachine(req),
-      });
+    // ── Route plugins ───────────────────────────────────────────────────
+    // Platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons
+    // and the plugin list are each a plugin that owns its routes (interface/server-plugins.ts). A plugin that
+    // is turned off answers nothing here. Their paths do not overlap, and none is shared with the pages and
+    // routes below, so one dispatch point in plugin order is the same as the nine blocks that stood here.
+    {
+      const handled = await routePlugins.dispatchRoute(pathname, method, this.routeContext(req, res, pathname, method, parsedUrl));
       if (handled) return;
     }
 
@@ -2964,26 +3256,20 @@ export class WebServer {
       this.sendHtml(res, ACCOUNTS_PAGE);
       return;
     }
-    if (isAccountsRoute(pathname)) {
-      const handled = await handleAccountsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        accounts: getAccounts(),
-        fromThisMachine: r => this.isFromThisMachine(r),
-        computerAdmin: () => isComputerAdministrator(),
-        setupCodeOk: code => this.remoteAccess.checkSetupCode(code),
-        onSetup: () => { this.setupOnly = false; },
-        token: r => readCookie(r.headers.cookie, USER_COOKIE),
-      });
-      if (handled) return;
-    }
+
+    // ── Hosted mode: an account's tokens for the full AI on this computer ──
 
     // ── Logging in ──────────────────────────────────────────────────────
 
     // Data donor, lending and borrowing compute, and apps: one page, behind the normal gate.
     if (pathname === '/sharing' && method === 'GET') {
       this.sendHtml(res, SHARING_PAGE);
+      return;
+    }
+
+    // The network as one sphere with a tentacle per net skill.
+    if (pathname === '/hive' && method === 'GET') {
+      this.sendHtml(res, HIVE_PAGE);
       return;
     }
 
@@ -3166,100 +3452,21 @@ export class WebServer {
     // ── Apps, compute sharing, data donor ───────────────────────────────
     // See corona-routes.ts: owner routes behind the normal gate, plus the
     // token-checked /api/corona/v1 API that apps and borrowers call.
-    if (pathname.startsWith('/api/corona-apps') || pathname.startsWith('/api/compute') ||
-        pathname.startsWith('/api/donor') || isCoronaApiRoute(pathname)) {
-      const handled = await handleCoronaRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        chat: message => this.runner.generate(message),
-        status: () => {
-          const st = this.runner.getStatus();
-          return { running: st.running, uptime: Math.floor(st.uptime) };
-        },
-      });
-      if (handled) return;
-    }
 
     // ── Memory topics: the folder-tree memory the agent files into ──────
     // See memory-topics-routes.ts: behind the normal gate, per person.
-    if (isMemoryTopicsRoute(pathname)) {
-      const handled = await handleMemoryTopicsRoutes({
-        req, res, pathname, method, url: parsedUrl,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-      });
-      if (handled) return;
-    }
 
     // ── Risky tools, approvals, complete access, auto-continue ──────────
     // See safety-routes.ts: owner routes behind the normal gate.
-    if (isSafetyRoute(pathname)) {
-      const handled = await handleSafetyRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        gate: sharedToolGate(),
-        access: async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager(),
-        runApproved: async (toolId, request) => {
-          const { getNeuroclawSystem } = await import('../src/index.js');
-          return (await getNeuroclawSystem()).pluginRegistry.runApproved(toolId, request);
-        },
-      });
-      if (handled) return;
-    }
 
     // ── Net maker, net skill maker, weight editor, compiler ─────────────
     // See weights-routes.ts: owner routes behind the normal gate.
-    if (isWeightsRoute(pathname)) {
-      const handled = await handleWeightsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        base: async () => {
-          const { getNeuroclawSystem } = await import('../src/index.js');
-          return (await getNeuroclawSystem()).pipeline.ensureBrain() ?? null;
-        },
-      });
-      if (handled) return;
-    }
 
     // ── The agent: sandbox, danger level, alignment protocol ────────────
     // See agent-routes.ts.
-    if (isAgentRoute(pathname)) {
-      const handled = await handleAgentRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        access: async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager(),
-      });
-      if (handled) return;
-    }
 
     // ── Points, projects and the hive ───────────────────────────────────
     // See commons-routes.ts: owner routes behind the normal gate.
-    if (pathname === '/api/commons' || pathname.startsWith('/api/commons/')) {
-      const handled = await handleCommonsRoutes({
-        req, res, pathname, method,
-        parseBody: (r, max) => this.parseBody(r, max),
-        sendJson: (r, data, status) => this.sendJson(r, data, status),
-        // Text only, never a tool: see NeuroclawRunner.generateText().
-        chat: message => this.whileAgentLives(() => this.runner.generateText(message)),
-        act: message => this.whileAgentLives(() => this.runner.generate(message)),
-        status: () => ({ running: this.runner.getStatus().running }),
-        chats: this.chatHistory,
-        learn: text => this.learnFromFiling(text),
-        learner: async () => {
-          try {
-            const { getNeuroclawSystem } = await import('../src/index.js');
-            return (await getNeuroclawSystem()).hiveLearner();
-          } catch {
-            return null;
-          }
-        },
-      });
-      if (handled) return;
-    }
 
     // ── The public store ────────────────────────────────────────────────
     // Everything published lives in `store/` at the repo root and travels with
@@ -3412,6 +3619,12 @@ export class WebServer {
       } catch (err) {
         this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
       }
+      return;
+    }
+
+    // ── Ports: the numbered neurons and inputs (core/ports.ts) ──────────
+    if (pathname === '/api/ports' && method === 'GET') {
+      this.sendJson(res, { ports: ALL_PORTS });
       return;
     }
 
@@ -4046,7 +4259,8 @@ export class WebServer {
     }
 
     // DELETE /api/memory/all — forget everything: every remembered item,
-    // every AI Chat thread, and every shared chat room.
+    // every topic note, every prompt-memory stand-in, every AI Chat thread,
+    // and every shared chat room.
     //
     // Never public, and it never can be. It is behind the blanket gate above
     // like all destruction, and it is deliberately not one of the
@@ -4068,9 +4282,10 @@ export class WebServer {
         const system = await getNeuroclawSystem();
         const memories = system.memory.forgetAll();
         const topicNotes = new MemoryFolders().forgetAll();
+        const standIns = new PromptMemory().forgetAll();
         const threads = this.chatHistory.deleteAllThreads();
         const rooms = getSharedChatStore().deleteAllRooms();
-        this.sendJson(res, { memories, topicNotes, threads, rooms });
+        this.sendJson(res, { memories, topicNotes, standIns, threads, rooms });
       } catch (err) {
         this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
       }
@@ -4321,6 +4536,13 @@ export class WebServer {
       return;
     }
 
+    // GET /api/hive-agents — one entry per agent on a hive team, for the background:
+    // each gets its own sphere and shoggoth. Names and whether the hive is working, nothing more.
+    if (pathname === '/api/hive-agents' && method === 'GET') {
+      this.sendJson(res, { agents: hiveAgentsOverview() });
+      return;
+    }
+
     // GET /api/net-skills — which net skills are actually IN the network, and
     // where each one's neurons live.
     //
@@ -4534,7 +4756,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; neurons?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; auto?: unknown; instant?: unknown; optimize?: unknown; visualEvent?: unknown; attachments?: { batch?: unknown; files?: unknown }; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4543,9 +4765,14 @@ export class WebServer {
           this.sendJson(res, { error: 'Bad visual event' }, 400);
           return;
         }
-        const message = visualEvent
+        let message = visualEvent
           ? visualEventMessage(visualEvent)
           : (typeof body?.message === 'string' ? plainText(body.message) : body?.message);
+        // Files and folders attached on the page were uploaded first (POST /api/uploads); their text, or
+        // their names and sizes, ride in this turn.
+        if (typeof message === 'string' && body?.attachments && isBatchId(body.attachments.batch)) {
+          message += buildAttachmentNote(dataDir(), body.attachments.batch, body.attachments.files);
+        }
         if (!message || typeof message !== 'string') {
           this.sendJson(res, { error: 'Missing message field' }, 400);
           return;
@@ -4570,9 +4797,12 @@ export class WebServer {
         if (isOwnerOrAdmin()) await profileWithMemory().catch(() => undefined); // the owner's profile is the owner's
         const activity = activityStart(`Chat: ${clip(message, 80)}`, clip(message));
         let response: string;
+        // What auto routing decided for this message (effort, where, how much of the network), reported by the runner.
+        let autoRoute: RouteSummary | undefined;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body)], parseNeurons(body?.neurons));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions),
+            { request: parseAutoRoute(body), onPlan: (summary) => { autoRoute = summary; } });
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;
@@ -4588,7 +4818,35 @@ export class WebServer {
           const { getNeuroclawSystem } = await import('../src/index.js');
           details = (await getNeuroclawSystem()).lastTurnDetails ?? undefined;
         } catch { /* the details are not the answer; never fail the reply for them */ }
-        this.sendJson(res, { response, details, timestamp: Date.now() });
+        // The routing decision rides in the same panel as the rest of "how this answer was built".
+        if (autoRoute) details = { ...(details && typeof details === 'object' ? details as object : {}), autoRoute };
+        // What the mesh expects the user to say next, so the reply can carry it (prediction/ in the reply zip) and it can be scored.
+        const prediction = await this.currentNextMessageGuess();
+        this.sendJson(res, { response, details, prediction, timestamp: Date.now() });
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/uploads?batch=<hex>&path=<relative path> — one attached file, or one file of a folder.
+    // The body IS the file (raw bytes, streamed to disk, never held in memory) and lands in the current
+    // user's data folder under uploads/<batch>/<path>. The page sends one request per file, then names the
+    // batch in the chat turn. Needs the X-NC-Upload header, which a foreign page cannot send without a
+    // preflight this server never grants.
+    if (pathname === '/api/uploads' && method === 'POST') {
+      try {
+        if (!req.headers[UPLOAD_HEADER]) {
+          this.sendJson(res, { error: 'Missing upload header.' }, 400);
+          return;
+        }
+        const batch = parsedUrl.searchParams.get('batch') ?? '';
+        if (!isBatchId(batch)) {
+          this.sendJson(res, { error: 'Bad batch id.' }, 400);
+          return;
+        }
+        const r = await storeUpload(req, dataDir(), batch, parsedUrl.searchParams.get('path') ?? '');
+        this.sendJson(res, r.ok ? { ok: true, path: r.path, bytes: r.bytes } : { error: r.error }, r.status);
       } catch (err) {
         this.sendError(res, err);
       }
@@ -4621,6 +4879,106 @@ export class WebServer {
           prompt: typeof body?.prompt === 'string' ? body.prompt : undefined,
         });
         this.sendJson(res, result);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle — one reply as a zip: response/, plugins/ and prompts/ (see interface/response-bundle.ts).
+    // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
+    if (pathname === '/api/chat/bundle' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; prediction?: unknown; actualNext?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
+          return;
+        }
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits, prediction: body.prediction ?? (typeof body.actualNext === 'string' && body.actualNext.trim() ? null : await this.currentNextMessageGuess()), actualNext: body.actualNext });
+        this.setSecurityHeaders(res);
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="neuroclaw-reply-${new Date().toISOString().slice(0, 10)}.zip"`,
+          'Content-Length': zip.length,
+        });
+        res.end(zip);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/orb — what the voice orb plays for one reply: its audio file if the reply zip has one, else its text
+    // for the system voice, plus a visual file if there is one (see interface/voice-orb.ts). Same body as /api/chat/bundle.
+    // Runs nothing and asks the mesh nothing; the 855-format folder is left out because the orb never reads it.
+    if (pathname === '/api/chat/orb' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
+          return;
+        }
+        this.sendJson(res, orbMedia(bundleEntries({ message: body.message, response: body.response, details: body.details, formats: false })));
+    // POST /api/chat/bundle/prediction — score the guess at the next message against the message that really came
+    // (see interface/response-prediction.ts). { response, prediction, actual } -> { prediction } with its outcome.
+    // One guess, one score: a prediction already scored keeps its first outcome.
+    if (pathname === '/api/chat/bundle/prediction' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 256 * 1024) as { response?: unknown; prediction?: unknown; actual?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || typeof body.actual !== 'string' || !body.actual.trim()) {
+          this.sendJson(res, { error: 'Send { "response": "...", "prediction": ..., "actual": "<the next message>" }.' }, 400);
+          return;
+        }
+        this.sendJson(res, { prediction: scorePrediction(resolvePrediction(body.prediction, body.response), body.actual) });
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/orb/zip — the same, for a response zip the person picked or dropped on the orb: { zip: "<base64>" }.
+    // The zip is read by the hostile-input reader (models && skills/core/zip-archive.ts), with tighter limits than its default.
+    if (pathname === '/api/orb/zip' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 24 * 1024 * 1024) as { zip?: unknown } | null;
+        if (!body || typeof body.zip !== 'string' || !body.zip) {
+          this.sendJson(res, { error: 'Send { "zip": "<the zip file, base64>" }.' }, 400);
+          return;
+        }
+        const entries = readZip(Buffer.from(body.zip, 'base64'), { maxEntries: 5000, maxEntryBytes: 16 * 1024 * 1024, maxTotalBytes: 64 * 1024 * 1024 });
+        this.sendJson(res, orbMedia(entries));
+      } catch (err) {
+        this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, err instanceof ZipError ? 400 : 500);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle/review — one round of review on a reply zip's edits (see interface/response-edits.ts).
+    // { response, message?, definitions?, edits, decisions?, revisions?, withdraw? } -> { done, remaining, edits, open }.
+    // A separate agent reads the zip and sends decisions; the author sends revisions for what was rejected; repeat
+    // until done is true. An edit changes the zip only once it is approved.
+    if (pathname === '/api/chat/bundle/review' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; decisions?: unknown; revisions?: unknown; withdraw?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "...", "edits": [...] } with "decisions", "revisions" or "withdraw".' }, 400);
+          return;
+        }
+        const list = (v: unknown): unknown[] => (Array.isArray(v) ? v.slice(0, 200) : []);
+        const obj = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null ? v as Record<string, unknown> : {});
+        const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+        try {
+          this.sendJson(res, reviewStep(
+            { message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits },
+            {
+              decisions: list(body.decisions).map(d => ({ id: str(obj(d).id) ?? '', approve: obj(d).approve === true, comment: str(obj(d).comment) })),
+              revisions: list(body.revisions).map(r => ({ id: str(obj(r).id) ?? '', find: str(obj(r).find), replace: str(obj(r).replace), note: str(obj(r).note), comment: str(obj(r).comment) })),
+              withdraw: list(body.withdraw).filter((x): x is string => typeof x === 'string'),
+            },
+          ));
+        } catch (err) {
+          this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 400);
+        }
       } catch (err) {
         this.sendError(res, err);
       }

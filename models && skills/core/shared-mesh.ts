@@ -320,6 +320,15 @@ export function decodeDelta(raw: unknown, baseId: string, shape: MeshShape, expe
   return out;
 }
 
+/** The install ids that have been withdrawn (a file `<id>.json` in the revoked folder). Never throws. */
+export function revokedIds(dir: string): Set<string> {
+  try {
+    return new Set(existsSync(dir) ? readdirSync(dir).filter(f => /^[a-f0-9]{16}\.json$/.test(f)).map(f => f.slice(0, -".json".length)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * Every OTHER install's delta in `dir`, combined as sum / (count + 1). Returns
  * the combined contribution, how many installs it came from, and a
@@ -328,7 +337,7 @@ export function decodeDelta(raw: unknown, baseId: string, shape: MeshShape, expe
  */
 export function readOthersContribution(
   dir: string,
-  opts: { baseId: string; shape: MeshShape; expectedKeys: string[]; excludeInstallId: string; template: CoreArrays },
+  opts: { baseId: string; shape: MeshShape; expectedKeys: string[]; excludeInstallId: string; template: CoreArrays; revokedDir?: string },
 ): { contribution: CoreArrays; installs: number; fingerprint: string } {
   const contribution = zerosLike(opts.template);
   const hash = createHash("sha256");
@@ -339,9 +348,13 @@ export function readOthersContribution(
   } catch {
     files = [];
   }
+  // An install the security model shut down is withdrawn from everyone: a tombstone named after its id (revokedIds()) means its
+  // learning is not averaged in, wherever it was already published.
+  const revoked = revokedIds(opts.revokedDir ?? join(dirname(dir), "revoked"));
   const decoded: CoreArrays[] = [];
   for (const f of files) {
     if (f === `${opts.excludeInstallId}.json`) continue;
+    if (revoked.has(f.slice(0, -".json".length))) continue;
     const full = join(dir, f);
     try {
       if (statSync(full).size > MAX_DELTA_FILE_BYTES) continue;

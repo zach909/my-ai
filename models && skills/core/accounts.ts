@@ -433,7 +433,8 @@ const ADMIN_ONLY: RegExp[] = [
 
 const USER_EXACT = new Set<string>([
   "/", "/commons", "/login", "/accounts", "/ambient.css", "/ambient.js", "/settings", "/api/app-info", "/api/app-settings",
-  "/api/status", "/api/agent", "/api/commons", "/api/chat", "/api/chat/messages", "/api/chat/correct",
+  "/api/status", "/api/agent", "/api/commons", "/api/chat", "/api/chat/messages", "/api/chat/correct", "/api/chat/bundle", "/api/chat/bundle/review", "/api/chat/orb", "/api/orb/zip",
+  "/api/status", "/api/agent", "/api/commons", "/api/chat", "/api/chat/messages", "/api/chat/correct", "/api/chat/bundle", "/api/chat/bundle/review", "/api/chat/bundle/prediction",
   "/api/chat-history/save", "/api/chat-history/search", "/api/chat-history/groups", "/api/chat-history/threads",
   "/api/chat-history/export", "/api/chat-history/import",
 ]);
@@ -443,6 +444,9 @@ const USER_PATTERNS: RegExp[] = [
   /^\/api\/chat-history\/threads\/[^/]+(\/pin)?$/,
   /^\/api\/accounts\/(status|login|logout|register|me|password)$/,
   /^\/api\/auth\/(status|logout)$/,
+  // Hosted mode: your own tokens and usage. The limits (/api/hosted/settings) are the admin's, so they are not listed.
+  /^\/api\/hosted\/(status|tokens)$/,
+  /^\/api\/hosted\/tokens\/[0-9a-f]{16}$/,
 ];
 
 /**

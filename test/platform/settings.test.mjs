@@ -15,7 +15,7 @@ const text = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 test('defaults are sensible and every field in the schema has a consumer in the code', () => {
   assert.equal(DEFAULT_SETTINGS.appearance.ambient, true);
   assert.equal(DEFAULT_SETTINGS.updates.checkAutomatically, false, 'nothing contacts the network until the person opts in');
-  const consumers = { 'appearance.ambient': ['interface/ambient.ts', 'ambient'], 'appearance.reduceMotion': ['interface/ambient.ts', 'reduceMotion'], 'chat.keepLocalHistory': ['interface/web-server.ts', 'keepLocalHistory'], 'updates.channel': ['interface/platform/routes.ts', 'updates.channel'], 'updates.checkAutomatically': ['interface/platform/settings-page.ts', 'checkAutomatically'], 'updates.manifestUrl': ['interface/platform/routes.ts', 'updates.manifestUrl'] };
+  const consumers = { 'appearance.ambient': ['interface/ambient.ts', 'ambient'], 'appearance.reduceMotion': ['interface/ambient.ts', 'reduceMotion'], 'chat.keepLocalHistory': ['interface/web-server.ts', 'keepLocalHistory'], 'sources.show': ['interface/web-server.ts', 'sourceMode'], 'sources.focus': ['interface/web-server.ts', 'settings.sources.focus'], 'updates.channel': ['interface/platform/routes.ts', 'updates.channel'], 'updates.checkAutomatically': ['interface/platform/settings-page.ts', 'checkAutomatically'], 'updates.manifestUrl': ['interface/platform/routes.ts', 'updates.manifestUrl'] };
   assert.deepEqual(SETTINGS_FIELDS.map((f) => f.path).sort(), Object.keys(consumers).sort(), 'a new setting must declare where it takes effect');
   for (const [field, [file, needle]] of Object.entries(consumers)) assert.ok(text(file).includes(needle), `${field}: ${file} never uses "${needle}"`);
 });

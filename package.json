@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "app": "node scripts/app.mjs",
     "dev": "node scripts/dev.mjs",
     "server": "node scripts/server.mjs",
     "launch": "node scripts/launcher.mjs",
@@ -16,8 +17,10 @@
     "test:smoke": "node scripts/build-backend.mjs && node test/smoke.mjs",
     "test:integration": "vitest run",
     "test:install": "bash test/install-sh.test.sh",
+    "test:training": "node --test \"test/training/*.test.mjs\"",
+    "train:sim": "node training/simulation/run.mjs",
     "test:platform": "node scripts/build-backend.mjs && node --test --test-concurrency=2 \"test/platform/*.test.mjs\"",
-    "test": "npm run check:third-party && npm run test:smoke && npm run test:platform && npm run test:integration && npm run test:install",
+    "test": "npm run check:third-party && npm run test:smoke && npm run test:platform && npm run test:training && npm run test:integration && npm run test:install",
     "release:version": "node scripts/release/version.mjs",
     "release:extension": "node scripts/release/build-extension.mjs",
     "build:phone-brain": "node scripts/release/build-mobile-brain.mjs"

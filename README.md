@@ -770,6 +770,7 @@ Each `self_ext_N` folder is a memory extension the agent saved at generation N. 
 | `models && skills/core/code-iteration.ts` | Write → run in a sandbox → read the error → fix loop for code. |
 | `models && skills/core/code-to-net.ts` | Behavioral Code-to-Net: builds a network that reproduces what a piece of code does. |
 | `models && skills/core/net-search.ts` | Net Search over neurons, definitions, and connections. |
+| `models && skills/core/elastic-district.ts` | Elastic districts: islands of neurons with a subject that learn faster when the input is about it and slower when it is not. |
 | `models && skills/core/net-skill-graft.ts` | Grafts a specialized net skill neuron-to-neuron into the main mesh. |
 | `models && skills/core/net-skill-store.ts` | Publishes live net skills to the store's "net-skills" catalog. |
 | `models && skills/core/skill-freeze.ts` | Freezes the main model while a net skill is trained on top of it. |
@@ -1105,6 +1106,7 @@ Run with `npm test` (smoke + Vitest + install test). Everything in `test/core/` 
 | `test/core/mod-apply.test.ts` | Applying mods onto the working copy. |
 | `test/core/multi-desktop.test.ts` | `launchOnDesktop()` shell handling. |
 | `test/core/multi-input-security.test.ts` | Multi-input plugin validation. |
+| `test/core/elastic-district.test.ts` | Districts open and close with the subject, settle, grow, and are discovered. |
 | `test/core/net-skill-graft.test.ts` | Net skills graft into the mesh. |
 | `test/core/net-skill-store.test.ts` | Net skills appear in the store catalog. |
 | `test/core/notifications-permissions.test.ts` | Notification file permissions. |

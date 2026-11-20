@@ -269,10 +269,15 @@ async function main() {
   const home = process.env.NEUROCLAW_APP_HOME || appHomeDir();
   const { syncAppHome } = await import(pathToFileURL(path.join(HERE, 'release', 'app-home.mjs')).href);
   const logFile = path.join(dataDir, 'logs', 'server.log');
-  let sync;
-  try { sync = syncAppHome({ payloadDir: payload, homeDir: home }); }
-  catch (e) { return fatal(`Could not prepare the app's folder (${home}): ${e.message}`, logFile, noWindow); }
-  log(`app ${sync.version} ${sync.action} in ${home}`);
+  // Running straight from the source tree (`npm run app`: NEUROCLAW_APP_HOME is the repo itself) there is nothing to
+  // copy, and copying a folder onto itself would only delete and recreate dist/.
+  if (path.resolve(home) === path.resolve(payload)) log(`running from the source tree in ${home}`);
+  else {
+    let sync;
+    try { sync = syncAppHome({ payloadDir: payload, homeDir: home }); }
+    catch (e) { return fatal(`Could not prepare the app's folder (${home}): ${e.message}`, logFile, noWindow); }
+    log(`app ${sync.version} ${sync.action} in ${home}`);
+  }
 
   // The macOS app is the window: it speaks the line protocol on this process's stdin and stdout.
   if (args.includes('--embedded')) { await runWindow({ home, dataDir, logFile, port, hostIsParent: true }); return; }

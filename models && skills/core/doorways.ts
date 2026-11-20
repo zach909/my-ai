@@ -9,7 +9,8 @@
  * one of them speaks the same bit-level language, and nothing in between turns
  * the bytes into anything else: no tokenizer, no outside embedding, no
  * speech-to-text. A kind is a label for people and for routing ("audio",
- * "image"); it never changes how the bytes go in.
+ * "image"); it never changes how the bytes go in. Its six neurons are Ports 1-6, numbered the same way as the Zip
+ * Loop's (ports.ts), and each doorway counts what goes through each port.
  *
  * Declaring is free and happens at load. Neurons are only added to the mesh
  * when a doorway is first used, because every neuron is wired to every other
@@ -27,6 +28,7 @@
 
 import { ZipLoopInterface, type HyperDimensionalEngine } from "./onebrain.js";
 import { DoorwayLock } from "./doorway-lock.js";
+import { PortTracker, portsOfDoorway, type PortActivity, type PortSpec } from "./ports.js";
 
 export type DoorwayDirection = "in" | "out" | "both";
 
@@ -45,6 +47,8 @@ export interface DoorwayInfo extends DoorwaySpec {
   neurons: number[];
   bytesIn: number;
   bytesOut: number;
+  /** Its six ports (1-6, see ports.ts): which neuron is which, and how many bits have gone through each. Empty until open. */
+  ports: Array<PortSpec & { neuron: number; count: number; lastAt: number | null }>;
 }
 
 export class DoorwayError extends Error {}
@@ -72,6 +76,7 @@ const openedByEngine = new WeakMap<object, Map<string, Opened>>();
 export class DoorwayRegistry {
   private readonly specs = new Map<string, DoorwaySpec>();
   private readonly counts = new Map<string, { bytesIn: number; bytesOut: number }>();
+  private readonly portUse = new Map<string, PortTracker>();
 
   /**
    * @param engine  The mesh, or null while it has not been built.
@@ -108,6 +113,7 @@ export class DoorwayRegistry {
     }
     this.specs.set(name, { name, kind, direction: input.direction, source: input.source });
     this.counts.set(name, { bytesIn: 0, bytesOut: 0 });
+    this.portUse.set(name, new PortTracker());
     return this.info(name);
   }
 
@@ -174,6 +180,7 @@ export class DoorwayRegistry {
       opened.zip.sendBytes(bytes);
       const counts = this.counts.get(spec.name)!;
       counts.bytesIn += bytes.length;
+      this.portUse.get(spec.name)?.recordBytes("in", bytes);
       return { bytes: bytes.length };
     });
   }
@@ -192,6 +199,7 @@ export class DoorwayRegistry {
       const opened = this.open(spec.name);
       const out = opened.zip.receiveBytes(count);
       this.counts.get(spec.name)!.bytesOut += out.length;
+      this.portUse.get(spec.name)?.recordBytes("out", out);
       return out;
     });
   }
@@ -226,6 +234,10 @@ export class DoorwayRegistry {
     const engine = this.engine();
     const opened = engine ? openedByEngine.get(engine)?.get(name) : undefined;
     const counts = this.counts.get(name) ?? { bytesIn: 0, bytesOut: 0 };
-    return { ...spec, open: !!opened, neurons: opened ? [...opened.neurons] : [], ...counts };
+    const use = new Map<number, PortActivity>((this.portUse.get(name)?.snapshot() ?? []).map(a => [a.port, a]));
+    const ports = opened
+      ? portsOfDoorway(opened.neurons).map(p => ({ ...p, count: use.get(p.port)?.count ?? 0, lastAt: use.get(p.port)?.lastAt ?? null }))
+      : [];
+    return { ...spec, open: !!opened, neurons: opened ? [...opened.neurons] : [], ...counts, ports };
   }
 }
