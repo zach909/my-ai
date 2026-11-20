@@ -619,6 +619,24 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     transform: translateY(0) scale(0.95);
   }
 
+  /* Compact: one button hides the dials and routing boxes so the input bar is a single slim row. */
+  #compact-btn {
+    background: rgba(255, 238, 230, 0.07);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 10px 16px;
+    min-height: 44px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    backdrop-filter: blur(12px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #compact-btn:hover { background: rgba(227,169,157, 0.28); transform: translateY(-2px) scale(1.03); }
+  #compact-btn:active { transform: translateY(0) scale(0.95); }
+  #input-area.compact #neurons-wrap, #input-area.compact #questions-wrap, #input-area.compact #route-wrap { display: none; }
   #neurons-wrap, #questions-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
   #neurons, #questions { width: 96px; accent-color: #ff9a84; }
   #neurons-out, #questions-out { min-width: 2.2em; opacity: 0.8; }
@@ -774,6 +792,7 @@ ${UPLOAD_CSS}
 <div id="input-area">
   <label for="input" class="sr-only">Message</label>
   <input type="text" id="input" placeholder="Type a message..." autofocus>
+  <button type="button" id="compact-btn" aria-controls="neurons-wrap questions-wrap route-wrap" aria-expanded="true">Hide options</button>
   <label id="neurons-wrap" for="neurons" title="Neurons: how confident it acts. Low asks more questions. High assumes. Very high does it both ways.">
     <span class="nc-dim">Neurons</span>
     <input type="range" id="neurons" min="0" max="100" step="5" value="50" aria-label="Neurons, how confident the AI acts, 0 to 100" aria-valuetext="50, balanced">
@@ -1322,6 +1341,24 @@ ${UPLOAD_CSS}
     onEvent: (name, data) => sendMessage('▸ ' + name + (data === null ? '' : ' ' + JSON.stringify(data)), {name, data})
   });
   ncUploads.install({ area: document.getElementById('input-area'), before: sendBtn });
+  // Hide or show the dials and routing boxes. The choice stays in this browser.
+  (function () {
+    const area = document.getElementById('input-area');
+    const btn = document.getElementById('compact-btn');
+    function apply(compact) {
+      area.classList.toggle('compact', compact);
+      btn.textContent = compact ? 'Show options' : 'Hide options';
+      btn.setAttribute('aria-expanded', String(!compact));
+    }
+    let saved = false;
+    try { saved = localStorage.getItem('nc_compact') === '1'; } catch {}
+    apply(saved);
+    btn.addEventListener('click', () => {
+      const next = !area.classList.contains('compact');
+      apply(next);
+      try { localStorage.setItem('nc_compact', next ? '1' : '0'); } catch {}
+    });
+  })();
   const clearChat = () => {
     if (confirm('Clear chat history?')) {
       chat.innerHTML = '';
