@@ -12,6 +12,7 @@ import { EncryptionManager } from './encryption.js';
 import { ChatHistoryStore, type ChatSource } from '../models && skills/core/chat-history-store.js';
 import { exportChats, importChats } from '../models && skills/core/chat-archive.js';
 import { buildResponseBundle, reviewStep } from './response-bundle.js';
+import { resolvePrediction, scorePrediction } from './response-prediction.js';
 import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
@@ -1118,12 +1119,20 @@ ${SOURCE_CSS}
             if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
           }
         }
+        // The message the person sent after this reply, if there is one: the guess in prediction/ is scored against it.
+        let actualNext = undefined;
+        if (entry) {
+          const here = chatHistory.indexOf(entry);
+          for (let i = here + 1; i < chatHistory.length; i++) {
+            if (chatHistory[i].role === 'user') { actualNext = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
         zip.disabled = true;
         try {
           const r = await fetch('/api/chat/bundle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details })
+            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details, prediction: (entry && entry.prediction) || undefined, actualNext })
           });
           if (!r.ok) throw new Error('no zip');
           const url = URL.createObjectURL(await r.blob());
@@ -1231,7 +1240,7 @@ ${SOURCE_CSS}
         // The entry is pushed BEFORE the message is rendered, and handed to
         // it: the pen edits this object in place, so it has to be the same
         // object the transcript is saved from.
-        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details};
+        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details, prediction: data.prediction};
         chatHistory.push(entry);
         addMessage('ai', data.response, aiTime, entry);
         save();
@@ -2252,6 +2261,22 @@ export class WebServer {
   }
 
   getPort(): number { return this.port; }
+
+  /**
+   * What the mesh currently expects the user to say next (ContinuousLearner.currentPrediction), as a prediction record's
+   * input, or null if it has none or cannot be asked quickly. Never throws and never waits long: the reply does not depend on it.
+   */
+  private async currentNextMessageGuess(): Promise<{ predicted: string; source: 'mesh' } | null> {
+    try {
+      const guess = await Promise.race([
+        (async () => (await (await import('../src/index.js')).getNeuroclawSystem()).continuousLearner.currentPrediction())(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 2000)),
+      ]);
+      return typeof guess === 'string' ? { predicted: guess, source: 'mesh' } : null;
+    } catch {
+      return null;
+    }
+  }
 
   private setSecurityHeaders(res: http.ServerResponse): void {
     // Security: Restricted CORS and standard security headers
@@ -4725,7 +4750,9 @@ export class WebServer {
         } catch { /* the details are not the answer; never fail the reply for them */ }
         // The routing decision rides in the same panel as the rest of "how this answer was built".
         if (autoRoute) details = { ...(details && typeof details === 'object' ? details as object : {}), autoRoute };
-        this.sendJson(res, { response, details, timestamp: Date.now() });
+        // What the mesh expects the user to say next, so the reply can carry it (prediction/ in the reply zip) and it can be scored.
+        const prediction = await this.currentNextMessageGuess();
+        this.sendJson(res, { response, details, prediction, timestamp: Date.now() });
       } catch (err) {
         this.sendError(res, err);
       }
@@ -4768,12 +4795,12 @@ export class WebServer {
     // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
     if (pathname === '/api/chat/bundle' && method === 'POST') {
       try {
-        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown } | null;
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; prediction?: unknown; actualNext?: unknown } | null;
         if (!body || typeof body.response !== 'string' || !body.response) {
           this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
           return;
         }
-        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits });
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits, prediction: body.prediction ?? (typeof body.actualNext === 'string' && body.actualNext.trim() ? null : await this.currentNextMessageGuess()), actualNext: body.actualNext });
         this.setSecurityHeaders(res);
         res.writeHead(200, {
           'Content-Type': 'application/zip',
@@ -4781,6 +4808,23 @@ export class WebServer {
           'Content-Length': zip.length,
         });
         res.end(zip);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle/prediction — score the guess at the next message against the message that really came
+    // (see interface/response-prediction.ts). { response, prediction, actual } -> { prediction } with its outcome.
+    // One guess, one score: a prediction already scored keeps its first outcome.
+    if (pathname === '/api/chat/bundle/prediction' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 256 * 1024) as { response?: unknown; prediction?: unknown; actual?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || typeof body.actual !== 'string' || !body.actual.trim()) {
+          this.sendJson(res, { error: 'Send { "response": "...", "prediction": ..., "actual": "<the next message>" }.' }, 400);
+          return;
+        }
+        this.sendJson(res, { prediction: scorePrediction(resolvePrediction(body.prediction, body.response), body.actual) });
       } catch (err) {
         this.sendError(res, err);
       }

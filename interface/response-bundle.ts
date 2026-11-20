@@ -3,6 +3,7 @@
  *
  *   response/   the reply itself (reply.md) and a spoken copy of it (reply.wav), the reply in every converter format (formats/), the question that led to it (question.md) and how the turn was built (details.json)
  *   plugins/    one file per plugin the turn used, with the tools it called and whether each worked, plus an index
+ *   prediction/ a guess at the user's next message (always present) and, once that message is known, how close it was
  *   prompts/    ready-to-send prompts, as [[ask: Label | prompt]] lines (the same syntax a reply's own buttons use, so
  *               a line pasted into the chat becomes a button): plugins.md, tools.md, commands.md, feedback.md, and
  *               follow-ups.md for any button of the reply that fits none of those
@@ -17,6 +18,7 @@ import { writeZip, type ZipEntry } from "../models && skills/core/zip-archive.js
 import { applyApproved, decide, isSettled, normalizeDefinitions, normalizeEdits, open, resolveDefinitions, revise, withdraw, type Edit, type Revision } from "./response-edits.js";
 import { renderSpeechWav } from "./response-audio.js";
 import { SOURCE_FORMAT, formatEntries } from "./response-formats.js";
+import { predictionFiles, resolvePrediction, scorePrediction } from "./response-prediction.js";
 import { PROMPT_BUTTON_LABEL_MAX, PROMPT_BUTTON_PROMPT_MAX, splitPromptButtons } from "./prompt-buttons.js";
 
 export const BUNDLE_FORMAT = "neuroclaw-response";
@@ -40,6 +42,10 @@ export interface BundleInput {
   audio?: boolean;
   /** Set false to leave out response/formats/ (the reply in every format the converter knows). On by default. */
   formats?: boolean;
+  /** The guess at the user's next message: a string, or an earlier prediction record. Without one the zip still has a prediction folder, with an empty guess. */
+  prediction?: unknown;
+  /** The message that really came next, if it has arrived: the guess is scored against it. */
+  actualNext?: unknown;
 }
 
 export interface ToolCallRecord {
@@ -224,6 +230,11 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
     if (json && json.length <= BUNDLE_MAX_TEXT) add("response/details.json", json + "\n");
   }
 
+  // The prediction folder is not optional: every reply carries a guess at the next message, and it is scored once that message is known.
+  let guess = resolvePrediction(input.prediction, reply, now);
+  if (typeof input.actualNext === "string" && input.actualNext.trim()) guess = scorePrediction(guess, input.actualNext);
+  for (const f of predictionFiles(guess)) add(f.name, f.body);
+
   const used = new Set<string>();
   const index: Array<{ plugin: string; file: string; calls: number; failed: number }> = [];
   for (const p of plugins) {
@@ -268,7 +279,7 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
     format: BUNDLE_FORMAT,
     version: 1,
     createdAt: now.toISOString(),
-    folders: { response: "the reply and how it was built", plugins: "what the turn used", prompts: "prompts to send next" },
+    folders: { response: "the reply and how it was built", plugins: "what the turn used", prompts: "prompts to send next", prediction: "the guess at the next message, and its score once it is known" },
     editsRemaining: open(edits).length,
     formatFiles: formatCount,
     files: files.map(f => f.name).filter(n => !n.startsWith("response/formats/") || n === "response/formats/index.json").concat("manifest.json").sort(),
