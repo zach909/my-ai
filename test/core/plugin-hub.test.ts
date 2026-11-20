@@ -3,8 +3,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
-  PluginHub, OllamaAdapter, MemoryStorage, JsonlStorage, adoptRegistryTools,
-  type HubPlugin, type ModelAdapter, type StoragePlugin,
+  PluginHub, MemoryStorage, JsonlStorage, adoptRegistryTools,
+  type HubPlugin, type StoragePlugin,
 } from "../../plugin_manager/index.js";
 import { PluginRegistry } from "../../plugin_manager/registry.js";
 
@@ -71,32 +71,6 @@ describe("PluginHub", () => {
     expect(hub.list("tool")).toHaveLength(before);
     expect(registry.getPluginCount()).toBe(before);
     expect(adoptRegistryTools(hub, registry)).toBe(0);
-  });
-});
-
-describe("OllamaAdapter", () => {
-  const reply = (body: unknown, ok = true, status = 200) =>
-    (async () => ({ ok, status, statusText: ok ? "OK" : "Bad", json: async () => body })) as unknown as typeof fetch;
-
-  it("posts to /api/chat and returns the message text", async () => {
-    let seen: { url: string; body: any } | undefined;
-    const fetchImpl = (async (url: string, init: RequestInit) => {
-      seen = { url, body: JSON.parse(init.body as string) };
-      return { ok: true, status: 200, statusText: "OK", json: async () => ({ message: { content: "hi" } }) };
-    }) as unknown as typeof fetch;
-    const adapter: ModelAdapter = new OllamaAdapter({ model: "m1", baseUrl: "http://h:1/", fetchImpl });
-    const out = await adapter.complete({ messages: [{ role: "user", content: "yo" }], temperature: 0.2 });
-    expect(out).toEqual({ text: "hi", model: "m1" });
-    expect(seen!.url).toBe("http://h:1/api/chat");
-    expect(seen!.body).toMatchObject({ model: "m1", stream: false, options: { temperature: 0.2 } });
-  });
-
-  it("throws on HTTP errors and malformed replies, and reports health", async () => {
-    await expect(new OllamaAdapter({ model: "m", fetchImpl: reply({}, false, 500) }).complete({ messages: [] })).rejects.toThrow(/500/);
-    await expect(new OllamaAdapter({ model: "m", fetchImpl: reply({}) }).complete({ messages: [] })).rejects.toThrow(/no message content/);
-    expect(await new OllamaAdapter({ model: "m", fetchImpl: reply({}) }).health()).toBe(true);
-    const down = (async () => { throw new Error("refused"); }) as unknown as typeof fetch;
-    expect(await new OllamaAdapter({ model: "m", fetchImpl: down }).health()).toBe(false);
   });
 });
 

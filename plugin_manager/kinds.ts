@@ -213,62 +213,6 @@ export interface ModelAdapter extends HubPlugin {
   complete(request: ModelRequest): Promise<ModelResponse>;
 }
 
-export interface OllamaAdapterOptions {
-  id?: string;
-  /** Base URL of an Ollama server you run. Defaults to the usual local port. */
-  baseUrl?: string;
-  model: string;
-  /** Replaceable so tests need no server. Defaults to the built-in `fetch`. */
-  fetchImpl?: typeof fetch;
-}
-
-/** Talks to an Ollama server over HTTP (/api/chat). Nothing from Ollama is imported or vendored. */
-export class OllamaAdapter implements ModelAdapter {
-  readonly kind = "model" as const;
-  readonly id: string;
-  readonly name: string;
-  private readonly baseUrl: string;
-  private readonly model: string;
-  private readonly fetchImpl: typeof fetch;
-
-  constructor(options: OllamaAdapterOptions) {
-    this.id = options.id ?? "ollama";
-    this.name = "Ollama";
-    this.baseUrl = (options.baseUrl ?? "http://127.0.0.1:11434").replace(/\/+$/, "");
-    this.model = options.model;
-    this.fetchImpl = options.fetchImpl ?? fetch;
-  }
-
-  async complete(request: ModelRequest): Promise<ModelResponse> {
-    const model = request.model ?? this.model;
-    const res = await this.fetchImpl(`${this.baseUrl}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: request.messages,
-        stream: false,
-        ...(request.temperature !== undefined ? { options: { temperature: request.temperature } } : {}),
-      }),
-      signal: request.signal,
-    });
-    if (!res.ok) throw new Error(`Ollama answered ${res.status} ${res.statusText}`.trim());
-    const body = (await res.json()) as { message?: { content?: unknown } };
-    const text = body?.message?.content;
-    if (typeof text !== "string") throw new Error("Ollama's reply had no message content.");
-    return { text, model };
-  }
-
-  async health(): Promise<boolean> {
-    try {
-      const res = await this.fetchImpl(`${this.baseUrl}/api/tags`);
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // kind: "storage"
 // ---------------------------------------------------------------------------
