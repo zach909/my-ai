@@ -83,7 +83,7 @@ describe('the reply zip', () => {
     for (const n of names) {
       expect(n.includes('..')).toBe(false)
       expect(n.startsWith('/')).toBe(false)
-      expect(n.split('/').length).toBeLessThanOrEqual(2)
+      expect(n.split('/').length).toBeLessThanOrEqual(n.startsWith('response/formats/') ? 3 : 2)
       expect(n.split('/').pop()!.startsWith('.')).toBe(false)
     }
     expect(new Set(names).size).toBe(names.length)

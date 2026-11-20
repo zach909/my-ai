@@ -1,7 +1,7 @@
 /**
  * The agent's reply as a zip.
  *
- *   response/   the reply itself (reply.md) and a spoken copy of it (reply.wav), the question that led to it (question.md) and how the turn was built (details.json)
+ *   response/   the reply itself (reply.md) and a spoken copy of it (reply.wav), the reply in every converter format (formats/), the question that led to it (question.md) and how the turn was built (details.json)
  *   plugins/    one file per plugin the turn used, with the tools it called and whether each worked, plus an index
  *   prompts/    ready-to-send prompts, as [[ask: Label | prompt]] lines (the same syntax a reply's own buttons use, so
  *               a line pasted into the chat becomes a button): plugins.md, tools.md, commands.md, feedback.md, and
@@ -9,13 +9,14 @@
  *
  * Written on the project's own zip writer (models && skills/core/zip-archive.ts); nothing else is used. Everything in
  * the zip is derived from what the page already has (the reply and the details of its turn), so building one never
- * runs a tool, never reads a file and never asks the mesh anything. Names inside the zip are built here from
+ * runs a tool and never asks the mesh anything (the format list is the one file it reads). Names inside the zip are built here from
  * a strict character set, never copied from the input.
  */
 
 import { writeZip, type ZipEntry } from "../models && skills/core/zip-archive.js";
 import { applyApproved, decide, isSettled, normalizeDefinitions, normalizeEdits, open, resolveDefinitions, revise, withdraw, type Edit, type Revision } from "./response-edits.js";
 import { renderSpeechWav } from "./response-audio.js";
+import { SOURCE_FORMAT, formatEntries } from "./response-formats.js";
 import { PROMPT_BUTTON_LABEL_MAX, PROMPT_BUTTON_PROMPT_MAX, splitPromptButtons } from "./prompt-buttons.js";
 
 export const BUNDLE_FORMAT = "neuroclaw-response";
@@ -37,6 +38,8 @@ export interface BundleInput {
   edits?: unknown;
   /** Set false to leave out response/reply.wav (the spoken copy). On by default. */
   audio?: boolean;
+  /** Set false to leave out response/formats/ (the reply in every format the converter knows). On by default. */
+  formats?: boolean;
 }
 
 export interface ToolCallRecord {
@@ -206,6 +209,14 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
   // The spoken copy, made from the reply as it now reads (definitions in, approved edits applied).
   const wav = input.audio === false ? null : renderSpeechWav(reply);
   if (wav) files.push({ name: "response/reply.wav", data: wav });
+  // The reply in every format the converter knows. Not the mesh writing them: see interface/response-formats.ts.
+  let formatCount = 0;
+  if (input.formats !== false) {
+    const r = formatEntries(reply);
+    files.push(...r.entries);
+    formatCount = r.entries.length;
+    add("response/formats/index.json", JSON.stringify({ source: SOURCE_FORMAT, total: r.total, written: r.written.length, skipped: r.skipped.length, files: r.written, notSent: r.skipped }, null, 2) + "\n");
+  }
   if (question) add("response/question.md", question + (question.endsWith("\n") ? "" : "\n"));
   if (input.details !== undefined) {
     let json = "";
@@ -259,7 +270,8 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
     createdAt: now.toISOString(),
     folders: { response: "the reply and how it was built", plugins: "what the turn used", prompts: "prompts to send next" },
     editsRemaining: open(edits).length,
-    files: files.map(f => f.name).concat("manifest.json").sort(),
+    formatFiles: formatCount,
+    files: files.map(f => f.name).filter(n => !n.startsWith("response/formats/") || n === "response/formats/index.json").concat("manifest.json").sort(),
   };
   add("manifest.json", JSON.stringify(manifest, null, 2) + "\n");
   return files;
