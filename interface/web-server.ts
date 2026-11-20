@@ -843,6 +843,12 @@ ${UPLOAD_CSS}
     if (routeInstantEl.checked) routeAutoEl.checked = true;
     routeAutoEl.disabled = routeInstantEl.checked;
     routeOptimizeEl.disabled = routeInstantEl.checked;
+    // With Auto on the AI picks how often to ask, so the slider is not used.
+    questionsEl.disabled = routeAutoEl.checked;
+    document.getElementById('questions-wrap').style.opacity = routeAutoEl.checked ? '0.4' : '';
+    const qw = document.getElementById('questions-wrap');
+    if (!qw.dataset.title) qw.dataset.title = qw.title;
+    qw.title = routeAutoEl.checked ? 'Questions: Auto picks this for each message. Turn Auto off to set it by hand.' : qw.dataset.title;
   }
   loadRoute(routeAutoEl, 'nc-route-auto', true);
   loadRoute(routeInstantEl, 'nc-route-instant', false);
@@ -909,6 +915,7 @@ ${UPLOAD_CSS}
     if (d.autoRoute) {
       const r = d.autoRoute;
       row(dl, 'effort', r.effort.level + ' (' + r.effort.mode + ', ' + (r.effort.source === 'auto' ? 'picked for this message' : r.effort.source === 'manual' ? 'set by hand' : 'instant') + ')');
+      if (r.questions) row(dl, 'questions', r.questions.level + ' (' + r.questions.mode + ', ' + (r.questions.source === 'auto' ? 'picked for this message' : r.questions.source === 'manual' ? 'set by hand' : 'instant never asks') + ')');
       row(dl, 'answered', (r.where === 'cloud' ? 'on a bigger computer' : 'on this device') + ' (' + r.engine + ')');
       row(dl, 'processor', r.compute.islandsTotal ? Math.round(r.compute.share * 100) + '%: ' + r.compute.islandsRun.length + ' of ' + r.compute.islandsTotal + ' islands run' : 'whole network (no islands found yet)');
       if (r.code) row(dl, 'code job', r.code.task + (r.code.language ? ' in ' + r.code.language : '') + ', ' + r.code.difficulty);
@@ -1275,7 +1282,7 @@ ${UPLOAD_CSS}
           buttons: true,
           sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
-          questions: Number(questionsEl.value),
+          questions: routeAutoEl.checked ? null : Number(questionsEl.value),
           auto: routeAutoEl.checked,
           instant: routeInstantEl.checked,
           optimize: routeOptimizeEl.checked && !routeInstantEl.checked,
