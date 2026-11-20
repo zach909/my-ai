@@ -33,6 +33,12 @@ export interface AppSettings {
     /** Keep the conversation shown on the home page in this browser, so a reload does not empty it. */
     keepLocalHistory: boolean;
   };
+  sources: {
+    /** Ask the AI to back its claims with source links (interface/sources.ts). Off hides the chips and stops asking. */
+    show: boolean;
+    /** A source link opens /source at the passage that supports the claim (or the part of the picture that matters), instead of the bare page. */
+    focus: boolean;
+  };
   updates: {
     channel: 'stable' | 'beta';
     /** Check for a newer release on its own when Settings opens. Off by default: it contacts the update address. */
@@ -45,6 +51,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   appearance: { ambient: true, reduceMotion: 'system' },
   chat: { keepLocalHistory: true },
+  sources: { show: true, focus: true },
   updates: { channel: 'stable', checkAutomatically: false, manifestUrl: 'https://github.com/zach909/.my-ai/releases/latest/download/release-manifest.json' },
 };
 
@@ -53,6 +60,8 @@ export const SETTINGS_FIELDS = [
   { path: 'appearance.ambient', type: 'boolean', label: 'Ring and glow background', help: 'Turn off for a plain dark background (saves battery on phones).', effect: 'interface/ambient.ts: hides #nc-ambient' },
   { path: 'appearance.reduceMotion', type: 'enum', values: ['system', 'on', 'off'], label: 'Reduce motion', help: 'System follows your device. On keeps the ring nearly still. Off keeps full motion.', effect: 'interface/ambient.ts: ring speed' },
   { path: 'chat.keepLocalHistory', type: 'boolean', label: 'Remember the chat on this device', help: 'Keeps the conversation on the home page in this browser. Turn off and it is cleared on reload.', effect: 'interface/web-server.ts HTML_TEMPLATE: localStorage nc_hist' },
+  { path: 'sources.show', type: 'boolean', label: 'Show sources', help: 'The AI backs what it says with links to the pages, files or pictures it used.', effect: 'interface/web-server.ts HTML_TEMPLATE: asks for and draws [[source: ...]] chips' },
+  { path: 'sources.focus', type: 'boolean', label: 'Open sources at the passage', help: 'A source link opens on the sentence that proves the point, highlighted, or crops a picture to the part that matters.', effect: 'interface/sources.ts: chip address (/source viewer)' },
   { path: 'updates.channel', type: 'enum', values: ['stable', 'beta'], label: 'Update channel', help: 'Stable only offers finished releases.', effect: 'interface/platform/update.ts' },
   { path: 'updates.checkAutomatically', type: 'boolean', label: 'Check for updates when Settings opens', help: 'Contacts the update address below. Nothing is downloaded or installed.', effect: 'interface/platform/settings-page.ts' },
   { path: 'updates.manifestUrl', type: 'url', label: 'Update address', help: 'Where the release manifest is published. Must be https (or local http). Empty turns update checks off.', effect: 'interface/platform/update.ts' },

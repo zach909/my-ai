@@ -21,7 +21,7 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HyperDimensionalEngine } from "./onebrain.js";
 import type { DoorwayLock } from "./doorway-lock.js";
@@ -51,6 +51,8 @@ export interface SharedMeshPaths {
   root: string;
   baseFile?: string;
   deltasDir?: string;
+  /** Where tombstones for withdrawn installs live (default: next to the deltas folder). */
+  revokedDir?: string;
   localDir?: string;
   publishScript?: string;
 }
@@ -72,6 +74,7 @@ type SpawnFn = typeof spawn;
 export class SharedMeshSync {
   private readonly baseFile: string;
   private readonly deltasDir: string;
+  private readonly revokedDir: string;
   private readonly localDir: string;
   private readonly publishScript: string;
   private readonly root: string;
@@ -93,6 +96,7 @@ export class SharedMeshSync {
     this.root = paths.root;
     this.baseFile = paths.baseFile ?? join(paths.root, "extension-builder", "shared-mesh", "base.json");
     this.deltasDir = paths.deltasDir ?? join(paths.root, "extension-builder", "shared-mesh", "deltas");
+    this.revokedDir = paths.revokedDir ?? join(paths.root, "extension-builder", "shared-mesh", "revoked");
     this.localDir = paths.localDir ?? join(paths.root, "extension-builder", "shared-mesh-local");
     this.publishScript = paths.publishScript ?? join(paths.root, "scripts", "shared-mesh-publish.mjs");
     this.status = {
@@ -200,6 +204,7 @@ export class SharedMeshSync {
       expectedKeys: Object.keys(this.baseCore!),
       excludeInstallId: this.installId,
       template: this.baseCore!,
+      revokedDir: this.revokedDir,
     });
   }
 
@@ -254,6 +259,75 @@ export class SharedMeshSync {
 
     // 3. Push this install's learning if it changed since the last push.
     this.queuePublish(own, now);
+  }
+
+  /**
+   * Withdraw this install's learning, for the security model's shutdown ("delete the model for everyone").
+   *
+   *   1. The running network goes back to base + what others taught it: everything THIS install learned is gone.
+   *   2. Its saved learning and its pending push are deleted, and its id is retired: a fresh one is made, so a
+   *      clean start is possible once an admin makes a new agent, without inheriting the withdrawn identity.
+   *   3. If sharing is on, a tombstone for the retired id is queued for the shared branch. Every other install
+   *      skips a delta whose id has a tombstone (readOthersContribution), so the learning is also drawn back out
+   *      of everyone else's network at their next sync. Nothing else of theirs is touched.
+   *
+   * Never throws; the result says what was done, because a half-done withdrawal must not look like a whole one.
+   */
+  async revokeOwn(reason: string, now = Date.now()): Promise<{ purged: boolean; retiredId: string | null; tombstoneQueued: boolean; note: string }> {
+    const work = (): { purged: boolean; retiredId: string | null; tombstoneQueued: boolean; note: string } => {
+      const idPath = join(this.localDir, "install-id");
+      const retiredId = this.installId || (existsSync(idPath) ? getInstallId(idPath) : "") || null;
+      let purged = false;
+      let note = "";
+      const engine = this.getEngine();
+      if (engine && this.baseCore && this.shape && this.othersApplied) {
+        try {
+          const snapshot = engine.captureNetworkState();
+          const clean = combine(this.baseCore, this.othersApplied);
+          const next = injectCore(snapshot, clean, this.shape);
+          purged = !!next && engine.restoreNetworkState(next);
+          if (!purged) note = "The engine refused the restored network, so this install's learning is still in it.";
+        } catch (err) {
+          note = `Could not restore the network: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      } else {
+        note = "The shared mesh was not loaded here, so there was no shared learning to take out of the network.";
+      }
+      rmSync(this.ownPath, { force: true });
+      rmSync(this.outboxPath, { force: true });
+      rmSync(this.statePath, { force: true });
+      rmSync(idPath, { force: true });
+      let tombstoneQueued = false;
+      if (retiredId && this.enabled) {
+        try {
+          const content = JSON.stringify({ installId: retiredId, at: now, reason: String(reason).slice(0, 300) }) + "\n";
+          mkdirSync(this.localDir, { recursive: true });
+          writeFileSync(
+            this.outboxPath,
+            JSON.stringify({ relPath: `extension-builder/shared-mesh/revoked/${retiredId}.json`, content, hash: createHash("sha256").update(content).digest("hex") }),
+            "utf8",
+          );
+          if (existsSync(this.publishScript)) {
+            const child = (this.opts.spawnFn ?? spawn)(process.execPath, [this.publishScript], { cwd: this.root, detached: true, stdio: "ignore", env: process.env });
+            child.on?.("error", (err: Error) => this.log(`could not start the withdrawal push (non-fatal): ${err.message}`));
+            child.unref?.();
+            tombstoneQueued = true;
+          }
+        } catch (err) {
+          note = `${note} Could not queue the withdrawal: ${err instanceof Error ? err.message : String(err)}`.trim();
+        }
+      }
+      // A clean identity from here on (made now, so the running install does not publish under the retired one).
+      this.installId = getInstallId(idPath);
+      this.status = { ...this.status, installId: this.installId, ownDeltaRms: 0 };
+      this.log(`withdrew this install's learning (${purged ? "network restored" : "network NOT restored"}${tombstoneQueued ? ", tombstone queued" : ""}): ${reason}`);
+      return { purged, retiredId, tombstoneQueued, note };
+    };
+    try {
+      return this.lock ? await this.lock.run(async () => work()) : work();
+    } catch (err) {
+      return { purged: false, retiredId: null, tombstoneQueued: false, note: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   private queuePublish(own: CoreArrays, now: number): void {

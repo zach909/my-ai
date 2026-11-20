@@ -56,7 +56,7 @@ api! {
     g_object_unref: unsafe extern "C" fn(P),
     g_memory_input_stream_new_from_data: unsafe extern "C" fn(P, isize, P) -> P,
     g_input_stream_read_all: unsafe extern "C" fn(P, P, usize, *mut usize, P, P) -> c_int,
-    g_get_user_special_directory: unsafe extern "C" fn(c_int) -> *const c_char,
+    g_get_user_special_dir: unsafe extern "C" fn(c_int) -> *const c_char,
     webkit_web_view_new: unsafe extern "C" fn() -> P,
     webkit_web_view_get_context: unsafe extern "C" fn(P) -> P,
     webkit_web_view_load_uri: unsafe extern "C" fn(P, *const c_char),
@@ -305,7 +305,7 @@ fn download_path(dir: &str, suggested: &str) -> String {
 unsafe extern "C" fn on_destination(_download: P, suggested: *const c_char, _data: P) -> c_int {
     let s = st();
     let dir = {
-        let d = cstr((s.api.g_get_user_special_directory)(2)); // G_USER_DIRECTORY_DOWNLOAD
+        let d = cstr((s.api.g_get_user_special_dir)(2)); // G_USER_DIRECTORY_DOWNLOAD
         if d.is_empty() { format!("{}/Downloads", std::env::var("HOME").unwrap_or_default()) } else { d }
     };
     let _ = std::fs::create_dir_all(&dir);

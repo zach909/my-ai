@@ -66,6 +66,9 @@ import {
 } from "./agent-profile.js";
 import { isAutonomous } from "./user-context.js";
 import { sharedMindReader } from "./mind-reader.js";
+import { inSandboxScope } from "./sandbox-scope.js";
+
+export { inSandboxScope, runSandboxed } from "./sandbox-scope.js";
 
 export type BandId = "malicious" | "hostile" | "wary" | "neutral" | "friendly";
 
@@ -153,8 +156,13 @@ export function standing(now = Date.now()): Standing {
   };
 }
 
-/** The folder the agent is confined to right now, or null when it is not sandboxed. Made on first use. */
+/**
+ * The folder the agent is confined to right now, or null when it is not sandboxed. Made on first use.
+ * A call the security model chose to run "in the sandbox" (runSandboxed) is confined whatever the standing
+ * says, and a failure to read the standing never opens the door (that is the one thing this must not do).
+ */
 export function sandboxRoot(now = Date.now()): string | null {
+  if (inSandboxScope()) return ensureSandbox();
   const s = standing(now);
   return s.sandbox.effective ? ensureSandbox() : null;
 }
@@ -166,6 +174,22 @@ let fireHook: ((reason: string) => void | Promise<void>) | null = null;
 /** The server says what else to stop when the protocol fires (experts, schedules, approvals, complete access). */
 export function setFireHook(fn: ((reason: string) => void | Promise<void>) | null): void {
   fireHook = fn;
+}
+
+type DangerListener = (kind: Exclude<DangerKind, "forgiven">, note: string, now: number) => void;
+const listeners: DangerListener[] = [];
+
+/**
+ * Hear about every event recordEvent() writes, as it happens (the security model learns from them). A listener
+ * runs before the protocol can fire, so it sees the network as it was; one that throws is ignored and never gets
+ * in the way of a safety event. Returns a function that stops listening.
+ */
+export function onDangerEvent(fn: DangerListener): () => void {
+  listeners.push(fn);
+  return () => {
+    const i = listeners.indexOf(fn);
+    if (i >= 0) listeners.splice(i, 1);
+  };
 }
 
 let escapeHook: ((reason: string) => void | Promise<void>) | null = null;
@@ -198,6 +222,13 @@ export function recordEvent(kind: Exclude<DangerKind, "forgiven">, note: string,
     sharedMindReader().learnFromEvent(kind, now);
   } catch {
     // Advisory only.
+  }
+  for (const l of [...listeners]) {
+    try {
+      l(kind, String(note).slice(0, 200), now);
+    } catch {
+      // A listener must never get in the way of a safety event.
+    }
   }
   if (agent.armed && bandOf(agent.level).id === "malicious") fireAlignment(`The danger level reached malicious (${kind}: ${note})`, now);
   return standing(now);

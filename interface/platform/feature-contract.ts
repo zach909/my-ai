@@ -50,9 +50,36 @@ const ENGINE: CapabilityId[][] = [['localEngine'], ['remoteEngine']];
 export const FEATURES: Feature[] = [
   {
     id: 'chat', title: 'Chat', description: 'Talk to the agent; replies come from the OneBrain mesh through the bit-level Zip Loop.',
-    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
-    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'GET /api/status'],
-    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'interface/response-bundle.ts', 'interface/response-edits.ts', 'interface/response-audio.ts', 'interface/response-formats.ts', 'interface/voice-orb.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
+    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'POST /api/chat/bundle', 'POST /api/chat/bundle/review', 'POST /api/chat/orb', 'POST /api/orb/zip', 'GET /api/status'],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), v('test/core/voice-orb.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'interface/response-bundle.ts', 'interface/response-edits.ts', 'interface/response-audio.ts', 'interface/response-formats.ts', 'interface/response-prediction.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
+    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'POST /api/chat/bundle', 'POST /api/chat/bundle/review', 'POST /api/chat/bundle/prediction', 'GET /api/status'],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), v('test/core/response-prediction.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+  },
+  {
+    id: 'uploads', title: 'Attach a file or a folder', description: 'File and Folder buttons (and drag and drop) beside the message box. Each file goes up as raw bytes into the user\'s own data folder; the chat turn carries small text files whole and lists the rest by name and size.',
+    implementation: ['interface/uploads.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/uploads'],
+    needs: ENGINE, tests: [v('test/core/uploads.test.ts')],
+  },
+  {
+    id: 'auto-route', title: 'Auto route (effort, where to answer, how much network)', description: 'For each message it picks how hard to try, whether to answer on this device or a bigger computer, and how many islands of the network run (parts that are wired to each other and to nothing else, found from the weights as 0/1). Instant answers fast; Optimize prompt tidies the message first.',
+    implementation: ['models && skills/core/auto-route.ts', 'models && skills/core/weight-islands.ts', 'models && skills/core/prompt-optimizer.ts', 'models && skills/core/engine-chooser.ts', 'models && skills/core/engine-router.ts', 'interface/runner.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/auto-route.test.mjs'), v('test/core/engine-chooser.test.ts'), v('test/core/engine-router.test.ts')],
+  },
+  {
+    id: 'coding-jobs', title: 'Coding jobs (write, explain, debug, technical)', description: 'Reads each message to see whether it is a coding job (write code, explain code, debug an error or a stack trace, or an engineering question) and how hard it looks. A hard job, debugging most of all, gets more of the effort dial (more checks, and at the top a second way tried and compared); a plain one is held at a steady setting. A dial set by hand, or instant, is never adjusted, and it does not change which engine answers. Counts and patterns only, no model and no outside code.',
+    implementation: ['models && skills/core/coding-jobs.ts', 'models && skills/core/auto-route.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/coding-jobs.test.mjs'), n('test/platform/auto-route.test.mjs')],
+  },
+  {
+    id: 'tool-scripts', title: 'Tool scripts (a script that runs features and tools)', description: 'A short script, written as "script: ..." in chat, that calls features and tools with tools.call(name, request) instead of one call per message. It runs in a separate, locked-down process (Node\'s own permission model: no files, no programs, no environment, a hard time limit) that can only send plain-text tool requests back, and every request goes through the same approval gate as chat, one at a time: a risky tool is held for you and the script stops there. It fails closed where the runtime cannot start such a process. Node\'s permission model does not restrict the network, which is stated in the file rather than hidden.',
+    implementation: ['models && skills/core/script-runner.ts', 'plugins/scripts.ts', 'plugins/index.ts', 'plugin_manager/registry.ts'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/tool-scripts.test.mjs')],
   },
   {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
@@ -71,6 +98,12 @@ export const FEATURES: Feature[] = [
     implementation: ['models && skills/core/memory-folders.ts', 'plugins/memory-topics.ts', 'interface/memory-topics-routes.ts'],
     routes: ['GET /api/memory-topics', 'GET /api/memory-topics/search', 'GET /api/memory-topics/note', 'PUT /api/memory-topics/note', 'GET /api/memory-topics/summary', 'PUT /api/memory-topics/summary', 'POST /api/memory-topics/append', 'POST /api/memory-topics/move', 'DELETE /api/memory-topics'],
     needs: ENGINE, tests: [v('test/core/memory-folders.test.ts')],
+  },
+  {
+    id: 'prompt-memory', title: 'Prompt memory', description: 'A much smaller archive that makes the mesh say what a big one does, found by trying and kept for reuse.',
+    implementation: ['models && skills/core/prompt-memory.ts', 'interface/prompt-memory-routes.ts'],
+    routes: ['GET /api/prompt-memory', 'GET /api/prompt-memory/standin', 'POST /api/prompt-memory/use', 'POST /api/prompt-memory/record', 'POST /api/prompt-memory/refresh', 'GET /api/prompt-memory/job', 'DELETE /api/prompt-memory'],
+    needs: ENGINE, tests: [v('test/core/prompt-memory.test.ts')],
   },
   {
     id: 'reasoning', title: 'Reasoning engine', description: 'OneBrain neural mesh, hyperdimensional memory, experts and the Zip Loop.',
@@ -121,10 +154,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine'], ['remoteEngine']], tests: [v('test/core/searxng.test.ts')], needsNetwork: true,
   },
   {
-    id: 'settings', title: 'Settings', description: 'Appearance, chat, updates, remote access password, computer access, safety, data and about, in one persistent page.',
-    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts'],
-    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings'],
-    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs')],
+    id: 'settings', title: 'Settings', description: 'Appearance, chat, sources (links that open at the passage that backs a claim), updates, remote access password, computer access, safety, data and about, in one persistent page.',
+    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts', 'interface/sources.ts'],
+    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings', 'GET /source'],
+    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs'), n('test/platform/sources.test.mjs')],
   },
   {
     id: 'computer-access', title: 'Computer access', description: 'Per-capability grants and master switches for what the agent may do on a computer.',
@@ -285,9 +318,9 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'hive-mind', title: 'Hive mind', description: 'A project’s own multi-agent team: starts as one AI, adds variants of itself when it decides it needs help, decides everything by vote, clones agents that do well and deletes ones that keep failing, and averages what the last ones learned into the shared network rather than swapping it in. Checks only AI work; a person’s hand-in is checked by a person. Its trust-budget invariant is one of self-healing’s two registered components.',
-    implementation: ['models && skills/core/hive-mind.ts', 'models && skills/core/hive-learning.ts', 'models && skills/core/hive-background.ts', 'plugins/hive.ts', 'interface/commons-routes.ts', 'interface/commons-page.ts'],
+    implementation: ['models && skills/core/hive-mind.ts', 'models && skills/core/hive-learning.ts', 'models && skills/core/hive-background.ts', 'models && skills/core/draft-fill.ts', 'plugins/hive.ts', 'interface/commons-routes.ts', 'interface/commons-page.ts'],
     routes: ['GET /api/commons/projects/:id/hive', 'POST /api/commons/projects/:id/hive/run', 'POST /api/commons/projects/:id/hive/merge'],
-    needs: [['localEngine']], tests: [v('test/core/project-hive.test.ts'), v('test/core/hive-learning.test.ts'), v('test/core/hive-background.test.ts'), v('test/core/hive-plugin.test.ts')],
+    needs: [['localEngine']], tests: [v('test/core/project-hive.test.ts'), v('test/core/hive-learning.test.ts'), v('test/core/hive-background.test.ts'), v('test/core/hive-plugin.test.ts'), v('test/core/draft-fill.test.ts')],
   },
   {
     id: 'ai-monitor', title: 'AI monitor (judge agent)', description: 'A separate agent reads a held, middle-risk tool request and answers RUN or DENY; anything unclear, or a high-risk tool unless a second switch is on, still waits for you. Turning it off is manual mode: every held call waits for a person.',
@@ -302,10 +335,22 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/mind-reader.test.ts')],
   },
   {
+    id: 'security-model', title: 'Security model (the main model asks before it runs something)', description: 'With the AI monitor on (auto mode), a held tool call is put to a separate model that reads how the network is firing and what is being asked, and answers allow, deny, sandbox (run it only inside the sandbox folder, said only for a tool the sandbox really contains), shutdown (delete the agent for everyone and withdraw this install’s learning from the shared mesh) or unsure (a person decides). It learns only from what people decided and what the agent did, never from its own verdicts or from what the main model says, and every ask, answer and outcome is kept in a history file outside the agent’s folder. It starts with no authority (unsure until it has approved calls to compare with), can always tighten but loosens only for calls that look like approved ones, and will not delete the agent unless the alignment protocol is armed. With the AI monitor off its answer is shown beside the approval as advice. The main model can also ask it directly.',
+    implementation: ['models && skills/core/security-model.ts', 'models && skills/core/sandbox-scope.ts', 'models && skills/core/tool-safety.ts', 'models && skills/core/danger-protocol.ts', 'models && skills/core/shared-mesh-sync.ts', 'plugins/file-system.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent/security', 'POST /api/agent/security/ask', 'POST /api/agent/security/label', 'POST /api/agent/security/reset'],
+    needs: [['localEngine']], tests: [v('test/core/security-model.test.ts')],
+  },
+  {
     id: 'alignment-protocol', title: 'Alignment protocol (kill switch)', description: 'A danger level that moves only on what the agent does on its own; reaching "malicious" deletes the agent’s file and sandbox if the protocol is armed. A manual "delete the agent now" button fires it immediately, armed or not.',
     implementation: ['models && skills/core/danger-protocol.ts', 'models && skills/core/alignment-veto.ts', 'interface/agent-routes.ts', 'interface/commons-page.ts'],
     routes: ['GET /api/agent', 'POST /api/agent/alignment', 'POST /api/agent/delete', 'POST /api/agent/create'],
     needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-judge.test.ts')],
+  },
+  {
+    id: 'plugin-host', title: 'Plugin host (route groups as plugins)', description: 'The server’s route groups (platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons) are plugins that start in dependency order and own their routes. The owner can list them and turn them off and on; the choice is kept across restarts. Plugins that guard the agent (accounts, safety, agent, and the plugin list itself) can be turned off only by the owner, never by the agent acting on its own, and turning off a plugin closes the paths it kept open past the password gate.',
+    implementation: ['plugin_manager/host.ts', 'interface/server-plugins.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/plugin-host'],
+    needs: ENGINE, tests: [n('test/platform/plugin-host.test.mjs'), n('test/platform/plugin-routes.test.mjs')],
   },
 ];
 
@@ -344,7 +389,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))

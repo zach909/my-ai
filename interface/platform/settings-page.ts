@@ -89,7 +89,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   'use strict';
   var LEVELS = ['observe', 'interact', 'modify', 'execute', 'system', 'privileged'];
   var SECTIONS = [
-    ['general', 'General'], ['updates', 'Updates'], ['remote', 'Remote access'], ['access', 'Computer access'], ['aios', 'AI OS'],
+    ['general', 'General'], ['updates', 'Updates'], ['remote', 'Remote access'], ['sources', 'Sources'], ['access', 'Computer access'], ['aios', 'AI OS'],
     ['safety', 'Safety'], ['data', 'Data'], ['modules', 'More'], ['about', 'About']
   ];
   var tabs = document.getElementById('tabs'), panel = document.getElementById('panel');
@@ -184,6 +184,35 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
       setting('Remember the chat on this device', 'Keeps the conversation on the home page in this browser. Off clears it when the page reloads.', toggle('keepLocalHistory', st.chat.keepLocalHistory, function (v) {
         return save({ chat: { keepLocalHistory: v } }).then(function () { try { localStorage.setItem('nc_keep_hist', v ? '1' : '0'); if (!v) localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } });
       }, 'Remember the chat on this device'), 'keepLocalHistory')
+    );
+  }
+
+  /* ---------- Sources ---------- */
+  async function sources() {
+    var s = await api('/api/app-settings');
+    var st = s.settings;
+    showPersistence(s.persistence);
+    async function save(patch) {
+      var r = await api('/api/app-settings', { method: 'POST', body: patch });
+      st = r.settings; showPersistence(r.persistence); say('Saved.', 'ok');
+      return r;
+    }
+    var focus = toggle('sourcesFocus', st.sources.focus, function (v) { return save({ sources: { focus: v } }); }, 'Open sources at the passage');
+    function sync() { focus.disabled = !st.sources.show; }
+    var show = toggle('sourcesShow', st.sources.show, function (v) { return save({ sources: { show: v } }).then(sync); }, 'Show sources');
+    sync();
+    panel.replaceChildren(
+      h('h2', { text: 'Sources' }),
+      h('p', { class: 'nc-dim', text: 'When the AI states something, it can link the page or picture it came from.' }),
+      setting('Show sources', 'The AI adds a small link under a claim, naming where it came from. Off: no links, and it is not asked for them.', show, 'sourcesShow'),
+      setting('Open sources at the passage', 'The link opens on the exact sentence that backs the claim, highlighted and scrolled into view, like Ctrl+F in a browser. For a picture it shows only the part that matters and drops the rest, with a button to see the whole picture. Off: the link opens the page as it is.', focus, 'sourcesFocus'),
+      h('h3', { text: 'What to know' }),
+      h('ul', { style: 'margin:6px 0 0;padding-left:20px;display:grid;gap:8px;font-size:14px;line-height:1.5' }, [
+        'A highlighted source is shown as the page\u2019s plain words, without its own layout, pictures or scripts, so nothing from that site runs here.',
+        'The server fetches the page for you, and refuses addresses on your own network.',
+        'If the passage cannot be found on the page, it says so and highlights nothing. It never guesses.',
+        'Web pages and pictures only for now. Local files are not offered yet, because opening one would need your computer-access permission.'
+      ].map(function (b) { return h('li', { text: b }); }))
     );
   }
 
@@ -417,7 +446,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
     );
   }
 
-  var RENDER = { general: general, updates: updates, remote: remote, access: access, aios: aios, safety: safety, data: data, modules: modules, about: about };
+  var RENDER = { general: general, sources: sources, updates: updates, remote: remote, access: access, aios: aios, safety: safety, data: data, modules: modules, about: about };
 
   function select(id, focus) {
     if (!RENDER[id]) id = 'general';
