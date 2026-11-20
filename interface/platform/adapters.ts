@@ -94,7 +94,7 @@ export const ADAPTERS: Record<PlatformId, PlatformAdapter> = {
     capabilities: {
       ...desktopCommon,
       backgroundService: some('AI OS mode starts the engine at sign-in from a hidden script under the per-user Run key (no administrator rights). It is not restarted if it stops. The script and registry commands are generated and checked by tests here, but have not been run on a Windows PC: this repository\'s sandbox has none.'),
-      desktopControl: no('No Windows UI Automation tools are wired into the packaged launcher.'),
+      desktopControl: some('Native: PowerShell with the .NET and user32 calls Windows ships (models && skills/core/desktop/native.ts). Lists windows, takes screenshots, and moves, closes, types into and clicks the windows of programs the agent started itself; the user\'s own windows are observe-only. Written against Windows\' documented behaviour and tested here with a stand-in runner; NOT yet run on a real Windows desktop. Windows may refuse to let a background program take focus, in which case nothing is sent.'),
       systemTray: no('The launcher opens a window; there is no tray icon.'),
       selfUpdate: some('The app reports a newer release and links to the installer. It never replaces itself silently.'),
       systemPermissions: no('No privilege-broker adapter exists for Windows yet (models && skills/core/linux-privilege-broker.ts is Linux-only); nothing here can request an elevated grant beyond the ordinary install.'),
@@ -122,7 +122,7 @@ export const ADAPTERS: Record<PlatformId, PlatformAdapter> = {
     capabilities: {
       ...desktopCommon,
       backgroundService: some('AI OS mode starts the engine at sign-in from a LaunchAgent in ~/Library/LaunchAgents that restarts after a failure. The plist is generated and checked as well-formed XML by tests here, but has not been loaded on a Mac: this repository\'s sandbox has none.'),
-      desktopControl: no('The packaged app asks for no Accessibility or Screen Recording permission.'),
+      desktopControl: some('Native: osascript (System Events and CoreGraphics) and screencapture (models && skills/core/desktop/native.ts). Same rule as everywhere: only windows of programs the agent started itself are driven. macOS asks for Accessibility and Screen Recording the first time, and the packaged app does not request them in advance. Tested here with a stand-in runner; NOT yet run on a real Mac.'),
       systemTray: no('No menu-bar item; open the app from the Dock.'),
       selfUpdate: some('Reports a newer release and links to the .dmg. Signed, notarised updates need the maintainer\'s Apple credentials, which this repo does not hold.'),
       systemPermissions: no('No privilege-broker adapter exists for macOS yet; the packaged app requests no elevated or special permission at all.'),

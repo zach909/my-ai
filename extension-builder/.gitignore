@@ -67,3 +67,7 @@ skill-quality-history.json
 # bookkeeping. The shared parts (shared-mesh/base.json and, only when
 # NEUROCLAW_SHARED_LEARNING=1, shared-mesh/deltas/<id>.json) are tracked.
 shared-mesh-local/
+
+# Knowledge extensions (extension-builder/corpus-extension.mjs): built from the cited corpus, regenerable with
+# node extension-builder/build-corpus-extension.mjs. Own suffix so the *.ext.json boot loader never reads them.
+extensions/*.kx.json

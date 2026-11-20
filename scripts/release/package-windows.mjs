@@ -35,6 +35,9 @@ sh.CurrentDirectory = here
 sh.Run """" & here & "\\runtime\\node.exe"" """ & here & "\\app\\scripts\\desktop-launcher.mjs""", 0, False
 `;
 
+/** The osai command (the AI OS layers) for Windows: a batch file next to the bundled Node runtime. */
+export const OSAI_CMD = '@echo off\r\n"%~dp0..\\runtime\\node.exe" "%~dp0..\\app\\scripts\\osai.mjs" %*\r\n';
+
 export const INSTALL_PS1 = `# Per-user installer for ${APP_NAME}. Runs without administrator rights.
 $ErrorActionPreference = 'Stop'
 $dest = Join-Path $env:LOCALAPPDATA 'Programs\\${APP_NAME}'
@@ -51,6 +54,12 @@ if (Test-Path $oldNode) {
 if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
 New-Item -ItemType Directory -Path $dest | Out-Null
 Expand-Archive -Path (Join-Path $here 'payload.zip') -DestinationPath $dest -Force
+
+# The osai command (the AI OS layers) on this user's PATH. Per user, no administrator rights; undone by uninstall.
+$bin = Join-Path $dest 'bin'
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$parts = @(); if ($userPath) { $parts = @($userPath -split ';' | Where-Object { $_ -ne '' }) }
+if ($parts -notcontains $bin) { [Environment]::SetEnvironmentVariable('Path', (($parts + $bin) -join ';'), 'User') }
 
 $shell = New-Object -ComObject WScript.Shell
 function New-NeuroClawShortcut([string]$path) {
@@ -92,6 +101,9 @@ $node = Join-Path $dest 'runtime\\node.exe'
 if (Test-Path $node) { & $node (Join-Path $dest 'app\\scripts\\desktop-launcher.mjs') --stop }
 Get-Process -Name node | Where-Object { $_.Path -eq $node } | Stop-Process -Force
 Start-Sleep -Seconds 1
+$bin = Join-Path $dest 'bin'
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($userPath) { [Environment]::SetEnvironmentVariable('Path', ((@($userPath -split ';' | Where-Object { $_ -ne '' -and $_ -ne $bin })) -join ';'), 'User') }
 Remove-Item (Join-Path ([Environment]::GetFolderPath('Programs')) '${APP_NAME}.lnk') -Force
 Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) '${APP_NAME}.lnk') -Force
 Remove-Item 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}' -Recurse -Force
@@ -139,6 +151,7 @@ export async function packageWindows({ stageDir, outDir }) {
   entries.push({ name: `${APP_NAME}/${APP_NAME}.vbs`, data: Buffer.from(LAUNCH_VBS.replace(/\n/g, '\r\n')) });
   entries.push({ name: `${APP_NAME}/${APP_NAME}.ico`, data: ico });
   entries.push({ name: `${APP_NAME}/uninstall.ps1`, data: Buffer.from(UNINSTALL_PS1) });
+  entries.push({ name: `${APP_NAME}/bin/osai.cmd`, data: Buffer.from(OSAI_CMD) });
 
   const artifacts = [];
   const zip = path.join(outDir, artifactName({ version: info.version, platform: 'windows', arch: info.arch, ext: 'zip' }));

@@ -42,13 +42,14 @@ export const PROMPTING_CATEGORY_LABELS: Record<PromptingCategory, string> = {
  * Where a perception skill may look. Every entry is a capability this system
  * already has; a skill cannot invent a new source, only choose among these.
  *
- * `chats` reads back real past conversations, and `web` is the only source
+ * `topics` searches the folder-tree memory the agent keeps itself
+ * (memory-folders.ts). `chats` reads back real past conversations, and `web` is the only source
  * that leaves the machine. Both are ordinary sources rather than special
  * cases: a skill chooses one, and the host decides whether to expose it at
  * all. Somebody running with no network simply has no `web` capability, and a
  * skill that wanted it contributes nothing instead of failing.
  */
-export const PERCEPTION_SOURCES = ["memory", "wiki", "store", "chats", "web", "plugin"] as const;
+export const PERCEPTION_SOURCES = ["memory", "topics", "wiki", "store", "chats", "web", "plugin"] as const;
 export type PerceptionSource = (typeof PERCEPTION_SOURCES)[number];
 
 /**

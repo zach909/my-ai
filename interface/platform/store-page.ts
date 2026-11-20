@@ -26,13 +26,13 @@ export function storePage(): string {
   h1 {
     font-size: 1.5rem;
     margin: 0 0 24px;
-    color: #ffc4b4;
+    color: #efd0c8;
   }
   .tabs {
     display: flex;
     gap: 8px;
     margin-bottom: 24px;
-    border-bottom: 1px solid rgba(255, 154, 132, 0.2);
+    border-bottom: 1px solid rgba(227,169,157, 0.2);
     flex-wrap: wrap;
   }
   .tab-button {
@@ -46,8 +46,8 @@ export function storePage(): string {
     border-bottom: 2px solid transparent;
   }
   .tab-button.active {
-    color: #ffc4b4;
-    border-bottom-color: #ff9a84;
+    color: #efd0c8;
+    border-bottom-color: #e3a99d;
   }
   .tab-content {
     display: none;
@@ -56,15 +56,15 @@ export function storePage(): string {
     display: block;
   }
   .card {
-    background: rgba(255, 154, 132, 0.08);
-    border: 1px solid rgba(255, 154, 132, 0.2);
+    background: rgba(227,169,157, 0.08);
+    border: 1px solid rgba(227,169,157, 0.2);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 16px;
   }
   .card h3 {
     margin: 0 0 8px;
-    color: #ffc4b4;
+    color: #efd0c8;
   }
   .card p {
     margin: 0 0 12px;
@@ -82,9 +82,9 @@ export function storePage(): string {
     }
   }
   button {
-    background: rgba(255, 154, 132, 0.16);
-    border: 1px solid rgba(255, 154, 132, 0.5);
-    color: #ffc4b4;
+    background: rgba(227,169,157, 0.16);
+    border: 1px solid rgba(227,169,157, 0.5);
+    color: #efd0c8;
     padding: 8px 16px;
     border-radius: 999px;
     font-family: inherit;
@@ -92,7 +92,7 @@ export function storePage(): string {
     font-size: 0.9rem;
   }
   button:hover {
-    background: rgba(255, 154, 132, 0.24);
+    background: rgba(227,169,157, 0.24);
   }
   .loading, .error {
     padding: 12px;
@@ -100,12 +100,12 @@ export function storePage(): string {
     margin-bottom: 16px;
   }
   .loading {
-    background: rgba(255, 154, 132, 0.1);
+    background: rgba(227,169,157, 0.1);
     color: rgba(248, 237, 233, 0.75);
   }
   .error {
     background: rgba(255, 100, 100, 0.1);
-    color: #ff9a84;
+    color: #e3a99d;
   }
 </style>
 

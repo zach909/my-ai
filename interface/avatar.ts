@@ -76,7 +76,7 @@ export const AVATAR_HTML = `<!DOCTYPE html>
   #row { position: relative; z-index: 2; display: flex; gap: 8px; align-items: center; margin: 0 18px 18px; padding: 8px; border-radius: 999px; }
   #row input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: inherit; font: inherit; padding: 8px 12px; }
   #row .nc-btn { padding: 8px 12px; font-size: 13px; }
-  #mic.live { background: rgba(255,154,132,.28); border-color: rgba(255,154,132,.8); }
+  #mic.live { background: rgba(227,169,157,.28); border-color: rgba(227,169,157,.8); }
 </style>
 </head>
 <body class="nc-soft">

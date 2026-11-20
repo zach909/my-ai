@@ -24,7 +24,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
   h3 { font-size:15px; margin:18px 0 6px; }
   section { padding:24px 26px; }
   p { margin:6px 0 12px; font-size:14px; line-height:1.5; }
-  a { color:#ffc4b4; }
+  a { color:#efd0c8; }
   .links { margin:0 8px; font-size:14px; }
   .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:10px 0; }
   .row > .grow { flex:1 1 140px; min-width:0; }
@@ -32,19 +32,19 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
           background:rgba(255,240,232,.06); border:1px solid rgba(255,228,218,.14); border-radius:24px; font-size:14px; }
   .item > div:first-child { min-width:0; overflow-wrap:anywhere; }
   .item small { display:block; color:rgba(248,237,233,.62); }
-  .item.you { border-color:rgba(255,154,132,.5); background:rgba(255,154,132,.1); }
+  .item.you { border-color:rgba(227,169,157,.5); background:rgba(227,169,157,.1); }
   .item.gone { opacity:.55; }
   .btns { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
-  .rank { display:inline-block; min-width:28px; color:#ffc4b4; font-weight:600; }
+  .rank { display:inline-block; min-width:28px; color:#efd0c8; font-weight:600; }
   .chip { display:inline-block; padding:2px 10px; margin-left:6px; border-radius:999px; font-size:12px;
           border:1px solid rgba(255,228,218,.2); background:rgba(255,238,230,.07); color:rgba(248,237,233,.62); }
   .chip.done { color:#8fe3a8; border-color:rgba(143,227,168,.4); }
-  .chip.hot { color:#ffc4b4; border-color:rgba(255,154,132,.5); }
+  .chip.hot { color:#efd0c8; border-color:rgba(227,169,157,.5); }
   .on { color:#8fe3a8; } .err { color:#ff9aa8; }
   .bar { height:10px; border-radius:999px; background:rgba(255,238,230,.08); overflow:hidden; margin:8px 0 4px; }
-  .bar > i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#e8705a,#ff9a84); transition:width .6s cubic-bezier(.34,1.56,.64,1); }
+  .bar > i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#c98476,#e3a99d); transition:width .6s cubic-bezier(.34,1.56,.64,1); }
   label.chk { display:inline-flex; gap:6px; align-items:center; font-size:14px; margin-right:12px; }
-  input[type=checkbox] { accent-color:#ff9a84; }
+  input[type=checkbox] { accent-color:#e3a99d; }
   #msg { min-height:20px; margin:0 8px; font-size:14px; }
   textarea.nc-input { border-radius:24px; width:100%; box-sizing:border-box; min-height:70px; resize:vertical; }
   details { margin-top:6px; font-size:13px; } summary { cursor:pointer; color:rgba(248,237,233,.62); }
@@ -52,22 +52,22 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
   .rate { display:grid; grid-template-columns:1fr auto; gap:8px 14px; align-items:center; }
   .rate input { width:100px; }
   .meter { position:relative; height:14px; border-radius:999px; margin:18px 4px 6px;
-           background:linear-gradient(90deg,#ff9aa8 0%,#e8705a 22%,#ffc4b4 50%,#f8ede9 68%,#8fe3a8 100%); }
+           background:linear-gradient(90deg,#ff9aa8 0%,#c98476 22%,#efd0c8 50%,#f8ede9 68%,#8fe3a8 100%); }
   .meter > i { position:absolute; top:-5px; width:6px; height:24px; margin-left:-3px; border-radius:999px; background:#110c0e;
                border:2px solid #f8ede9; transition:left .8s cubic-bezier(.34,1.56,.64,1); }
   .scale { display:flex; justify-content:space-between; font-size:12px; color:rgba(248,237,233,.62); margin:0 4px; }
-  .scale b { color:#ffc4b4; font-weight:600; }
+  .scale b { color:#efd0c8; font-weight:600; }
   .cap { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:6px 10px; }
   .cap > div { font-size:13px; padding:6px 12px; border-radius:20px; border:1px solid rgba(255,228,218,.14); background:rgba(255,240,232,.05); }
   .cap > div small { display:block; color:rgba(248,237,233,.5); }
-  .cap .free { border-color:rgba(143,227,168,.4); } .cap .agent { border-color:rgba(255,196,180,.5); }
-  .cap .asks { border-color:rgba(255,154,132,.5); } .cap .blocked, .cap .gone { opacity:.5; }
+  .cap .free { border-color:rgba(143,227,168,.4); } .cap .agent { border-color:rgba(239,208,200,.5); }
+  .cap .asks { border-color:rgba(227,169,157,.5); } .cap .blocked, .cap .gone { opacity:.5; }
   [hidden] { display:none !important; }
 </style>
 </head>
 <body class="nc-soft">
 <main>
-  <div id="escape-banner" class="nc-glass" hidden style="border-color:#ff6a5c;background:rgba(255,106,92,.14);margin-bottom:16px">
+  <div id="escape-banner" class="nc-glass" hidden style="border-color:#ff6a5c;background:rgba(214,150,138,.14);margin-bottom:16px">
     <h2 style="color:#ffb4a8">⚠ Sandbox escape detected</h2>
     <p id="escape-reason"></p>
     <div class="row"><button class="nc-btn primary" id="escape-ack">I've seen this</button></div>

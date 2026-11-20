@@ -103,15 +103,15 @@ export function promptButtonSkillsFor(body: { buttons?: unknown } | null | undef
 
 /** Styles for the buttons. Same tokens as the rest of the page (see AGENTS.md, VISUAL STYLE): clear glass, coral on hover, fully round. */
 export const PROMPT_BUTTON_CSS = `
-  .nc-ask { font: inherit; font-size: 0.92em; color: var(--primary-light, #ffc4b4); background: rgba(255, 154, 132, 0.16);
-    border: 1px solid rgba(255, 154, 132, 0.5); border-radius: 999px; padding: 4px 14px; margin: 2px 3px; cursor: pointer;
+  .nc-ask { font: inherit; font-size: 0.92em; color: var(--primary-light, #efd0c8); background: rgba(227,169,157, 0.16);
+    border: 1px solid rgba(227,169,157, 0.5); border-radius: 999px; padding: 4px 14px; margin: 2px 3px; cursor: pointer;
     vertical-align: baseline; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, opacity 0.2s; }
-  .nc-ask:hover { background: rgba(255, 154, 132, 0.28); transform: translateY(-2px) scale(1.03); }
+  .nc-ask:hover { background: rgba(227,169,157, 0.28); transform: translateY(-2px) scale(1.03); }
   .nc-ask:active { transform: scale(0.95); }
-  .nc-ask:focus-visible { outline: 2px solid rgba(255, 196, 180, 0.8); outline-offset: 2px; }
+  .nc-ask:focus-visible { outline: 2px solid rgba(239,208,200, 0.8); outline-offset: 2px; }
   [aria-busy="true"] .nc-ask { opacity: 0.55; pointer-events: none; }
   .nc-ask.nc-put { background: rgba(255, 238, 230, 0.07); border-color: var(--border, rgba(255, 228, 218, 0.2)); color: inherit; }
-  .nc-ask.nc-put:hover { background: rgba(255, 154, 132, 0.28); }
+  .nc-ask.nc-put:hover { background: rgba(227,169,157, 0.28); }
   .nc-ask .nc-where { opacity: 0.62; font-size: 0.85em; }
   @media (prefers-reduced-motion: reduce) { .nc-ask { transition: none; } }
 `;
@@ -247,7 +247,7 @@ export function askPage(button: { id: string; label: string; prompt: string }, a
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(button.label)}</title>
 <style>
-  :root { --primary: #ff9a84; --primary-light: #ffc4b4; --bg-dark: #110c0e; --border: rgba(255, 228, 218, 0.2); --text: #f8ede9; }
+  :root { --primary: #e3a99d; --primary-light: #efd0c8; --bg-dark: #110c0e; --border: rgba(255, 228, 218, 0.2); --text: #f8ede9; }
   * { box-sizing: border-box; }
   body { margin: 0; min-height: 100vh; background: var(--bg-dark); color: var(--text);
     font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif; }

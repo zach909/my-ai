@@ -29,6 +29,7 @@ import { loadRegistry } from "./prompting-skill-store.js";
 import { readRecentConversationTurns } from "../../src/lib/conversation-log.js";
 import { attachmentMetadata, resolveAttachment, type ChatAttachment } from "./chat-attachments.js";
 import { reviewZip, type ZipJudge } from "./zip-review.js";
+import { MemoryFolders } from "./memory-folders.js";
 
 /**
  * Strips every `[[ATTACH:<id>]]` marker (see chat-attachments.ts and
@@ -177,6 +178,16 @@ export function buildAgentCapabilities(host: AgentHost, attachmentsOut: ChatAtta
   if (host.mistakes) {
     caps.lessons = (task: string) => host.mistakes!.lessons(task, PERCEPTION_LIMIT);
   }
+
+  // The folder-tree memory. Read straight from disk like the wiki, so it needs no host wiring.
+  caps.searchTopics = (query: string) => {
+    try {
+      return new MemoryFolders().digest(query, PERCEPTION_LIMIT);
+    } catch {
+      // Not logged in, or the folder cannot be read this run: it found nothing.
+      return [];
+    }
+  };
 
   caps.searchWiki = (query: string) => {
     try {
@@ -367,9 +378,11 @@ const CHAT_MAX_ITERATIONS = 4;
  *
  * `memory`, `wiki` and `store` are deliberately absent: the existing
  * recall/solve path already reads those, so engaging the loop for them would
- * duplicate work and change answers that were already fine.
+ * duplicate work and change answers that were already fine. `topics` is not
+ * absent: nothing else reads the folder-tree memory, so a skill that asks for
+ * it is the only way it gets read.
  */
-const REACHES_BEYOND: ReadonlySet<string> = new Set(["web", "chats"]);
+const REACHES_BEYOND: ReadonlySet<string> = new Set(["web", "chats", "topics"]);
 
 export async function runAgentLoopForMessage(
   userMessage: string,

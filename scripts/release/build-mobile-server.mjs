@@ -22,7 +22,7 @@ const shim = (name) => path.join(SHIMS, `${name}.ts`);
 const MODULES = {
   fs: 'fs', 'fs/promises': 'fs-promises', path: 'path', os: 'os', crypto: 'crypto', url: 'url', util: 'util', vm: 'vm', http: 'http', https: 'https',
   events: 'events', zlib: 'zlib', child_process: 'child-process', net: 'net', readline: 'readline', async_hooks: 'async-hooks',
-  'dns/promises': 'dns-promises', buffer: 'buffer',
+  'dns/promises': 'dns-promises', buffer: 'buffer', stream: 'stream',
 };
 const aliases = {};
 for (const [name, file] of Object.entries(MODULES)) { aliases[name] = shim(file); aliases[`node:${name}`] = shim(file); }

@@ -28,6 +28,8 @@ beforeAll(async () => {
       parseBody: (r, m) => body(r, m),
       sendJson: (r, data, status = 200) => { r.writeHead(status, { 'Content-Type': 'application/json' }); r.end(JSON.stringify(data)) },
       chat: async m => `echo:${m}`,
+      // Guests get this one. It differs from chat so a guest reaching the owner's chat (plugins and all) fails the test.
+      text: async m => `text:${m}`,
       status: () => ({ running: true }),
     })
     if (!handled) { res.writeHead(404); res.end() }
@@ -88,7 +90,7 @@ describe('/api/corona/v1', () => {
     const token = g.json.token as string
     const run = await call('POST', '/api/corona/v1/compute/run', { token, json: { job: 'chat', prompt: 'hello' } })
     expect(run.status).toBe(200)
-    expect(run.json.result).toBe('echo:hello')
+    expect(run.json.result).toBe('text:hello') // the text-only path, never the owner's chat
     expect((await call('GET', '/api/corona/v1/compute/lease', { token })).json.usedCu).toBeGreaterThanOrEqual(0)
     expect((await call('POST', '/api/corona/v1/chat', { token, json: { message: 'hi' } })).status).toBe(401)
     expect((await call('POST', '/api/corona/v1/compute/run', { token, json: { job: 'shell', prompt: 'rm -rf /' } })).status).toBe(400)

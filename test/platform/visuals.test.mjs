@@ -62,7 +62,7 @@ let server, base, browser;
 
 before(async () => {
   if (skip) return;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--border:rgba(255,228,218,.2);--text:#f8ede9;--primary-light:#ffc4b4}
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>:root{--border:rgba(255,228,218,.2);--text:#f8ede9;--primary-light:#efd0c8}
 body{background:#110c0e;color:#f8ede9;margin:0}${V.VISUAL_CSS}</style></head><body>
 <div id="chat"></div><div id="input-area"><input id="input"><button id="send">Send</button></div>
 <script>${V.VISUAL_CLIENT_JS}</script>

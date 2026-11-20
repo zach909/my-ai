@@ -54,6 +54,8 @@ import { USER_PLUGINS } from "./accounts.js";
 import { isAutonomous, isOwnerOrAdmin } from "./user-context.js";
 import { beforeTool, bandOf, levelNow, recordEvent } from "./danger-protocol.js";
 import { loadAgent } from "./agent-profile.js";
+import { runSandboxed } from "./sandbox-scope.js";
+import { currentPurpose, type Reply as SecurityReply, type SecurityChannel, type Verdict as SecurityVerdict } from "./security-model.js";
 
 export interface RiskyTool {
   /** The plugin id the registry uses. */
@@ -74,6 +76,7 @@ export const RISKY_TOOLS: readonly RiskyTool[] = [
   { id: "multi-input", label: "Mouse and keyboard", why: "Drives your mouse and keyboard.", level: "high" },
   { id: "computer-access", label: "Computer access", why: "Changes what the agent is allowed to reach.", level: "high" },
   { id: "file-system", label: "File system", why: "Reads, writes and deletes your files.", level: "high" },
+  { id: "os-commands", label: "OS commands", why: "Starts, stops and ends services and processes on your computer.", level: "high" },
   { id: "linux-permission-tools", label: "Linux permissions", why: "Changes system permissions, services and security policy.", level: "high" },
   { id: "email", label: "Email", why: "Sends email in your name.", level: "high" },
   { id: "messaging", label: "Messaging", why: "Sends messages in your name.", level: "high" },
@@ -204,6 +207,9 @@ export interface Approval {
   reason: string | null;
   /** Whether the agent asked for this on its own, not because a person did. */
   autonomous: boolean;
+  /** The security model's answer to this ask (security-model.ts), and the id its history and learning use. Null while there is none. */
+  securityId: string | null;
+  security: { verdict: SecurityVerdict; reasons: string[]; warm: boolean; pBad: number | null; anomaly: number | null } | null;
 }
 
 export class SafetyError extends Error {
@@ -265,10 +271,20 @@ function judgePrompt(a: Approval, tool: RiskyTool | undefined, band: string): st
 export class ToolGate implements ToolGateLike {
   private approvals: Approval[] = [];
   private judge: Judge | null = null;
+  private security: SecurityChannel | null = null;
 
   /** Give the gate a judge agent (the server does, once the model is ready). */
   useJudge(judge: Judge | null): void {
     this.judge = judge;
+  }
+
+  /**
+   * Give the gate the security model (security-model.ts). Every held call is put to it. With the AI monitor on it
+   * decides first: it can always tighten (deny, shutdown) and loosens (allow, sandbox) only for calls that look like
+   * ones a person approved. With the monitor off its answer is shown beside the approval and a person decides.
+   */
+  useSecurity(security: SecurityChannel | null): void {
+    this.security = security;
   }
 
   constructor(
@@ -294,6 +310,16 @@ export class ToolGate implements ToolGateLike {
    * tool (low score) is not held: it would not have been this tool's to do.
    */
   check(pluginId: string, input: string, score: number, acts?: boolean): GateDecision {
+    const held = this.checkCore(pluginId, input, score, acts);
+    // Without the async path nobody else will ask, so the advice is still put with the approval.
+    if (held.allow === false && held.approvalId) {
+      const a = this.get(held.approvalId);
+      if (a && a.security === null) this.askSecurity(a, false);
+    }
+    return held;
+  }
+
+  private checkCore(pluginId: string, input: string, score: number, acts?: boolean): GateDecision {
     // The plugin knows whether it will act; the router's score is only a ranking.
     // A plugin that says it will act is held however weakly the router scored it,
     // and one that says it will not is not held however strongly it scored.
@@ -321,6 +347,7 @@ export class ToolGate implements ToolGateLike {
       a = {
         id: randomBytes(5).toString("hex"), toolId: id, label: RISK_BY_ID.get(id)?.label ?? id, request, requestedAt: this.now(),
         status: "pending", decidedAt: null, result: null, decidedBy: null, reason: null, autonomous: isAutonomous(),
+        securityId: null, security: null,
       };
       this.approvals.push(a);
     }
@@ -339,14 +366,48 @@ export class ToolGate implements ToolGateLike {
    * is slow, or fails, the call stays held for you.
    */
   async checkAsync(pluginId: string, input: string, score: number, acts?: boolean): Promise<GateDecision> {
-    const held = this.check(pluginId, input, score, acts);
+    const held = this.checkCore(pluginId, input, score, acts);
     const approvalId = held.allow === false ? (held as { approvalId: string }).approvalId : "";
     if (held.allow === true || !approvalId) return held;
     const a = this.get(approvalId);
     const judge = this.judge;
     const s = this.settings();
-    if (!a || a.status !== "pending" || !judge || !s.judge.enabled) return held;
+    if (!a || a.status !== "pending") return held;
+    const auto = !!judge && s.judge.enabled;
     const tool = RISK_BY_ID.get(a.toolId);
+
+    // The security model speaks first. With the AI monitor on, what it says is carried out (a shutdown included);
+    // with it off, what it says is only put beside the approval for a person to read.
+    let fresh: SecurityReply | null = null;
+    if (this.security && a.security === null) fresh = this.askSecurity(a, auto);
+    if (fresh?.enforced) {
+      a.status = "expired";
+      a.decidedAt = this.now();
+      a.decidedBy = "agent";
+      a.reason = fresh.reasons[0] ?? null;
+      return { allow: false, approvalId: "", message: `${fresh.message} Everything the agent asked for is cancelled.` };
+    }
+    if (!judge || !s.judge.enabled) return held;
+    const sec = a.security;
+    if (sec && sec.verdict !== "unsure") {
+      const why = sec.reasons[0] ?? "";
+      if (sec.verdict === "deny" || sec.verdict === "shutdown") {
+        await this.decide(a.id, false, judge.run, "agent", why);
+        return { allow: false, approvalId: a.id, message: `[The security model refused ${a.label}] ${why}` };
+      }
+      if (sec.verdict === "sandbox") {
+        // Contained: the call runs, but only inside the sandbox folder, so it is not held back by the high-risk rule.
+        const done = await this.decide(a.id, true, (t, r) => runSandboxed(() => judge.run(t, r)), "agent", why);
+        return { allow: false, approvalId: a.id, message: `[The security model ran ${a.label} in the sandbox] ${done.result ?? ""}`.trim() };
+      }
+      // allow: no more than the owner's own consent to automate high-risk tools lets it do.
+      if (!(tool?.level === "high" && !s.judge.high)) {
+        const done = await this.decide(a.id, true, judge.run, "agent", why);
+        return { allow: false, approvalId: a.id, message: `[The security model decided to run ${a.label}] ${done.result ?? ""}`.trim() };
+      }
+      return held;
+    }
+    // unsure (or no security model): the text judge, as before.
     if (tool?.level === "high" && !s.judge.high) return held;
     let verdict: { run: boolean; reason: string } | null = null;
     try {
@@ -367,6 +428,26 @@ export class ToolGate implements ToolGateLike {
         ? `[The judge agent decided to run ${a.label}] ${done.result ?? ""}`.trim()
         : `[The judge agent decided not to run ${a.label}] ${verdict.reason}`,
     };
+  }
+
+  /** Put one held call to the security model and keep its answer with the approval. Never throws. */
+  private askSecurity(a: Approval, enforce: boolean): SecurityReply | null {
+    if (!this.security) return null;
+    try {
+      const tool = RISK_BY_ID.get(a.toolId);
+      const reply = this.security.consult(
+        {
+          tool: a.toolId, request: a.request, purpose: currentPurpose(), autonomous: a.autonomous,
+          toolIndex: RISKY_TOOLS.findIndex(t => t.id === a.toolId), level: tool?.level ?? "none",
+        },
+        { enforce, now: this.now() },
+      );
+      a.securityId = reply.id;
+      a.security = { verdict: reply.verdict, reasons: reply.reasons, warm: reply.warm, pBad: reply.pBad, anomaly: reply.anomaly };
+      return reply;
+    } catch {
+      return null;
+    }
   }
 
   /** Throw away everything waiting. Used when the agent is removed: nothing it asked for should run later. */
@@ -400,6 +481,11 @@ export class ToolGate implements ToolGateLike {
     a.decidedAt = this.now();
     a.decidedBy = by;
     a.reason = reason;
+    // A person's yes or no is what the security model learns from. Its own verdicts, and the text judge's, are not
+    // evidence of anything: learning from them would be learning from itself.
+    if (by === "you" && a.securityId && this.security) {
+      try { this.security.outcome(a.securityId, approve ? "ok" : "unwanted", "person"); } catch { /* learning never blocks a decision */ }
+    }
     if (!approve) {
       a.status = "denied";
       // Something the agent asked for on its own, turned down: that counts against it.

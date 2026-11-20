@@ -30,12 +30,12 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   h2 { font-size: 18px; margin: 0 0 4px; }
   h3 { font-size: 15px; margin: 18px 0 6px; }
   p { margin: 6px 0 12px; font-size: 14px; line-height: 1.5; }
-  a { color: #ffc4b4; }
+  a { color: #efd0c8; }
   .back { text-decoration: none; display: inline-flex; align-items: center; }
   nav[role=tablist] { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   nav[role=tablist]::-webkit-scrollbar { display: none; }
   nav[role=tablist] .nc-btn { flex: 0 0 auto; white-space: nowrap; min-height: 44px; }
-  nav[role=tablist] .nc-btn[aria-selected=true] { color: #ffc4b4; background: rgba(255,154,132,.16); border-color: rgba(255,154,132,.5); }
+  nav[role=tablist] .nc-btn[aria-selected=true] { color: #efd0c8; background: rgba(227,169,157,.16); border-color: rgba(227,169,157,.5); }
   section.nc-glass { padding: 22px; min-width: 0; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(255,228,218,.12); flex-wrap: wrap; }
   .row:first-of-type { border-top: 0; }
@@ -45,17 +45,17 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   .stack { display: grid; gap: 10px; max-width: 420px; }
   .stack label { font-size: 13px; color: rgba(248,237,233,.62); display: grid; gap: 6px; }
   .nc-input { width: 100%; min-width: 0; }
-  select.nc-input { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, #ffc4b4 50%), linear-gradient(135deg, #ffc4b4 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; background-color: rgba(20,12,14,.4); }
+  select.nc-input { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, #efd0c8 50%), linear-gradient(135deg, #efd0c8 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 15px) 50%; background-size: 5px 5px; background-repeat: no-repeat; background-color: rgba(20,12,14,.4); }
   select.nc-input option { background: #1b1216; color: #f8ede9; }
   input[type=checkbox][role=switch] { appearance: none; -webkit-appearance: none; flex: 0 0 auto; width: 52px; height: 32px; border-radius: 999px; background: rgba(255,238,230,.1); border: 1px solid rgba(255,228,218,.28); position: relative; cursor: pointer; transition: background .25s, border-color .25s; margin: 0; }
   input[type=checkbox][role=switch]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #f8ede9; transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
-  input[type=checkbox][role=switch]:checked { background: rgba(255,154,132,.3); border-color: rgba(255,154,132,.7); }
-  input[type=checkbox][role=switch]:checked::after { transform: translateX(20px); background: #ffc4b4; }
+  input[type=checkbox][role=switch]:checked { background: rgba(227,169,157,.3); border-color: rgba(227,169,157,.7); }
+  input[type=checkbox][role=switch]:checked::after { transform: translateX(20px); background: #efd0c8; }
   input[type=checkbox][role=switch]:disabled { opacity: .5; cursor: default; }
-  :focus-visible { outline: 2px solid #ff9a84; outline-offset: 2px; }
+  :focus-visible { outline: 2px solid #e3a99d; outline-offset: 2px; }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(255,228,218,.2); background: rgba(255,238,230,.07); color: rgba(248,237,233,.62); }
   .badge.ok { color: var(--ok); border-color: rgba(143,227,168,.45); }
-  .badge.warn { color: #ffc4b4; border-color: rgba(255,154,132,.5); }
+  .badge.warn { color: #efd0c8; border-color: rgba(227,169,157,.5); }
   .badge.bad { color: var(--err); border-color: rgba(255,154,168,.5); }
   .banner { padding: 12px 16px; border-radius: 24px; font-size: 14px; border: 1px solid rgba(255,154,168,.5); background: rgba(255,154,168,.1); color: var(--err); overflow-wrap: anywhere; }
   .banner.ok { border-color: rgba(143,227,168,.45); background: rgba(143,227,168,.08); color: var(--ok); }
@@ -63,7 +63,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   #status.err { color: var(--err); } #status.ok { color: var(--ok); }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   .grid a { display: block; padding: 14px 18px; border-radius: 24px; background: rgba(255,240,232,.06); border: 1px solid rgba(255,228,218,.14); text-decoration: none; color: inherit; min-height: 44px; }
-  .grid a b { display: block; color: #ffc4b4; }
+  .grid a b { display: block; color: #efd0c8; }
   .grid a span { font-size: 13px; color: rgba(248,237,233,.62); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
@@ -89,7 +89,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
   'use strict';
   var LEVELS = ['observe', 'interact', 'modify', 'execute', 'system', 'privileged'];
   var SECTIONS = [
-    ['general', 'General'], ['updates', 'Updates'], ['remote', 'Remote access'], ['access', 'Computer access'], ['aios', 'AI OS'],
+    ['general', 'General'], ['updates', 'Updates'], ['remote', 'Remote access'], ['sources', 'Sources'], ['access', 'Computer access'], ['aios', 'AI OS'],
     ['safety', 'Safety'], ['data', 'Data'], ['modules', 'More'], ['about', 'About']
   ];
   var tabs = document.getElementById('tabs'), panel = document.getElementById('panel');
@@ -184,6 +184,35 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
       setting('Remember the chat on this device', 'Keeps the conversation on the home page in this browser. Off clears it when the page reloads.', toggle('keepLocalHistory', st.chat.keepLocalHistory, function (v) {
         return save({ chat: { keepLocalHistory: v } }).then(function () { try { localStorage.setItem('nc_keep_hist', v ? '1' : '0'); if (!v) localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } });
       }, 'Remember the chat on this device'), 'keepLocalHistory')
+    );
+  }
+
+  /* ---------- Sources ---------- */
+  async function sources() {
+    var s = await api('/api/app-settings');
+    var st = s.settings;
+    showPersistence(s.persistence);
+    async function save(patch) {
+      var r = await api('/api/app-settings', { method: 'POST', body: patch });
+      st = r.settings; showPersistence(r.persistence); say('Saved.', 'ok');
+      return r;
+    }
+    var focus = toggle('sourcesFocus', st.sources.focus, function (v) { return save({ sources: { focus: v } }); }, 'Open sources at the passage');
+    function sync() { focus.disabled = !st.sources.show; }
+    var show = toggle('sourcesShow', st.sources.show, function (v) { return save({ sources: { show: v } }).then(sync); }, 'Show sources');
+    sync();
+    panel.replaceChildren(
+      h('h2', { text: 'Sources' }),
+      h('p', { class: 'nc-dim', text: 'When the AI states something, it can link the page or picture it came from.' }),
+      setting('Show sources', 'The AI adds a small link under a claim, naming where it came from. Off: no links, and it is not asked for them.', show, 'sourcesShow'),
+      setting('Open sources at the passage', 'The link opens on the exact sentence that backs the claim, highlighted and scrolled into view, like Ctrl+F in a browser. For a picture it shows only the part that matters and drops the rest, with a button to see the whole picture. Off: the link opens the page as it is.', focus, 'sourcesFocus'),
+      h('h3', { text: 'What to know' }),
+      h('ul', { style: 'margin:6px 0 0;padding-left:20px;display:grid;gap:8px;font-size:14px;line-height:1.5' }, [
+        'A highlighted source is shown as the page\u2019s plain words, without its own layout, pictures or scripts, so nothing from that site runs here.',
+        'The server fetches the page for you, and refuses addresses on your own network.',
+        'If the passage cannot be found on the page, it says so and highlights nothing. It never guesses.',
+        'Web pages and pictures only for now. Local files are not offered yet, because opening one would need your computer-access permission.'
+      ].map(function (b) { return h('li', { text: b }); }))
     );
   }
 
@@ -334,7 +363,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
     del.addEventListener('click', async function () {
       if (confirmBox.value !== 'delete everything') return say('Type "delete everything" exactly to confirm.', 'err');
       del.disabled = true;
-      try { var r = await api('/api/memory/all', { method: 'DELETE', body: { confirm: 'delete everything' } }); try { localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } confirmBox.value = ''; say('Forgot ' + r.memories + ' memories, ' + r.threads + ' chats and ' + r.rooms + ' rooms.', 'ok'); }
+      try { var r = await api('/api/memory/all', { method: 'DELETE', body: { confirm: 'delete everything' } }); try { localStorage.removeItem('nc_hist'); } catch (e) { /* storage blocked */ } confirmBox.value = ''; say('Forgot ' + r.memories + ' memories, ' + (r.topicNotes || 0) + ' topic notes, ' + r.threads + ' chats and ' + r.rooms + ' rooms.', 'ok'); }
       catch (e) { say(e.message, 'err'); } finally { del.disabled = false; }
     });
     panel.replaceChildren(
@@ -417,7 +446,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
     );
   }
 
-  var RENDER = { general: general, updates: updates, remote: remote, access: access, aios: aios, safety: safety, data: data, modules: modules, about: about };
+  var RENDER = { general: general, sources: sources, updates: updates, remote: remote, access: access, aios: aios, safety: safety, data: data, modules: modules, about: about };
 
   function select(id, focus) {
     if (!RENDER[id]) id = 'general';

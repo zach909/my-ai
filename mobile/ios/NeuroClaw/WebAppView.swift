@@ -48,7 +48,7 @@ struct WebAppView: UIViewRepresentable {
             let html = "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;padding:24px;background:#110c0e;color:#f8ede9;font-family:-apple-system,sans-serif'>"
                 + "<h2>Can't reach NeuroClaw</h2><p>\(base) did not answer (\(reason)).</p>"
                 + "<p>Check that NeuroClaw is running on your PC, that this phone is on the same network, and that the address in Settings is right. It looks like http://192.168.1.20:7861.</p>"
-                + "<p><a style='color:#ffc4b4' href='\(base)/'>Try again</a></p></body>"
+                + "<p><a style='color:#efd0c8' href='\(base)/'>Try again</a></p></body>"
             web.loadHTMLString(html, baseURL: nil)
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,

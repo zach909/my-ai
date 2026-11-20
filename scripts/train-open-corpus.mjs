@@ -13,8 +13,15 @@ const BUILD = process.argv[3] ?? path.join('dist', 'models && skills')
 const CORPUS = process.argv[4] ?? path.join('training_data', 'open_corpus')
 const TRAIN_CHARS = Number(process.argv[2] ?? 300000)
 const { NeuroclawTrainer } = await import(path.join(BUILD, 'trainer.js'))
+// Company, brand and product names (and web addresses) are blanked to generic words before anything is trained on.
+const { scrubNames } = await import(path.join(BUILD, 'core', 'name-scrubber.js'))
 
-const read = (d) => readdirSync(path.join(CORPUS, d)).sort().map((f) => ({ f, t: readFileSync(path.join(CORPUS, d, f), 'utf8').replace(/\s+/g, ' ') }))
+const blanked = new Map()
+const read = (d) => readdirSync(path.join(CORPUS, d)).sort().map((f) => {
+  const r = scrubNames(readFileSync(path.join(CORPUS, d, f), 'utf8').replace(/\s+/g, ' '))
+  for (const h of r.hits) blanked.set(h.original, (blanked.get(h.original) ?? 0) + h.count)
+  return { f, t: r.text }
+})
 const books = read('gutenberg'), wiki = read('wikipedia')
 
 // Training text: an equal slice from every document (middle of each book), wiki in full for 6 of 15.
@@ -53,4 +60,4 @@ const t0 = Date.now()
 await model.train(train)
 const secs = ((Date.now() - t0) / 1000).toFixed(1)
 const after = { same: score(model, heldSame), other: score(model, heldNew) }
-console.log(JSON.stringify({ trainChars: train.length, vocab: V, trainSecs: +secs, loss: model.getTrainingLoss(), samples: model.getSamplesProcessed(), before, after, randomTop1: +(1 / chars.length).toFixed(4) }, null, 1))
+console.log(JSON.stringify({ blankedNames: Object.fromEntries(blanked), trainChars: train.length, vocab: V, trainSecs: +secs, loss: model.getTrainingLoss(), samples: model.getSamplesProcessed(), before, after, randomTop1: +(1 / chars.length).toFixed(4) }, null, 1))

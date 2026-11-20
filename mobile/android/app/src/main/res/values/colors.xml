@@ -7,8 +7,8 @@
     <color name="nc_dim">#9ef8ede9</color>
     <color name="nc_faint">#66f8ede9</color>
     <color name="nc_line">#33ffe4da</color>
-    <color name="nc_accent">#ff9a84</color>
-    <color name="nc_accent_soft">#ffc4b4</color>
-    <color name="nc_accent_deep">#e8705a</color>
-    <color name="nc_highlight">#29ff9a84</color>
+    <color name="nc_accent">#e3a99d</color>
+    <color name="nc_accent_soft">#efd0c8</color>
+    <color name="nc_accent_deep">#c98476</color>
+    <color name="nc_highlight">#29e3a99d</color>
 </resources>

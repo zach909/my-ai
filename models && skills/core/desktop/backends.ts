@@ -15,8 +15,12 @@
  *             operating system only lets an app act through its own first-party
  *             APIs, so the NeuroClaw app on the phone exposes a small HTTP
  *             bridge (mobile/android, mobile/ios) and this talks to it.
- *   unsupported / none   Windows and macOS are out of scope by decision, and a
- *             machine with no session has nothing to control. Both say so.
+ *   windows   Native: PowerShell and the .NET and Win32 calls Windows itself
+ *   macos     ships (native.ts); macOS uses osascript (System Events and the
+ *             CoreGraphics calls it can reach) and screencapture. Only windows
+ *             of programs the agent started are driven, as everywhere else.
+ *   unsupported / none   A system with no backend, and a machine with no
+ *             session, have nothing to control. Both say so.
  *
  * Every backend reports what it can really do, so callers (and the probe)
  * never have to guess from the platform name.
@@ -27,7 +31,10 @@ import { fileURLToPath } from "node:url";
 import { X11, X11Error, X11Unreachable } from "./x11.js";
 import { DBusConnection, DBusError, Variant, portalRequest, variantText } from "./dbus.js";
 
-export class DesktopError extends Error {}
+import { DesktopError, Unsupported } from "./errors.js";
+import { MacBackend, WindowsBackend } from "./native.js";
+
+export { DesktopError, Unsupported };
 
 /** No graphical session at all -- nothing to install will fix this. */
 export class NoDisplay extends DesktopError {
@@ -39,10 +46,8 @@ export class NoDisplay extends DesktopError {
 /** A session is configured but could not be reached or authenticated with. */
 export class DisplayUnreachable extends DesktopError {}
 
-/** This platform cannot do this, and says why. Different from a failure: retrying will not help. */
-export class Unsupported extends DesktopError {}
 
-export type BackendKind = "x11" | "wayland" | "phone" | "unsupported" | "none";
+export type BackendKind = "x11" | "wayland" | "windows" | "macos" | "phone" | "unsupported" | "none";
 
 export interface Region {
   x: number;
@@ -443,20 +448,20 @@ export class PhoneBackend implements DesktopBackend {
 
 // ── no desktop here ───────────────────────────────────────────────────────
 
-/** Windows and macOS: out of scope by decision. Says so rather than half-working. */
+/** A system none of the backends fits (not Linux, Windows, macOS or a phone). Says so rather than half-working. */
 export class UnsupportedBackend implements DesktopBackend {
   readonly kind: BackendKind = "unsupported";
   constructor(private readonly platform: string) {}
 
   private refuse(): never {
     throw new Unsupported(
-      `Desktop control is not offered on ${this.platform === "win32" ? "Windows" : this.platform === "darwin" ? "macOS" : this.platform}. It runs on Linux (X11 and Wayland), Android and iOS.`,
+      `Desktop control is not offered on ${this.platform}. It runs on Linux (X11 and Wayland), Windows, macOS, Android and iOS.`,
     );
   }
   async describe(): Promise<BackendReport> {
     return {
       reachable: false,
-      notes: [`Desktop control is not offered on ${this.platform}. It runs on Linux (X11 and Wayland), Android and iOS.`],
+      notes: [`Desktop control is not offered on ${this.platform}. It runs on Linux (X11 and Wayland), Windows, macOS, Android and iOS.`],
       platform: this.platform,
       features: noFeatures(),
     };
@@ -497,7 +502,9 @@ export function selectBackend(env: NodeJS.ProcessEnv = process.env, platform: st
   // Node on Android (Termux-style) reports "android"; the app is on loopback.
   const bridge = env.NEUROCLAW_PHONE_BRIDGE_URL || (platform === "android" ? "http://127.0.0.1:7862" : "");
   if (bridge) return new PhoneBackend(bridge, env.NEUROCLAW_PHONE_BRIDGE_TOKEN ?? "");
-  if (platform === "win32" || platform === "darwin") return new UnsupportedBackend(platform);
+  if (platform === "win32") return new WindowsBackend();
+  if (platform === "darwin") return new MacBackend();
+  if (platform !== "linux") return new UnsupportedBackend(platform);
   if (env.WAYLAND_DISPLAY) return new WaylandBackend(env.DISPLAY);
   if (env.DISPLAY) return new X11Backend(env.DISPLAY);
   return new NoDisplayBackend();

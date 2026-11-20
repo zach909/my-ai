@@ -26,6 +26,7 @@ import { CodingExtension } from "./extensions/coding.js";
 import { ImageExtension, VideoExtension, GameExtension, SelfHealExtension, SkillMakerExtension, PluginMakerExtension, UniversalLanguageSkill } from "./extensions/index.js";
 import { ResearchPlugin } from "./research.js";
 import { WikiPlugin } from "./wiki.js";
+import { MemoryTopicsPlugin } from "./memory-topics.js";
 import { TerminalPlugin } from "./terminal.js";
 import { DesktopPlugin } from "./desktop.js";
 import { ToolsPlugin } from "./tools.js";
@@ -34,7 +35,9 @@ import { GithubPublishPlugin } from "./github-publish.js";
 import { ComputerAccessPlugin } from "./computer-access.js";
 import { HivePlugin } from "./hive.js";
 import { SchedulePlugin } from "./schedule.js";
+import { ScriptsPlugin } from "./scripts.js";
 import { LinuxPermissionToolsPlugin } from "./linux-permission-plugin.js";
+import { OsCommandsPlugin } from "./os-commands.js";
 import type { BasePlugin } from "../plugin_manager/sdk.js";
 
 export { LocationPlugin } from "./location.js";
@@ -63,6 +66,7 @@ export { CodingExtension } from "./extensions/coding.js";
 export { ImageExtension, VideoExtension, GameExtension, SelfHealExtension, SkillMakerExtension, PluginMakerExtension, UniversalLanguageSkill } from "./extensions/index.js";
 export { ResearchPlugin } from "./research.js";
 export { WikiPlugin } from "./wiki.js";
+export { MemoryTopicsPlugin } from "./memory-topics.js";
 export { TerminalPlugin } from "./terminal.js";
 export { DesktopPlugin } from "./desktop.js";
 export { ToolsPlugin } from "./tools.js";
@@ -71,7 +75,9 @@ export { GithubPublishPlugin } from "./github-publish.js";
 export { ComputerAccessPlugin } from "./computer-access.js";
 export { HivePlugin } from "./hive.js";
 export { SchedulePlugin } from "./schedule.js";
+export { ScriptsPlugin } from "./scripts.js";
 export { LinuxPermissionToolsPlugin } from "./linux-permission-plugin.js";
+export { OsCommandsPlugin } from "./os-commands.js";
 
 export function createPluginInstance(
   name: string,
@@ -117,6 +123,7 @@ export function createPluginInstance(
   if (lower.includes("language") || lower.includes("universal-language")) return new UniversalLanguageSkill(definition, sharedMesh);
   if (lower === "research") return new ResearchPlugin(definition);
   if (lower === "wiki") return new WikiPlugin(definition);
+  if (lower === "memory-topics" || lower === "memory topics") return new MemoryTopicsPlugin(definition);
   if (lower === "terminal") return new TerminalPlugin(definition);
   if (lower === "tools") return new ToolsPlugin(definition);
   if (lower === "store") return new StorePlugin(definition);
@@ -124,7 +131,9 @@ export function createPluginInstance(
   if (lower === "computer access" || lower === "computer-access") return new ComputerAccessPlugin(definition);
   if (lower === "hive") return new HivePlugin(definition);
   if (lower === "schedule") return new SchedulePlugin(definition);
+  if (lower === "scripts") return new ScriptsPlugin(definition);
   if (lower === "linux permission tools" || lower === "linux-permission-tools") return new LinuxPermissionToolsPlugin(definition);
+  if (lower === "os commands" || lower === "os-commands") return new OsCommandsPlugin(definition);
   throw new Error(`Unknown plugin: ${name}`);
 }
 
@@ -161,6 +170,8 @@ const pluginExtensions: Record<string, PluginDefinition> = {
   "universal-language-skill": { id: "universal-language-skill", name: "Universal Language Skill", type: "skill-expert", capabilities: ["language-support", "code-detection", "neuron-clusters"] },
   research: { id: "research", name: "Research", type: "api-connection", capabilities: ["memory-search", "drive-search", "web-search"] },
   wiki: { id: "wiki", name: "Wiki", type: "api-connection", capabilities: ["wiki"] },
+  // Memory as a tree of topic folders with notes in them, which the agent files into, updates and searches itself.
+  "memory-topics": { id: "memory-topics", name: "Memory Topics", type: "api-connection", capabilities: ["memory-topics", "memory-search"] },
   // Already referenced as a dispatch candidate in plugin_manager/registry.ts's
   // intentToPlugins `command` bucket (['self-heal', 'terminal', 'file-system'])
   // but never actually implemented/registered on the TS side -- 'terminal'
@@ -190,6 +201,11 @@ const pluginExtensions: Record<string, PluginDefinition> = {
   // (models && skills/core/scheduler.ts). It only records the schedule; the
   // action runs later by the normal path, so risky tools still ask first.
   schedule: { id: "schedule", name: "Schedule", type: "api-connection", capabilities: ["schedule", "timer"] },
+  // A short script that runs several tools in one go (models && skills/core/script-runner.ts). It runs in a
+  // locked-down child process and every tool call it makes goes through the same approval gate as chat.
+  scripts: { id: "scripts", name: "Scripts", type: "api-connection", capabilities: ["scripts", "script"] },
+  // The deepest AI OS layer, native on Linux, Windows and macOS (interface/platform/os-commands.ts).
+  "os-commands": { id: "os-commands", name: "OS Commands", type: "api-connection", capabilities: ["os-commands", "services", "processes", "system-info"] },
   "linux-permission-tools": { id: "linux-permission-tools", name: "Linux Permission Tools", type: "api-connection", capabilities: ["linux-permissions", "linux-file-read", "linux-file-write", "linux-chmod", "linux-acl-read", "linux-acl-write", "linux-service-control", "linux-selinux-context-read", "linux-apparmor-status-read", "lennox-admin-controls", "lennox-ordering", "lennox-inventory", "lennox-pricing-visibility", "lennox-warranty-returns"] },
 };
 

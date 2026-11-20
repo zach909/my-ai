@@ -21,7 +21,7 @@ export const ACCOUNTS_PAGE = `<!DOCTYPE html>
   h2 { font-size:17px; margin:0 0 4px; }
   section { padding:24px 26px; }
   p { margin:6px 0 12px; font-size:14px; line-height:1.5; }
-  a { color:#ffc4b4; }
+  a { color:#efd0c8; }
   .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:10px 0; }
   .row > .grow { flex:1 1 160px; min-width:0; }
   .item { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:10px 14px; margin:8px 0;
@@ -31,11 +31,11 @@ export const ACCOUNTS_PAGE = `<!DOCTYPE html>
   .item.gone { opacity:.55; }
   .btns { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
   .chip { display:inline-block; padding:2px 10px; margin-left:6px; border-radius:999px; font-size:12px; border:1px solid rgba(255,228,218,.2); background:rgba(255,238,230,.07); color:rgba(248,237,233,.62); }
-  .chip.hot { color:#ffc4b4; border-color:rgba(255,154,132,.5); }
+  .chip.hot { color:#efd0c8; border-color:rgba(227,169,157,.5); }
   .err { color:#ff9aa8; } .on { color:#8fe3a8; }
   #msg { min-height:20px; margin:0 8px; font-size:14px; }
   label.chk { display:inline-flex; gap:6px; align-items:center; font-size:14px; }
-  input[type=checkbox] { accent-color:#ff9a84; }
+  input[type=checkbox] { accent-color:#e3a99d; }
   [hidden] { display:none !important; }
 </style>
 </head>

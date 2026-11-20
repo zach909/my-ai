@@ -44,20 +44,60 @@ Turning AI OS mode on also gives you the nearest thing each system allows to "th
 
 If the GNOME shortcut list ever comes back in a format this does not expect, it is left completely alone and the step says so.
 
-## The four AI OS layers, with KOS as the engine
+## The AI OS layers: native on Linux, Windows and macOS
 
-AI OS is the AI's three access layers plus the skill maker, and nothing else of NeuroClaw:
+AI OS is the AI's access layers plus the skill maker, and nothing else of NeuroClaw. They are listed deepest first, and each system uses its own tools:
 
-| Layer | What it is | NeuroClaw tool |
-|---|---|---|
-| `gui` | graphical button clicker | `desktop` |
-| `app` | terminal: app commands | `terminal` |
-| `kernel` | kernel commands (Linux only) | `linux-permission-tools` |
-| `skill` | auto skill maker | `skill-maker` |
+| Layer | What it is | Linux | Windows | macOS |
+|---|---|---|---|---|
+| `os` | the system's own commands: info, uptime, processes, services, network, disks, users, permissions, start/stop/restart a service, end a process | systemd (user), `ps`, `ip`, `df`, `ls` | PowerShell cmdlets | `launchctl`, `ps`, `ifconfig`, `df`, `sw_vers` |
+| `app` | terminal: run programs and app commands | the shell | the Windows command shell | the shell |
+| `gui` | the graphical button clicker: list windows, screenshot, launch, click, type, move, close | X11 / Wayland | PowerShell with the .NET and `user32` calls Windows ships | `osascript` (System Events, CoreGraphics) and `screencapture` |
+| `skill` | the auto skill maker | the same | the same | the same |
 
-On Linux, **KOS** (the kernal-os repo) carries requests to them, with no password: `kos aios gui|app|kernel|skill WORDS...` calls `POST /api/ai-os/layer` on this computer. The route accepts only those four layers, only from the admin on this computer, and runs them through the same tool gate as chat, so approvals and Computer Access switches still apply. `node scripts/ai-os.mjs layers` shows them. On Linux the installer also installs KOS for you: it clones the owner's `zach909/kernal-os` into `~/.local/share/kernal-os` and links `kos` into `~/.local/bin` (no sudo). It starts nothing, and AI OS asks for no password. Skip it with `NEUROCLAW_SKIP_KOS=1`; a failed download never stops the install.
+`kernel` is still accepted as another name for `os`, so older callers keep working. On Linux the older "list linux permission tools" question still reaches the Linux permission tools.
 
-Limits: KOS does not autostart anything, so the engine must be running (see the switch above). KOS needs Linux; on macOS and Windows the layers route exists but only the `gui`, `app` and `skill` layers are offered and nothing calls it for you.
+**The `osai` command** is how you reach them from a terminal, the same on every system: `osai status`, `osai os services`, `osai os restart NAME`, `osai app ls -la`, `osai gui windows`, `osai gui screenshot`, `osai skill ...`. It is a few lines that carry the request to the engine on this computer (`POST /api/ai-os/layer`, loopback only, admin only) and print the answer. Exit code 0 means it ran, 3 means it is waiting for your approval, 2 means the engine is not running, 1 is anything else. Every installer puts it in place for you:
+
+| System | What the installer does |
+|---|---|
+| Linux, from the `.deb` | `/usr/bin/osai` |
+| Linux, from the tarball | `osai` next to `neuroclaw` |
+| Linux and macOS, from `scripts/install.sh` | `~/.local/bin/osai` (no sudo; skip with `NEUROCLAW_SKIP_OSAI=1`) |
+| Windows installer | `bin\osai.cmd` in the install folder, and that folder is added to **your** PATH (not the machine's); the uninstaller removes it |
+| macOS app | `NeuroClaw.app/Contents/Resources/bin/osai`. A signed app cannot add itself to your PATH, so link it once: `ln -s /Applications/NeuroClaw.app/Contents/Resources/bin/osai ~/.local/bin/osai` |
+
+**What stops it doing damage.** Every request still goes through the same tool gate as chat, so approvals and the Computer Access switches apply:
+
+- `os` commands that only look run straight away. Commands that change something (`start`, `stop`, `restart`, `kill`) are held for your approval. Nothing is ever run through a shell: each command is a fixed entry in a table (`interface/platform/os-commands.ts`) and the one word you give it is checked first (a service name, a process id, or a path). On Windows the value reaches PowerShell through an environment variable, never inside the script text. Nothing is elevated: it runs as you, and a command you may not run fails with the system's own message.
+- `app` and `gui` ask first, as they always did.
+- `gui` only ever drives windows of programs **the agent started itself**; yours are observe-only. Input goes to a window only after it has been brought to the front and confirmed to be in front, and a click outside the window is refused. This holds on every system.
+- KOS (the kernal-os repo) is not needed for any of this. `kos aios ...` can still call the same door, and the installer still offers KOS on Linux; nothing here depends on it.
+
+Limits: the engine must be running (see the switch above). Windows may refuse to let a background program take focus; the button clicker then sends nothing and says so. A Store app on Windows, or an app started through `open` on macOS, runs under a different process id, so it counts as yours and stays observe-only; give the agent the program's own executable to launch instead. macOS asks for Accessibility (to list windows, type and click) and Screen Recording (to capture) the first time. The macOS app declares the one prompt text (`NSAppleEventsUsageDescription`) and **no new entitlement**; if a signed, notarised build is still blocked from using System Events, the next step would be the `com.apple.security.automation.apple-events` entitlement, which widens what the signed app may do, so it was not added without your say-so.
+
+## KOS apps: open an app like a browser opens a website
+
+`kos://firefox` opens Firefox the way a browser opens a web address. `kos:firefox` and plain `firefox` mean the same. A name nobody registered is taken to be an app already on the computer and is opened with the button clicker. An app you install is a small manifest (id, name, scope, and the requests that open it); KOS's own layers have front ends in the same list: `kos://buttons`, `kos://commands`, `kos://kernel`, `kos://skills`. Everything is an app; there is no second kind of thing.
+
+Three rules, enforced in `interface/platform/kos-apps.ts` and checked by `test/platform/kos-apps.test.mjs`:
+
+1. **Everything goes through the layers.** An app is only a list of requests, each aimed at one layer (`gui`, `app`, `kernel`, `skill`). Opening it calls `runLayer()` for each request, and the module imports nothing else that could act on the computer (a test fails if it does). So the same tool gate as chat, with approvals and the Computer Access switches, applies to every app. A request that is held or refused stops the app and says why.
+2. **Everything is an app.** See above.
+3. **Two versions of the system, chosen per computer:**
+
+| Version | What it is | Kernel layer | Apps it opens |
+|---|---|---|---|
+| `extension` (default) | KOS sits on top of the system like a browser extension: it drives what is already there through the button clicker and app commands. Nothing system-wide is touched; remove it and the computer is as it was. | closed (also on the raw `/api/ai-os/layer` door) | scope `extension` |
+| `system` | KOS may also use kernel commands, so an app can change system apps and services. | open, Linux only | scope `extension` and `system` |
+
+An app's `scope` says which version it needs. A `system` app is refused in the extension version, and a manifest cannot use the kernel layer unless its scope is `system`.
+
+Routes (admin, from this computer): `GET /api/ai-os/apps` lists the apps and which ones this version lets open; `POST /api/ai-os/apps` takes `{action: "open", address}`, `{action: "install", app}`, `{action: "remove", id}` or `{action: "edition", edition}`. The choice and the installed apps are saved in `kos-apps.json` in the config folder, written atomically; a save that fails is reported and changes nothing.
+
+**Changed default:** before this, the kernel layer was open on Linux. It is now closed until the computer is switched to the system version.
+
+Not done here: the `kos` command in the separate `kernal-os` repo does not call these routes yet, so `kos://` addresses work through the HTTP route and tests, not from the `kos` command line, until that repo adds an `open` command.
 
 ## What it does not do
 
@@ -81,11 +121,13 @@ While it is on, the service holds port 7861, so `npm run dev` will fail with "ad
 | | Verified here | Not verified here |
 |---|---|---|
 | Linux | the GNOME shortcut logic runs only against a fake `gsettings` (the schema is not installed here), including preserving existing shortcuts and refusing unexpected output; the systemd unit passes `systemd-analyze verify` (with an install path containing spaces, `%`, backticks, `&` and `;`); the autostart `Exec` line round-trips through the Desktop Entry rules; enable and disable run end to end against a throwaway home; the command it starts serves requests and refuses external connections | a real graphical login session; a live `systemctl --user` |
-| macOS | the plist is well-formed XML (`xmllint`) with its paths escaped | loading it with `launchctl` on a Mac |
+| macOS | the plist is well-formed XML (`xmllint`) with its paths escaped; the button clicker and the OS commands are tested with a stand-in runner, as on Windows | loading it with `launchctl` on a Mac; the JavaScript-for-Automation script and the permission prompts on a real Mac |
 | Android | the manifest, service metadata and sheet are checked as source; **nothing was compiled** (no Android SDK here), the CI Android job is the first compile | running it on a phone; whether a given phone maker's build accepts the assistant launch |
 | ChromeOS | the extension loads in Chromium with the new manifest | a Chromebook |
-| Windows | the scripts (startup, opener, Start menu shortcut with hotkey) and the `reg` commands are generated with Windows paths and checked as text | running them on a Windows PC |
+| Windows | the scripts (startup, opener, Start menu shortcut with hotkey) and the `reg` commands are generated with Windows paths and checked as text; the button clicker and the OS commands are tested with a stand-in runner for exactly what is sent, how values are passed and how errors are reported | running any of it on a Windows PC: the PowerShell scripts, the PATH change in the installer, focus handling |
 
 The capability list in Settings > About therefore calls background service **limited**, not supported, on all three, with this reason.
 
-Tests: `node --test test/platform/ai-os.test.mjs`. Code: `interface/platform/ai-os.ts`, `scripts/ai-os.mjs`.
+The layers on Linux were also run end to end against a real engine here: `osai status`, `osai os info|disks|uptime`, and the held-then-approved path for a changing command and for `app` and `gui`. There is no graphical session in that environment, so the Linux button clicker was not exercised on a real desktop either.
+
+Tests: `node --test test/platform/ai-os.test.mjs test/platform/ai-os-layers.test.mjs test/platform/os-commands.test.mjs test/platform/native-desktop.test.mjs test/platform/osai.test.mjs`. Code: `interface/platform/ai-os.ts`, `interface/platform/ai-os-layers.ts`, `interface/platform/os-commands.ts`, `plugins/os-commands.ts`, `models && skills/core/desktop/native.ts`, `scripts/osai.mjs`, `scripts/ai-os.mjs`.

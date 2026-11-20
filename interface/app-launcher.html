@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#ff9a84">
+<meta name="theme-color" content="#e3a99d">
 <title>App Launcher - Neuroclaw</title>
 <style>
   :root {
     --bg-primary: #110c0e;
     --bg-secondary: #1b1216;
     --bg-tertiary: #3b2b2e;
-    --accent-primary: #ff9a84;
-    --accent-secondary: #ffc4b4;
-    --accent-glow: rgba(255, 154, 132, 0.3);
+    --accent-primary: #e3a99d;
+    --accent-secondary: #efd0c8;
+    --accent-glow: rgba(227,169,157, 0.3);
     --text-primary: #f8ede9;
     --text-secondary: #b9a7a2;
     --text-muted: #8f7d79;
@@ -40,8 +40,8 @@
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: 
-      radial-gradient(circle at 20% 30%, rgba(255, 154, 132, 0.08) 0%, transparent 40%),
-      radial-gradient(circle at 80% 70%, rgba(255, 190, 150, 0.08) 0%, transparent 40%);
+      radial-gradient(circle at 20% 30%, rgba(227,169,157, 0.08) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(226,190,170, 0.08) 0%, transparent 40%);
     pointer-events: none;
     z-index: 0;
   }
@@ -51,8 +51,8 @@
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background-image: 
-      linear-gradient(rgba(255, 154, 132, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 154, 132, 0.03) 1px, transparent 1px);
+      linear-gradient(rgba(227,169,157, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(227,169,157, 0.03) 1px, transparent 1px);
     background-size: 40px 40px;
     pointer-events: none;
     z-index: 0;
@@ -99,7 +99,7 @@
     font-size: 18px; 
     font-weight: 600; 
     letter-spacing: 0.5px;
-    background: linear-gradient(135deg, #fff 0%, #ffc4b4 100%);
+    background: linear-gradient(135deg, #fff 0%, #efd0c8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -127,7 +127,7 @@
   
   #search-input:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(255, 154, 132, 0.1);
+    box-shadow: 0 0 0 3px rgba(227,169,157, 0.1);
   }
   
   .search-icon {
@@ -220,14 +220,14 @@
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(135deg, rgba(255, 154, 132, 0.1) 0%, transparent 100%);
+    background: linear-gradient(135deg, rgba(227,169,157, 0.1) 0%, transparent 100%);
     opacity: 0;
     transition: opacity 0.3s;
   }
   
   .app-card:hover {
     border-color: var(--accent-primary);
-    box-shadow: 0 8px 30px rgba(255, 154, 132, 0.2);
+    box-shadow: 0 8px 30px rgba(227,169,157, 0.2);
     transform: translateY(-4px);
   }
   
@@ -260,10 +260,10 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
   
-  .app-icon.browser { background: linear-gradient(135deg, #ffb78a, #e8705a); }
+  .app-icon.browser { background: linear-gradient(135deg, #e3b9a0, #c98476); }
   .app-icon.terminal { background: linear-gradient(135deg, #10b981, #059669); }
   .app-icon.files { background: linear-gradient(135deg, #f59e0b, #d97706); }
-  .app-icon.editor { background: linear-gradient(135deg, #ff9a84, #e8705a); }
+  .app-icon.editor { background: linear-gradient(135deg, #e3a99d, #c98476); }
   .app-icon.settings { background: linear-gradient(135deg, #8f7d79, #6a5a57); }
   .app-icon.ai { background: linear-gradient(135deg, #ff8fa3, #d4506a); }
 
@@ -322,7 +322,7 @@
   
   .recent-card:hover {
     border-color: var(--accent-primary);
-    background: rgba(255, 154, 132, 0.1);
+    background: rgba(227,169,157, 0.1);
   }
   
   .recent-icon {
@@ -372,7 +372,7 @@
     background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
     color: white;
     border-color: transparent;
-    box-shadow: 0 4px 12px rgba(255, 154, 132, 0.3);
+    box-shadow: 0 4px 12px rgba(227,169,157, 0.3);
   }
 
   /* Empty state */

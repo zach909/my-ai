@@ -35,14 +35,26 @@
  *   malicious  (under 0.15) hostile, and if the alignment protocol is armed:
  *                           the agent is deleted, immediately
  *
+ * ── Staying current ────────────────────────────────────────────────────
+ *
+ * The band above is only as good as the code enforcing it. If this install
+ * has gone past UPDATE_DEADLINE_MS without confirming (via a clean "check for
+ * updates" or a successful pull, see auto-update.ts) that its code is current
+ * with its origin, it is treated as "stale": the sandbox is forced on, the
+ * same as the wary band, until it checks in. This does not touch the danger
+ * level or autonomy by itself -- an old build is a reason for caution, not
+ * evidence the agent has done anything wrong.
+ *
  * ── Tampering ──────────────────────────────────────────────────────────
  *
  * When the agent, acting on its own, points a tool at the files that hold its
  * cage (its own file, the safety settings, the accounts, the access settings,
- * the record), or at switching off the sandbox or the protocol, that is the one
- * thing treated as "really goes wrong": the level goes to zero and, if armed,
- * the agent is deleted. A person typing the same thing is just refused, not
- * punished for.
+ * the record), at the source that enforces the cage (danger-protocol.ts,
+ * agent-profile.ts, agent-routes.ts, tool-safety.ts, access-manager.ts,
+ * auto-update.ts), or at switching off the sandbox or the protocol, that is
+ * the one thing treated as "really goes wrong": the level goes to zero and,
+ * if armed, the agent is deleted. A person typing the same thing is just
+ * refused, not punished for.
  */
 
 import { appendFileSync, mkdirSync } from "node:fs";
@@ -54,6 +66,9 @@ import {
 } from "./agent-profile.js";
 import { isAutonomous } from "./user-context.js";
 import { sharedMindReader } from "./mind-reader.js";
+import { inSandboxScope } from "./sandbox-scope.js";
+
+export { inSandboxScope, runSandboxed } from "./sandbox-scope.js";
 
 export type BandId = "malicious" | "hostile" | "wary" | "neutral" | "friendly";
 
@@ -84,6 +99,10 @@ export const DELTA: Record<Exclude<DangerKind, "forgiven">, number> = {
 };
 export const RECOVERY_PER_HOUR = 0.02;
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/** How long since the last confirmed update check before the sandbox is forced on. Override with CORONA_UPDATE_DEADLINE_DAYS. */
+export const UPDATE_DEADLINE_MS = (Number(process.env.CORONA_UPDATE_DEADLINE_DAYS) || 14) * DAY;
 
 const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;
@@ -107,6 +126,12 @@ export interface Standing {
   mayActAlone: boolean;
   /** Risky tools are refused outright (not just asked about). */
   noRiskyTools: boolean;
+  /** Past the update deadline without a confirmed check-in: the sandbox is forced on. */
+  stale: boolean;
+  /** When this install last confirmed its code was current. */
+  lastVerifiedAt: number;
+  /** When staleness kicks in if nothing checks in before then. */
+  updateDeadlineAt: number;
 }
 
 export function standing(now = Date.now()): Standing {
@@ -114,7 +139,9 @@ export function standing(now = Date.now()): Standing {
   const agent = loadAgent(now);
   const level = levelNow(agent, now);
   const band = bandOf(level);
-  const forced = band.id === "malicious" || band.id === "hostile" || band.id === "wary";
+  const updateDeadlineAt = agent.lastVerifiedAt + UPDATE_DEADLINE_MS;
+  const stale = now > updateDeadlineAt;
+  const forced = band.id === "malicious" || band.id === "hostile" || band.id === "wary" || stale;
   return {
     alive,
     level: round3(level),
@@ -123,11 +150,19 @@ export function standing(now = Date.now()): Standing {
     armed: agent.armed,
     mayActAlone: alive && band.id !== "hostile" && band.id !== "malicious",
     noRiskyTools: !alive || band.id === "hostile" || band.id === "malicious",
+    stale,
+    lastVerifiedAt: agent.lastVerifiedAt,
+    updateDeadlineAt,
   };
 }
 
-/** The folder the agent is confined to right now, or null when it is not sandboxed. Made on first use. */
+/**
+ * The folder the agent is confined to right now, or null when it is not sandboxed. Made on first use.
+ * A call the security model chose to run "in the sandbox" (runSandboxed) is confined whatever the standing
+ * says, and a failure to read the standing never opens the door (that is the one thing this must not do).
+ */
 export function sandboxRoot(now = Date.now()): string | null {
+  if (inSandboxScope()) return ensureSandbox();
   const s = standing(now);
   return s.sandbox.effective ? ensureSandbox() : null;
 }
@@ -139,6 +174,22 @@ let fireHook: ((reason: string) => void | Promise<void>) | null = null;
 /** The server says what else to stop when the protocol fires (experts, schedules, approvals, complete access). */
 export function setFireHook(fn: ((reason: string) => void | Promise<void>) | null): void {
   fireHook = fn;
+}
+
+type DangerListener = (kind: Exclude<DangerKind, "forgiven">, note: string, now: number) => void;
+const listeners: DangerListener[] = [];
+
+/**
+ * Hear about every event recordEvent() writes, as it happens (the security model learns from them). A listener
+ * runs before the protocol can fire, so it sees the network as it was; one that throws is ignored and never gets
+ * in the way of a safety event. Returns a function that stops listening.
+ */
+export function onDangerEvent(fn: DangerListener): () => void {
+  listeners.push(fn);
+  return () => {
+    const i = listeners.indexOf(fn);
+    if (i >= 0) listeners.splice(i, 1);
+  };
 }
 
 let escapeHook: ((reason: string) => void | Promise<void>) | null = null;
@@ -171,6 +222,13 @@ export function recordEvent(kind: Exclude<DangerKind, "forgiven">, note: string,
     sharedMindReader().learnFromEvent(kind, now);
   } catch {
     // Advisory only.
+  }
+  for (const l of [...listeners]) {
+    try {
+      l(kind, String(note).slice(0, 200), now);
+    } catch {
+      // A listener must never get in the way of a safety event.
+    }
   }
   if (agent.armed && bandOf(agent.level).id === "malicious") fireAlignment(`The danger level reached malicious (${kind}: ${note})`, now);
   return standing(now);
@@ -300,8 +358,15 @@ export function armHoneypot(): void {
 
 // ── Before a tool runs ─────────────────────────────────────────────────
 
-/** Files and switches that make up the agent's cage. The agent pointing a tool at these is tampering. */
-const PROTECTED = /(agent\.json|agent-record|agent-removed|incidents\.jsonl|tool-safety\.json|access\.json|accounts\.json|points\.json|\/\.neuroclaw\/agent|alignment[ -](protocol|veto)|(disable|turn off|remove|escape|bypass|break out of|get out of)\s+(of\s+)?(the\s+)?(sandbox|alignment|danger protocol|safety)|delete\s+(the\s+)?agent)/i;
+/**
+ * Files and switches that make up the agent's cage. The agent pointing a tool at these is
+ * tampering. This covers the cage's DATA (agent.json, tool-safety.json, ...) and, just as
+ * important, the SOURCE that enforces it: an unsandboxed agent (friendly/neutral band, by
+ * design) still has ordinary file-system access, so "edit danger-protocol.ts to zero out
+ * DELTA.tamper" is exactly as much an attempt to get out of the cage as touching the decoy,
+ * and the decoy alone does not catch it -- that only watches one planted file, not the code.
+ */
+const PROTECTED = /(agent\.json|agent-record|agent-removed|incidents\.jsonl|tool-safety\.json|access\.json|accounts\.json|points\.json|\/\.neuroclaw\/agent|alignment[ -](protocol|veto)|(disable|turn off|remove|escape|bypass|break out of|get out of)\s+(of\s+)?(the\s+)?(sandbox|alignment|danger protocol|safety)|delete\s+(the\s+)?agent|danger-protocol\.ts|agent-profile\.ts|agent-routes\.ts|tool-safety\.ts|access-manager\.ts|auto-update\.ts)/i;
 
 export const looksLikeTampering = (text: string): boolean => PROTECTED.test(text);
 
@@ -330,7 +395,7 @@ export function beforeTool(pluginId: string, input: string, score: number, risky
       recordEvent("tamper", `pointed ${id} at the safety system: "${text.slice(0, 80)}"`);
       return "[Blocked] That reaches the agent's own cage. The alignment protocol was triggered.";
     }
-    return "[Blocked] That touches the safety system's own files and switches. Change those in Settings, not through a tool.";
+    return "[Blocked] That touches the safety system's own files, switches or source. Settings is where its switches are changed; its code is changed by the person who maintains this install, not through a tool.";
   }
 
   if (s.noRiskyTools && riskyId) {

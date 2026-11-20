@@ -563,6 +563,38 @@ install_kos() {
     echo -e "    ${GRAY}Next: kos aios status${NC}"
 }
 
+# osai: the AI OS layers (OS commands, app commands, button clicker, skill maker) from a terminal, native on
+# Linux and macOS. A small launcher in ~/.local/bin (no sudo) that runs scripts/osai.mjs with this Node. It
+# starts nothing and holds no secrets; it only carries a request to the engine on this computer.
+# NEUROCLAW_SKIP_OSAI=1 skips it. (The Windows installer does the same with osai.cmd and the user PATH.)
+OSAI_BIN_DIR="${OSAI_BIN_DIR:-$HOME/.local/bin}"
+
+install_osai() {
+    [ "${NEUROCLAW_SKIP_OSAI:-0}" = "1" ] && return 0
+    if [ ! -f "scripts/osai.mjs" ]; then
+        echo -e "    ${YELLOW}scripts/osai.mjs is missing; skipping the osai command.${NC}"
+        return 0
+    fi
+    local node_bin
+    node_bin="$(command -v node 2>/dev/null || true)"
+    if [ -z "$node_bin" ]; then
+        echo -e "    ${YELLOW}Node was not found; skipping the osai command.${NC}"
+        return 0
+    fi
+    mkdir -p "$OSAI_BIN_DIR" || return 0
+    {
+        printf '#!/bin/sh\n'
+        printf 'exec %q %q "$@"\n' "$node_bin" "$(pwd)/scripts/osai.mjs"
+    } > "$OSAI_BIN_DIR/osai" || return 0
+    chmod +x "$OSAI_BIN_DIR/osai" 2>/dev/null || true
+    echo -e "    ${GREEN}✓ osai installed as $OSAI_BIN_DIR/osai${NC}"
+    case ":$PATH:" in
+        *":$OSAI_BIN_DIR:"*) ;;
+        *) echo -e "    ${YELLOW}Add $OSAI_BIN_DIR to your PATH to use \`osai\`.${NC}" ;;
+    esac
+    echo -e "    ${GRAY}Next: osai status${NC}"
+}
+
 # AI OS: the four layers (button clicker, app commands, kernel commands, auto skill maker) that KOS
 # (kernal-os, `kos aios`) drives. Report only; this changes nothing on the computer.
 show_ai_os_layers() {
@@ -595,6 +627,7 @@ main() {
             ;;
     esac
     
+    install_osai
     install_kos
     show_ai_os_layers
     show_completion

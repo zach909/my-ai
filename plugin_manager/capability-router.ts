@@ -171,10 +171,10 @@ export class RoutingMemory {
   }
 
   /** How much this plugin has earned for these terms, capped. */
-  boostFor(pluginId: string, terms: Set<string>): number {
+  boostFor(pluginId: string, terms: Set<string>, cap: number = MAX_LEARNED_BOOST): number {
     let total = 0;
     for (const term of terms) total += this.evidence[term]?.[pluginId] ?? 0;
-    return Math.min(MAX_LEARNED_BOOST, total);
+    return Math.min(cap, total);
   }
 
   /** Everything learned, for persisting or inspecting. */
@@ -220,6 +220,30 @@ export interface Ranked {
 }
 
 /**
+ * The router's numeric knobs, gathered in one place so they can be tuned
+ * together with the plugin declarations and the learned memory instead of
+ * being three separate constants nobody measures. Defaults are exactly the
+ * values the router has always used: passing nothing changes no behaviour.
+ */
+export interface RouterTuning {
+  /** Score per declared term that matches the message. */
+  overlapWeight: number;
+  /** Strongest hint the intent map can give (first in its list). */
+  intentPriorMax: number;
+  /** Ceiling on what remembered successes can add. */
+  learnedCap: number;
+  /** Extra per-plugin nudge on top of what the plugin declares. */
+  weightOffsets: Record<string, number>;
+}
+
+export const DEFAULT_ROUTER_TUNING: Readonly<RouterTuning> = Object.freeze({
+  overlapWeight: 4,
+  intentPriorMax: 6,
+  learnedCap: MAX_LEARNED_BOOST,
+  weightOffsets: Object.freeze({}) as Record<string, number>,
+});
+
+/**
  * Builds the index once and answers "who should handle this" cheaply.
  *
  * Rebuilt when plugins change rather than on every message: the index is a
@@ -229,6 +253,8 @@ export interface Ranked {
 export class CapabilityRouter {
   private index: IndexedPlugin[] = [];
   readonly memory = new RoutingMemory();
+  /** Mutable on purpose: the joint tuner (scripts/joint-tune.mjs) sets it. */
+  tuning: RouterTuning = { ...DEFAULT_ROUTER_TUNING, weightOffsets: {} };
 
   /** Rebuild from the live plugin set. Cheap, and only called when that set changes. */
   reindex(plugins: Map<string, BasePlugin>, fallbackCapabilities: Record<string, string[]> = {}): void {
@@ -301,7 +327,7 @@ export class CapabilityRouter {
       let overlap = 0;
       for (const term of entry.terms) if (terms.has(term)) overlap++;
       if (overlap > 0) {
-        score += overlap * 4;
+        score += overlap * this.tuning.overlapWeight;
         if (!reason) reason = `${overlap} matching term${overlap === 1 ? "" : "s"}`;
       }
 
@@ -309,19 +335,19 @@ export class CapabilityRouter {
       // but it can be outscored by a plugin that genuinely matches the words.
       const prior = intentRank.get(entry.id);
       if (prior !== undefined) {
-        score += Math.max(1, 6 - prior);
+        score += Math.max(1, this.tuning.intentPriorMax - prior);
         if (!reason) reason = "suggested by intent";
       }
 
       // What has actually worked before, capped so it can inform routing
       // without overriding an explicit command.
-      const learned = this.memory.boostFor(entry.id, terms);
+      const learned = this.memory.boostFor(entry.id, terms, this.tuning.learnedCap);
       if (learned > 0) {
         score += learned;
         if (!reason) reason = "handled similar requests before";
       }
 
-      score += entry.weight;
+      score += entry.weight + (this.tuning.weightOffsets[entry.id] ?? 0);
       if (score > 0) {
         ranked.push({
           id: entry.id,

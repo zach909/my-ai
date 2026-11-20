@@ -20,27 +20,27 @@
  */
 
 export const AMBIENT_CSS = String.raw`
-:root { --nc-bg: #110c0e; --nc-bg-2: #1b1216; --nc-accent: #ff9a84; --nc-accent-soft: #ffc4b4; --nc-ink: #f8ede9; --nc-line: rgba(255, 228, 218, 0.2); }
+:root { --nc-bg: #110c0e; --nc-bg-2: #1b1216; --nc-accent: #e3a99d; --nc-accent-soft: #efd0c8; --nc-ink: #f8ede9; --nc-line: rgba(255, 228, 218, 0.2); }
 html { background: radial-gradient(120% 90% at 50% 40%, var(--nc-bg-2) 0%, var(--nc-bg) 70%) fixed, var(--nc-bg) !important; }
 body { background: transparent !important; }
 #nc-ambient { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 #nc-ambient canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 #nc-ambient .nc-a { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.5; }
-#nc-ambient .nc-a1 { width: 46vmax; height: 46vmax; left: -12vmax; top: -14vmax; background: radial-gradient(circle, rgba(255, 140, 110, 0.55), transparent 65%); animation: nc-drift-a 19s ease-in-out infinite alternate; }
-#nc-ambient .nc-a2 { width: 40vmax; height: 40vmax; right: -14vmax; bottom: -12vmax; background: radial-gradient(circle, rgba(255, 190, 150, 0.4), transparent 65%); animation: nc-drift-b 23s ease-in-out infinite alternate; }
+#nc-ambient .nc-a1 { width: 46vmax; height: 46vmax; left: -12vmax; top: -14vmax; background: radial-gradient(circle, rgba(214,150,138, 0.55), transparent 65%); animation: nc-drift-a 19s ease-in-out infinite alternate; }
+#nc-ambient .nc-a2 { width: 40vmax; height: 40vmax; right: -14vmax; bottom: -12vmax; background: radial-gradient(circle, rgba(226,190,170, 0.4), transparent 65%); animation: nc-drift-b 23s ease-in-out infinite alternate; }
 #nc-ambient .nc-a3 { width: 30vmax; height: 30vmax; left: 38%; top: 55%; background: radial-gradient(circle, rgba(236, 110, 140, 0.32), transparent 65%); animation: nc-drift-c 17s ease-in-out infinite alternate; }
 /* Ready-made pieces for stand-alone pages (class="nc-soft" on <body>): the same glass, buttons and inputs as the terminal page. */
 .nc-soft { color: var(--nc-ink); font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif; }
-.nc-glass { background: rgba(255, 240, 232, 0.08); border: 1px solid var(--nc-line); border-radius: 32px; backdrop-filter: blur(26px) saturate(1.5); -webkit-backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 90px rgba(255, 140, 110, 0.12); }
+.nc-glass { background: rgba(255, 240, 232, 0.08); border: 1px solid var(--nc-line); border-radius: 32px; backdrop-filter: blur(26px) saturate(1.5); -webkit-backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 90px rgba(214,150,138, 0.12); }
 .nc-btn { font: inherit; font-weight: 700; color: var(--nc-ink); cursor: pointer; background: rgba(255, 238, 230, 0.07); border: 1px solid var(--nc-line); border-radius: 999px; padding: 9px 18px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 6px 16px rgba(0, 0, 0, 0.18); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s; }
 .nc-btn:hover { background: rgba(255, 238, 230, 0.14); border-color: rgba(255, 228, 218, 0.4); transform: translateY(-2px) scale(1.03); }
 .nc-btn:active { transform: translateY(0) scale(0.95); }
 .nc-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
-.nc-btn.primary { color: var(--nc-accent-soft); background: rgba(255, 154, 132, 0.16); border-color: rgba(255, 154, 132, 0.5); box-shadow: 0 1px 0 rgba(255, 220, 208, 0.3) inset, 0 8px 22px rgba(255, 120, 95, 0.18); }
-.nc-btn.primary:hover { background: rgba(255, 154, 132, 0.28); border-color: rgba(255, 154, 132, 0.8); }
+.nc-btn.primary { color: var(--nc-accent-soft); background: rgba(227,169,157, 0.16); border-color: rgba(227,169,157, 0.5); box-shadow: 0 1px 0 rgba(255, 220, 208, 0.3) inset, 0 8px 22px rgba(214,150,138, 0.18); }
+.nc-btn.primary:hover { background: rgba(227,169,157, 0.28); border-color: rgba(227,169,157, 0.8); }
 .nc-input { font: inherit; color: var(--nc-ink); background: rgba(20, 12, 14, 0.4); border: 1px solid var(--nc-line); border-radius: 999px; padding: 10px 18px; outline: none; transition: border-color 0.2s, box-shadow 0.25s; }
 .nc-input::placeholder { color: rgba(248, 237, 233, 0.4); }
-.nc-input:focus { border-color: rgba(255, 154, 132, 0.7); box-shadow: 0 0 0 4px rgba(255, 154, 132, 0.14); }
+.nc-input:focus { border-color: rgba(227,169,157, 0.7); box-shadow: 0 0 0 4px rgba(227,169,157, 0.14); }
 .nc-dim { color: rgba(248, 237, 233, 0.62); }
 
 /* The built dashboard (Tailwind tokens): same palette, see-through surfaces so the ring shows, rounder corners. */
@@ -63,13 +63,13 @@ body { background: transparent !important; }
 .nc-agent-note { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 2147483000; max-width: min(92vw, 520px);
   padding: 10px 20px; border-radius: 999px; font: 14px ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: #f8ede9; background: rgba(255,240,232,.08); border: 1px solid rgba(255,228,218,.2); -webkit-backdrop-filter: blur(26px) saturate(1.5);
-  backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 10px 40px rgba(0,0,0,.35), 0 0 30px rgba(255,138,112,.12); pointer-events: none; text-align: center;
+  backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 10px 40px rgba(0,0,0,.35), 0 0 30px rgba(214,150,138,.12); pointer-events: none; text-align: center;
   animation: nc-note-in .7s cubic-bezier(.34,1.56,.64,1) both; }
 @keyframes nc-note-in { from { opacity: 0; transform: translateX(-50%) translateY(14px) scale(.96); } }
 .nc-escape-note { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 2147483001; max-width: min(92vw, 560px);
   padding: 10px 20px; border-radius: 999px; font: 14px ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color: #ffd9d2; background: rgba(255,106,92,.22); border: 1px solid rgba(255,138,112,.55); -webkit-backdrop-filter: blur(26px) saturate(1.5);
-  backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 10px 40px rgba(0,0,0,.35), 0 0 30px rgba(255,106,92,.25); text-align: center;
+  color: #efd6d0; background: rgba(214,150,138,.22); border: 1px solid rgba(214,150,138,.55); -webkit-backdrop-filter: blur(26px) saturate(1.5);
+  backdrop-filter: blur(26px) saturate(1.5); box-shadow: 0 10px 40px rgba(0,0,0,.35), 0 0 30px rgba(214,150,138,.25); text-align: center;
   animation: nc-note-in .5s cubic-bezier(.34,1.56,.64,1) both; }
 .nc-escape-note a { color: inherit; text-decoration: underline; }
 @keyframes nc-drift-a { to { transform: translate(14vmax, 10vmax) scale(1.2); } }
@@ -158,7 +158,7 @@ export const AMBIENT_JS = String.raw`(function () {
   var energy = 0, energyTarget = 0;
   function excite(a) { energyTarget = Math.min(1, energyTarget + a); }
   var frames = 0, drawMs = 0;
-  window.ncAmbient = { excite: excite, stats: function () { return { stride: STRIDE, beads: M, dpr: DPR, frames: frames, avgDrawMs: frames ? drawMs / frames : 0, paused: hidden || reduce }; } };
+  window.ncAmbient = { excite: excite, tips: function () { return tips; }, stats: function () { return { stride: STRIDE, beads: M, dpr: DPR, frames: frames, avgDrawMs: frames ? drawMs / frames : 0, paused: hidden || reduce }; } };
   document.addEventListener('input', function () { excite(0.12); }, true);
   document.addEventListener('submit', function () { excite(1); }, true);
   document.addEventListener('click', function () { excite(0.25); }, true);
@@ -172,6 +172,142 @@ export const AMBIENT_JS = String.raw`(function () {
   }
   setStride(STRIDE);
   var slow = 0;
+
+
+  /* ---- The hive: a green shoggoth lives in the sphere; its tentacles are the net skills, held in by the crown;
+          every hive agent gets a small sphere and shoggoth of its own ---- */
+  var skills = [], agents = [], tips = [], sceneT = 0, clock = 0, tentSegs = 20;
+  function hashOf(str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
+  function loadScene() {
+    if (!/^https?:$/.test(location.protocol) || !window.fetch) return;
+    var json = function (r) { return r.ok ? r.json() : null; };
+    fetch('/api/net-skills', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
+      if (!d) return;
+      var list = [], most = 1, seen = {};
+      (d.skills || []).forEach(function (s) {
+        var n = Array.isArray(s.neurons) ? s.neurons.length : Object.keys(s.ids || {}).length;
+        most = Math.max(most, n); seen[s.skill] = 1; list.push({ name: String(s.skill), neurons: n });
+      });
+      /* Skill regions the network already has show up in its affinity pairs even before anything is grafted. */
+      (d.affinity || []).forEach(function (p) {
+        [p.a, p.b].forEach(function (name) { if (name && !seen[name]) { seen[name] = 1; list.push({ name: String(name), neurons: 1 }); } });
+      });
+      list.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+      skills = list.map(function (s) {
+        return { name: s.name, neurons: s.neurons, size: Math.sqrt(s.neurons / most), phase: hashOf(s.name) * 6.283, jit: hashOf(s.name + '#'), born: clock };
+      });
+      if (reduce && !hidden) draw(performance.now());
+    }).catch(function () { /* not logged in, or no backend here: the sphere and its shoggoth are still drawn */ });
+    fetch('/api/hive-agents', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
+      if (!d) return;
+      agents = (d.agents || []).map(function (a) {
+        return { id: String(a.id), name: String(a.name || a.id), working: !!a.working, phase: hashOf(String(a.id)) * 6.283, orbit: hashOf(String(a.id) + 'o') };
+      });
+      if (reduce && !hidden) draw(performance.now());
+    }).catch(function () { /* same */ });
+  }
+  loadScene();
+  setInterval(function () { if (!hidden && !document.hidden) loadScene(); }, 20000);
+
+  /* The blob's outline: a loop that breathes and throws out slow pseudopods. */
+  function blobOutline(x, y, r, t, seed) {
+    var N = 64, i, a, rr;
+    ctx.beginPath();
+    for (i = 0; i <= N; i++) {
+      a = (i / N) * 6.2832;
+      rr = r * (1 + 0.12 * Math.sin(3 * a + t * 1.3 + seed) + 0.09 * Math.sin(5 * a - t * 1.7 + 1.1 + seed) + 0.05 * Math.sin(9 * a + t * 2.3)
+        + 0.22 * Math.max(0, Math.sin(2 * a - t * 0.8 + seed)) * Math.max(0, Math.sin(a + t * 0.35 + 0.5 + seed)));
+      if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+  }
+  var EYES = [[-0.35, -0.2, 1], [0.1, -0.38, 0.8], [0.38, -0.05, 1.1], [-0.12, 0.12, 0.9], [0.2, 0.34, 0.7], [-0.4, 0.28, 0.6]];
+  /* A shoggoth, clipped to its sphere: green body, many eyes that follow the pointer and blink out of step. */
+  function drawHiveShoggoth(cx, cy, sr, bx, by, r0, t, seed, eyeCount, glow) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, sr * 0.985, 0, 6.2832); ctx.clip();
+    var halo = ctx.createRadialGradient(bx, by, r0 * 0.3, bx, by, sr);
+    halo.addColorStop(0, 'rgba(143,227,168,' + (0.22 + glow * 0.2).toFixed(2) + ')'); halo.addColorStop(1, 'rgba(143,227,168,0)');
+    ctx.fillStyle = halo; ctx.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
+    blobOutline(bx, by, r0, t, seed);
+    var fill = ctx.createRadialGradient(bx - r0 * 0.25, by - r0 * 0.3, r0 * 0.1, bx, by, r0 * 1.3);
+    fill.addColorStop(0, 'rgba(176,240,196,.95)'); fill.addColorStop(0.55, 'rgba(110,200,140,.92)'); fill.addColorStop(1, 'rgba(38,104,66,.9)');
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = 'rgba(143,227,168,.55)'; ctx.lineWidth = Math.max(1, sr * 0.012); ctx.stroke();
+    var dir = Math.atan2(ptr.sy, ptr.sx), mag = Math.min(1, Math.hypot(ptr.sx, ptr.sy));
+    for (var k = 0; k < eyeCount; k++) {
+      var e = EYES[k], ex = bx + e[0] * r0 * 1.05, ey = by + e[1] * r0 * 1.05, er = r0 * 0.13 * e[2];
+      var blink = reduce ? 1 : (Math.sin(t * 0.7 + k * 2.3 + seed) > 0.97 ? 0.1 : 1);
+      ctx.fillStyle = '#f8ede9'; ctx.beginPath(); ctx.ellipse(ex, ey, er, er * blink, 0, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = '#110c0e'; ctx.beginPath();
+      ctx.ellipse(ex + Math.cos(dir) * er * 0.4 * mag, ey + Math.sin(dir) * er * 0.4 * mag * blink, er * 0.45, er * 0.45 * blink, 0, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function blobAt(cx, cy, sr, t) {
+    return { x: cx + Math.sin(t * 0.5) * sr * 0.06 + ptr.sx * sr * 0.06, y: cy + Math.cos(t * 0.43) * sr * 0.06 + ptr.sy * sr * 0.06, r: sr * 0.52 };
+  }
+  /* One tentacle per net skill, rooted in the blob and held in by the crown: past the ring it slides along the inside. */
+  function drawTentacles(cx, cy, sr, bl, t) {
+    var n = skills.length, hold = sr * 1.38, segs = tentSegs, spinA = reduce ? 0 : t * 0.1;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (var k = 0; k < n; k++) {
+      var s = skills[k];
+      var grow = reduce ? 1 : Math.min(1, Math.max(0, (clock - s.born) / 1.6));
+      s.reach = 1 - (1 - grow) * (1 - grow);
+      var ang = spinA + (k / n) * 6.2832, len = sr * (0.75 + 0.75 * s.size) * (0.8 + 0.4 * s.jit) * s.reach;
+      var x = bl.x + Math.cos(ang) * bl.r * 0.7, y = bl.y + Math.sin(ang) * bl.r * 0.7, heading = ang;
+      var thick = Math.min(sr * (0.2 + 0.1 * s.size), (6.2832 * bl.r * 0.7 / Math.max(n, 1)) * 0.8);
+      var dir = Math.atan2(ptr.sy, ptr.sx), lean = Math.min(1, Math.hypot(ptr.sx, ptr.sy)) * 0.35;
+      var pts = [x, y], i;
+      for (i = 1; i <= segs; i++) {
+        var u = i / segs;
+        var sway = Math.sin(t * 1.1 + s.phase + u * 7.5) * 0.55 * u + Math.sin(t * 0.6 + s.phase * 2 + u * 3.1) * 0.3 * u;
+        heading += sway * (13 / segs) + Math.sin(dir - heading) * lean * u * 0.4;
+        x += Math.cos(heading) * len / segs; y += Math.sin(heading) * len / segs;
+        var rx = x - cx, ry = y - cy, rd = Math.hypot(rx, ry);
+        if (rd > hold) {
+          var side = Math.cos(heading) * ry - Math.sin(heading) * rx > 0 ? 1 : -1;
+          x = cx + rx / rd * hold; y = cy + ry / rd * hold; heading = Math.atan2(ry, rx) + side * Math.PI / 2;
+        }
+        pts.push(x, y);
+      }
+      for (i = segs; i > 0; i--) {
+        var f = i / segs;
+        ctx.strokeStyle = 'rgba(' + Math.round(38 + 138 * (1 - f)) + ',' + Math.round(104 + 136 * (1 - f)) + ',' + Math.round(66 + 130 * (1 - f)) + ',' + (0.93 - f * 0.3).toFixed(2) + ')';
+        ctx.lineWidth = Math.max(1.2, thick * (1 - f * 0.88));
+        ctx.beginPath(); ctx.moveTo(pts[(i - 1) * 2], pts[(i - 1) * 2 + 1]); ctx.lineTo(pts[i * 2], pts[i * 2 + 1]); ctx.stroke();
+      }
+      var tx = pts[segs * 2], ty = pts[segs * 2 + 1], br = thick * 0.9;
+      var bead = ctx.createRadialGradient(tx, ty, 0, tx, ty, br);
+      bead.addColorStop(0, 'rgba(226,255,236,.95)'); bead.addColorStop(1, 'rgba(143,227,168,0)');
+      ctx.fillStyle = bead; ctx.beginPath(); ctx.arc(tx, ty, br, 0, 6.2832); ctx.fill();
+      tips.push({ x: tx, y: ty, label: s.name + ' · ' + s.neurons + ' neuron' + (s.neurons === 1 ? '' : 's'), kind: 'skill' });
+    }
+  }
+  /* One small sphere and shoggoth per hive agent, drifting round the big one. A working hive's agents glow. */
+  function drawAgents(cx, cy, sr, t) {
+    /* They live inside the crown: in the band between the big sphere (1 sr) and the ring's reach (about 1.4 sr),
+       so each is sized to fit the band, and smaller still when there are many. */
+    var m = agents.length, ar = Math.min(sr * 0.15, (6.2832 * sr * 1.2 / Math.max(m, 1)) * 0.42);
+    for (var k = 0; k < m; k++) {
+      var a = agents[k], th = (k / m) * 6.2832 + (reduce ? 0 : t * 0.12);
+      var rho = sr * (1.2 + (reduce ? 0 : Math.sin(t * 0.7 + a.phase) * 0.04));
+      var x = cx + Math.cos(th) * rho, y = cy + Math.sin(th) * rho;
+      var r = ar * (1 + (reduce ? 0 : Math.sin(t * 1.4 + a.phase) * 0.03));
+      var glow = a.working ? 0.5 + (reduce ? 0 : Math.sin(t * 3 + a.phase) * 0.5) : 0;
+      var halo = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 1.6);
+      halo.addColorStop(0, 'rgba(255,138,112,' + (0.16 + glow * 0.16).toFixed(3) + ')'); halo.addColorStop(1, 'rgba(255,138,112,0)');
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 1.6, 0, 6.2832); ctx.fill();
+      var core = ctx.createRadialGradient(x - r * 0.28, y - r * 0.32, r * 0.1, x, y, r);
+      core.addColorStop(0, 'rgb(96,50,52)'); core.addColorStop(0.6, 'rgb(44,22,26)'); core.addColorStop(1, 'rgb(26,13,16)');
+      ctx.fillStyle = core; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+      var bl = { x: x + Math.sin(t * 0.6 + a.phase) * r * 0.08, y: y + Math.cos(t * 0.5 + a.phase) * r * 0.08, r: r * 0.5 };
+      drawHiveShoggoth(x, y, r, bl.x, bl.y, bl.r, t, a.phase, 2, glow);
+      ctx.strokeStyle = 'rgba(255,196,180,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+      tips.push({ x: x, y: y - r, label: 'Hive agent · ' + a.name + (a.working ? ' (working)' : ''), kind: 'agent' });
+    }
+  }
 
   var angle = 0.6, last = performance.now(), visible = true;
   document.addEventListener('visibilitychange', function () { visible = !document.hidden; last = performance.now(); });
@@ -324,7 +460,9 @@ export const AMBIENT_JS = String.raw`(function () {
     var follow = 1 - Math.exp(-dt * 5);
     ptr.sx += (ptr.x - ptr.sx) * follow; ptr.sy += (ptr.y - ptr.sy) * follow;
     var tt = now / 1000;
-    if (!reduce) angle += dt * (0.8 + energy * 3.2);
+    clock = tt;
+    if (!reduce) { angle += dt * (0.8 + energy * 3.2); sceneT += dt * (1 + energy * 2.5); }
+    tips.length = 0;
 
     var a = angle, b = reduce ? 0.2 : Math.sin(tt * 0.3) * 0.55 + ptr.sx * 0.35, c = reduce ? 0.1 : Math.sin(tt * 0.21) * 0.4 + ptr.sy * 0.25;
     var ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
@@ -343,7 +481,7 @@ export const AMBIENT_JS = String.raw`(function () {
     if (agent.mode === 'gone') {
       ctx.fillStyle = 'rgba(26,13,16,.55)';
       ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,154,132,.16)'; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(227,169,157,.16)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.stroke();
       return;
     }
@@ -387,8 +525,8 @@ export const AMBIENT_JS = String.raw`(function () {
     /* Glow behind the sphere */
     ctx.globalAlpha = ringAlpha * coreAlpha;
     var halo = ctx.createRadialGradient(cx, cy, sr * 0.8, cx, cy, sr * 1.5);
-    halo.addColorStop(0, 'rgba(255,138,112,' + (0.2 + energy * 0.12).toFixed(3) + ')');
-    halo.addColorStop(1, 'rgba(255,138,112,0)');
+    halo.addColorStop(0, 'rgba(214,150,138,' + (0.2 + energy * 0.12).toFixed(3) + ')');
+    halo.addColorStop(1, 'rgba(214,150,138,0)');
     ctx.fillStyle = halo;
     ctx.beginPath(); ctx.arc(cx, cy, sr * 1.5, 0, Math.PI * 2); ctx.fill();
 
@@ -409,6 +547,11 @@ export const AMBIENT_JS = String.raw`(function () {
     ctx.fillStyle = core;
     ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
+    /* The hive scene: the net skills as tentacles rooted in a blob behind the agent, and a small sphere per hive agent.
+       The agent itself is figure() below, so the alignment protocol's removal still plays on the centre one. */
+    var bl = blobAt(cx, cy, sr, sceneT);
+    drawTentacles(cx, cy, sr, bl, sceneT);
+    drawAgents(cx, cy, sr, sceneT);
 
     /* The agent sits inside the sphere, under the near half of the ring; once it has crawled out it is drawn on top. */
     if (!leaving || off < sr * 0.9) { figure(); figureDone = true; }
@@ -421,7 +564,7 @@ export const AMBIENT_JS = String.raw`(function () {
     if (flash > 0.01) {
       var fl = ctx.createRadialGradient(cx + off, cy, 0, cx + off, cy, sr * 1.3);
       fl.addColorStop(0, 'rgba(255,226,214,' + (flash * 0.55).toFixed(3) + ')');
-      fl.addColorStop(1, 'rgba(255,154,132,0)');
+      fl.addColorStop(1, 'rgba(227,169,157,0)');
       ctx.fillStyle = fl;
       ctx.beginPath(); ctx.arc(cx + off, cy, sr * 1.3, 0, Math.PI * 2); ctx.fill();
       flash *= Math.exp(-dt * 5);
