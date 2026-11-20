@@ -55,13 +55,15 @@ function main() {
   } catch {
     return
   }
-  if (!job || typeof job.content !== 'string' || !/^extension-builder\/shared-mesh\/deltas\/[a-f0-9]{16}\.json$/.test(job.relPath)) {
+  if (!job || typeof job.content !== 'string' || !/^extension-builder\/shared-mesh\/(deltas|revoked)\/[a-f0-9]{16}\.json$/.test(job.relPath)) {
     log('outbox malformed -- skipping')
     return
   }
   const result = publishFilesToBranch(
     [{ relPath: job.relPath, content: job.content }],
-    'Shared learning: updated mesh weight delta from one install\n\nAutomated push by scripts/shared-mesh-publish.mjs (opt-in: NEUROCLAW_SHARED_LEARNING=1).',
+    job.relPath.includes('/revoked/')
+      ? 'Shared learning: withdrew one install\'s mesh weight delta\n\nAutomated push by scripts/shared-mesh-publish.mjs after the security model shut that install\'s agent down (opt-in: NEUROCLAW_SHARED_LEARNING=1). Other installs skip a delta whose id has a file here.'
+      : 'Shared learning: updated mesh weight delta from one install\n\nAutomated push by scripts/shared-mesh-publish.mjs (opt-in: NEUROCLAW_SHARED_LEARNING=1).',
     process.env.NEUROCLAW_SHARED_LEARNING_BRANCH || 'main',
   )
   if (!result.ok) {

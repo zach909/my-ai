@@ -11,7 +11,7 @@ import { api, ensureBuilt, removeDir, startServer, tempDir } from './helpers.mjs
 
 ensureBuilt();
 
-const GROUPS = ['plugin-host-routes', 'platform-routes', 'accounts-routes', 'hosted-routes', 'corona-routes', 'memory-topics-routes', 'safety-routes', 'weights-routes', 'agent-routes', 'commons-routes'];
+const GROUPS = ['plugin-host-routes', 'platform-routes', 'accounts-routes', 'hosted-routes', 'corona-routes', 'memory-topics-routes', 'prompt-memory-routes', 'safety-routes', 'weights-routes', 'agent-routes', 'commons-routes'];
 const dataDir = tempDir('nc-plugins-');
 const servers = [];
 after(async () => { for (const s of servers) await s.stop(); removeDir(dataDir); });

@@ -205,3 +205,88 @@ describe('combine', () => {
     expect(Array.from(combine(a, b, -1).x)).toEqual([0.5, 1.5]);
   });
 });
+
+describe('shared mesh: withdrawing an install (the security model shut its agent down)', () => {
+  it('skips an install that has a tombstone, wherever its delta already sits', () => {
+    const root = tmp();
+    const e = engine();
+    const shape = e.captureNetworkState().shape;
+    const core = extractCore(e.captureNetworkState(), shape)!;
+    const ones: CoreArrays = {};
+    for (const [k, v] of Object.entries(core)) ones[k] = new Float32Array(v.length).fill(0.3);
+    const deltas = path.join(root, 'deltas');
+    const revoked = path.join(root, 'revoked');
+    mkdirSync(deltas, { recursive: true });
+    mkdirSync(revoked, { recursive: true });
+    writeFileSync(path.join(deltas, 'aaaaaaaaaaaaaaaa.json'), JSON.stringify(encodeDelta(ones, 'b', shape)));
+    writeFileSync(path.join(deltas, 'bbbbbbbbbbbbbbbb.json'), JSON.stringify(encodeDelta(ones, 'b', shape)));
+    writeFileSync(path.join(revoked, 'aaaaaaaaaaaaaaaa.json'), JSON.stringify({ installId: 'aaaaaaaaaaaaaaaa', at: 1, reason: 'malicious' }));
+    writeFileSync(path.join(revoked, 'not-an-id.json'), '{}'); // only a real install id counts
+    const opts = { baseId: 'b', shape, expectedKeys: Object.keys(core), excludeInstallId: 'cccccccccccccccc', template: core };
+    for (const r of [readOthersContribution(deltas, { ...opts, revokedDir: revoked }), readOthersContribution(deltas, opts)]) {
+      expect(r.installs).toBe(1); // the folder next to the deltas is the default
+      expect(r.contribution.modWeight[0]).toBeCloseTo(0.3 / 2, 5);
+    }
+  });
+
+  it("takes this install's learning back out of the network, retires its id and queues a tombstone", async () => {
+    const root = tmp();
+    const e = engine();
+    const { paths } = setup(root, e);
+    const shape = e.captureNetworkState().shape;
+    const baseCore = extractCore(e.captureNetworkState(), shape)!;
+    const script = path.join(root, 'publish.mjs');
+    writeFileSync(script, '');
+    const spawned: unknown[][] = [];
+    const spawnFn = ((...a: unknown[]) => { spawned.push(a); return { on() {}, unref() {} }; }) as never;
+    const sync = new SharedMeshSync(() => e, null, { ...paths, publishScript: script }, { enabled: true, log: () => {}, spawnFn });
+    expect(sync.boot()).toBe(true);
+    const oldId = sync.getStatus().installId!;
+    expect(oldId).toMatch(/^[a-f0-9]{16}$/);
+
+    learnSomething(e, shape, 0.05);
+    await sync.tick();
+    expect(Math.abs(extractCore(e.captureNetworkState(), shape)!.modWeight[0] - baseCore.modWeight[0])).toBeGreaterThan(0.01);
+    const pushesBefore = spawned.length;
+
+    const result = await sync.revokeOwn('The security model shut the agent down.');
+    expect(result).toMatchObject({ purged: true, retiredId: oldId, tombstoneQueued: true });
+    const after = extractCore(e.captureNetworkState(), shape)!;
+    for (const k of Object.keys(baseCore)) for (let i = 0; i < baseCore[k].length; i++) expect(after[k][i]).toBeCloseTo(baseCore[k][i], 5);
+    expect(existsSync(path.join(paths.localDir, 'own-delta.json.gz'))).toBe(false);
+    expect(spawned.length).toBe(pushesBefore + 1);
+
+    const outbox = JSON.parse(readFileSync(path.join(paths.localDir, 'outbox.json'), 'utf8'));
+    expect(outbox.relPath).toBe(`extension-builder/shared-mesh/revoked/${oldId}.json`);
+    expect(JSON.parse(outbox.content)).toMatchObject({ installId: oldId });
+    expect(sync.getStatus().installId).not.toBe(oldId); // a clean identity from here on
+
+    await sync.tick(); // nothing learned since, so nothing is published under the new id
+    expect(JSON.parse(readFileSync(path.join(paths.localDir, 'outbox.json'), 'utf8')).relPath).toBe(`extension-builder/shared-mesh/revoked/${oldId}.json`);
+  });
+
+  it('still takes the learning out of the network when sharing is off, but pushes nothing', async () => {
+    const root = tmp();
+    const e = engine();
+    const { paths } = setup(root, e);
+    const shape = e.captureNetworkState().shape;
+    const baseCore = extractCore(e.captureNetworkState(), shape)!;
+    const sync = new SharedMeshSync(() => e, null, paths, { enabled: false, log: () => {} });
+    expect(sync.boot()).toBe(true);
+    learnSomething(e, shape, 0.05);
+    const result = await sync.revokeOwn('malicious');
+    expect(result).toMatchObject({ purged: true, tombstoneQueued: false });
+    expect(extractCore(e.captureNetworkState(), shape)!.modWeight[0]).toBeCloseTo(baseCore.modWeight[0], 5);
+    expect(existsSync(path.join(paths.localDir, 'outbox.json'))).toBe(false);
+  });
+
+  it('says plainly when there was nothing loaded to take out, and never throws', async () => {
+    const root = tmp();
+    const e = engine();
+    const { paths } = setup(root, e);
+    const sync = new SharedMeshSync(() => e, null, paths, { enabled: true, log: () => {} }); // never booted
+    const result = await sync.revokeOwn('malicious');
+    expect(result.purged).toBe(false);
+    expect(result.note).toMatch(/not loaded/);
+  });
+});

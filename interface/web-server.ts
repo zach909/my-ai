@@ -11,6 +11,7 @@ import { AppLauncher } from './app-launcher.js';
 import { EncryptionManager } from './encryption.js';
 import { ChatHistoryStore, type ChatSource } from '../models && skills/core/chat-history-store.js';
 import { exportChats, importChats } from '../models && skills/core/chat-archive.js';
+import { buildResponseBundle, reviewStep } from './response-bundle.js';
 import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
@@ -34,6 +35,7 @@ import { AVATAR_HTML } from './avatar.js';
 import { AMBIENT_CSS, AMBIENT_JS, injectAmbient, isAmbientRoute, isPwaRoute } from './ambient.js';
 import { parseNeurons } from '../models && skills/core/neurons.js';
 import { parseEffort } from '../models && skills/core/effort.js';
+import { parseAutoRoute, type RouteSummary } from '../models && skills/core/auto-route.js';
 import { parseQuestions } from '../models && skills/core/questions.js';
 import { ALL_PORTS } from '../models && skills/core/ports.js';
 import { PROMPT_BUTTON_CLIENT_JS, PROMPT_BUTTON_CSS, askPage, promptButtonSkillsFor } from './prompt-buttons.js';
@@ -59,12 +61,14 @@ import { WEIGHTS_PAGE } from './weights-page.js';
 import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
+import { PromptMemory } from '../models && skills/core/prompt-memory.js';
 import { isAccountsPublicRoute } from './accounts-routes.js';
 import { ACCOUNTS_PAGE } from './accounts-page.js';
 import { getAccounts, nameBelongsToAnotherAccount, resolveWho, userMayReach, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { setNameGuard } from '../models && skills/core/points.js';
 import { agentAlive } from '../models && skills/core/agent-profile.js';
 import { sharedMindReader, tapOfEngine } from '../models && skills/core/mind-reader.js';
+import { sharedSecurityModel } from '../models && skills/core/security-model.js';
 import { armDecoy, armHoneypot, recordEvent, setEscapeHook, setFireHook, standing, watchDecoy, watchHoneypot } from '../models && skills/core/danger-protocol.js';
 import { ANONYMOUS, OWNER, dataDir, isOwnerOrAdmin, runAs, runAutonomously, setLearnPolicy, who } from '../models && skills/core/user-context.js';
 import { sharedToolGate } from '../models && skills/core/tool-safety.js';
@@ -614,6 +618,12 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
   #neurons, #questions { width: 96px; accent-color: #ff9a84; }
   #neurons-out, #questions-out { min-width: 2.2em; opacity: 0.8; }
   @media (max-width: 600px) { #neurons-wrap, #questions-wrap { display: none; } }
+  /* Auto routing: Auto picks effort, where to answer and how much of the network runs; Instant answers fast; Optimize tidies the prompt. */
+  #route-wrap { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; font-size: 12px; }
+  .route-opt { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+  .route-opt input { accent-color: #ff9a84; margin: 0; }
+  .route-opt input:disabled + span { opacity: 0.4; }
+  @media (max-width: 600px) { #input-area { flex-wrap: wrap; } #route-wrap { order: 9; flex: 1 0 100%; justify-content: center; } }
   #send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -767,6 +777,11 @@ ${SOURCE_CSS}
     <input type="range" id="questions" min="0" max="100" step="5" value="50" aria-label="Questions, how often the AI asks when it is not sure, 0 to 100" aria-valuetext="50, sometimes">
     <output id="questions-out" for="questions">50</output>
   </label>
+  <span id="route-wrap" role="group" aria-label="How the AI picks effort and processor">
+    <label class="route-opt" for="route-auto" title="Auto: for each message it picks how hard to try, whether to answer on this device or a bigger computer, and how much of its network to run."><input type="checkbox" id="route-auto" checked><span>Auto</span></label>
+    <label class="route-opt" for="route-instant" title="Instant: answer fast. Lowest effort, the lightest engine, and only the most relevant part of the network."><input type="checkbox" id="route-instant"><span>Instant</span></label>
+    <label class="route-opt" for="route-optimize" title="Optimize prompt: tidy the message before it is sent (filler and repeats out, nothing added). Not used with Instant."><input type="checkbox" id="route-optimize"><span>Optimize prompt</span></label>
+  </span>
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
@@ -802,6 +817,26 @@ ${SOURCE_CSS}
   try { const savedQ = localStorage.getItem('nc-questions'); if (savedQ !== null && savedQ !== '') questionsEl.value = savedQ; } catch (e) { /* storage may be blocked */ }
   showQuestions();
   questionsEl.addEventListener('input', function () { showQuestions(); try { localStorage.setItem('nc-questions', questionsEl.value); } catch (e) { /* not saved */ } });
+  // Auto routing switches. Auto is on unless it was turned off; Instant and Optimize start off. Kept in this browser only.
+  const routeAutoEl = document.getElementById('route-auto');
+  const routeInstantEl = document.getElementById('route-instant');
+  const routeOptimizeEl = document.getElementById('route-optimize');
+  function loadRoute(el, key, fallback) {
+    let v = fallback;
+    try { const saved = localStorage.getItem(key); if (saved === '1' || saved === '0') v = saved === '1'; } catch (e) { /* storage may be blocked */ }
+    el.checked = v;
+    el.addEventListener('change', function () { showRoute(); try { localStorage.setItem(key, el.checked ? '1' : '0'); } catch (e) { /* not saved */ } });
+  }
+  // Instant answers at once, so it needs Auto's picking and has no use for a tidy-up first.
+  function showRoute() {
+    if (routeInstantEl.checked) routeAutoEl.checked = true;
+    routeAutoEl.disabled = routeInstantEl.checked;
+    routeOptimizeEl.disabled = routeInstantEl.checked;
+  }
+  loadRoute(routeAutoEl, 'nc-route-auto', true);
+  loadRoute(routeInstantEl, 'nc-route-instant', false);
+  loadRoute(routeOptimizeEl, 'nc-route-optimize', false);
+  showRoute();
   const clearBtn = document.getElementById('clear-btn');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
@@ -860,6 +895,14 @@ ${SOURCE_CSS}
 
     const dl = document.createElement('dl');
     if (d.route) row(dl, 'routed to', d.route.capability + ' (confidence ' + d.route.confidence + ')');
+    if (d.autoRoute) {
+      const r = d.autoRoute;
+      row(dl, 'effort', r.effort.level + ' (' + r.effort.mode + ', ' + (r.effort.source === 'auto' ? 'picked for this message' : r.effort.source === 'manual' ? 'set by hand' : 'instant') + ')');
+      row(dl, 'answered', (r.where === 'cloud' ? 'on a bigger computer' : 'on this device') + ' (' + r.engine + ')');
+      row(dl, 'processor', r.compute.islandsTotal ? Math.round(r.compute.share * 100) + '%: ' + r.compute.islandsRun.length + ' of ' + r.compute.islandsTotal + ' islands run' : 'whole network (no islands found yet)');
+      if (r.code) row(dl, 'code job', r.code.task + (r.code.language ? ' in ' + r.code.language : '') + ', ' + r.code.difficulty);
+      if (r.prompt.optimized) row(dl, 'prompt tidied', r.prompt.changes.join(', '));
+    }
     if (d.emotion) row(dl, 'read as', 'valence ' + d.emotion.valence + ', arousal ' + d.emotion.arousal);
     if (d.mesh) row(dl, 'mesh', d.mesh.neurons + ' neurons x ' + d.mesh.dimensions + ' dimensions');
     if (d.zipBytes) row(dl, 'zip loop', d.zipBytes + ' archive bytes through the bit neurons');
@@ -1060,6 +1103,41 @@ ${SOURCE_CSS}
         dots.setAttribute('aria-expanded', 'true');
       };
       ts.appendChild(dots);
+
+      // Zip, next to the dots: this reply as response/, plugins/ and prompts/ (interface/response-bundle.ts).
+      const zip = document.createElement('button');
+      zip.className = 'dots-btn';
+      zip.textContent = 'Zip';
+      zip.title = 'Download this reply as a zip: the response, the plugins it used and prompts to send next';
+      zip.setAttribute('aria-label', 'Download this reply as a zip');
+      zip.onclick = async () => {
+        let question = '';
+        if (entry) {
+          const at = chatHistory.indexOf(entry);
+          for (let i = at - 1; i >= 0; i--) {
+            if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
+        zip.disabled = true;
+        try {
+          const r = await fetch('/api/chat/bundle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details })
+          });
+          if (!r.ok) throw new Error('no zip');
+          const url = URL.createObjectURL(await r.blob());
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'neuroclaw-reply.zip';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch { zip.textContent = 'Zip failed'; setTimeout(() => { zip.textContent = 'Zip'; }, 2000); }
+        finally { zip.disabled = false; }
+      };
+      ts.appendChild(zip);
     }
     const stamp = document.createElement('span');
     stamp.textContent = time || new Date().toLocaleTimeString();
@@ -1139,6 +1217,9 @@ ${SOURCE_CSS}
           sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
           questions: Number(questionsEl.value),
+          auto: routeAutoEl.checked,
+          instant: routeInstantEl.checked,
+          optimize: routeOptimizeEl.checked && !routeInstantEl.checked,
           visualEvent,
           history: chatHistory.map(({role, content}) => ({role, content: ncVisuals.plain(content)}))
         })
@@ -1679,6 +1760,23 @@ export class WebServer {
     // The mind reader: a second model that reads which of the main network's neurons are firing. It is handed a read-only
     // tap (neuron count, energy, group) and nothing that writes; the engine is fetched each time so a swapped one is followed.
     sharedMindReader().attach(tapOfEngine(() => this.runner.getLLM().hyperEngine));
+    // The security model: the main model's way to ask "may I run this?" when the AI monitor (auto mode) is on. It reads
+    // the same read-only tap, learns from what people decide and what the agent does, and can answer allow, deny,
+    // sandbox or shutdown. A shutdown deletes the agent for every account here (the alignment protocol) and withdraws this
+    // install's learning from the shared mesh, so it is not carried to other installs either.
+    const security = sharedSecurityModel();
+    security.attach(tapOfEngine(() => this.runner.getLLM().hyperEngine));
+    security.listen();
+    security.setShutdownHook(async (reason) => {
+      try {
+        const { getNeuroclawSystem } = await import('../src/index.js');
+        const result = await (await getNeuroclawSystem()).sharedMesh.revokeOwn(reason);
+        console.log(`[security-model] shutdown: ${result.purged ? 'this install\'s learning was taken out of the network' : 'the network was NOT restored'}${result.tombstoneQueued ? '; a withdrawal was queued for the shared mesh' : ''}${result.note ? ` (${result.note})` : ''}`);
+      } catch {
+        // The agent is already gone; withdrawing the learning is best effort.
+      }
+    });
+    sharedToolGate().useSecurity(security);
     // A sandbox breach is not something to find out about next time someone
     // happens to open Commons: push a real OS notification too, if the
     // notifications plugin is active (watchDecoy already logs loudly and
@@ -4071,7 +4169,8 @@ export class WebServer {
     }
 
     // DELETE /api/memory/all — forget everything: every remembered item,
-    // every AI Chat thread, and every shared chat room.
+    // every topic note, every prompt-memory stand-in, every AI Chat thread,
+    // and every shared chat room.
     //
     // Never public, and it never can be. It is behind the blanket gate above
     // like all destruction, and it is deliberately not one of the
@@ -4093,9 +4192,10 @@ export class WebServer {
         const system = await getNeuroclawSystem();
         const memories = system.memory.forgetAll();
         const topicNotes = new MemoryFolders().forgetAll();
+        const standIns = new PromptMemory().forgetAll();
         const threads = this.chatHistory.deleteAllThreads();
         const rooms = getSharedChatStore().deleteAllRooms();
-        this.sendJson(res, { memories, topicNotes, threads, rooms });
+        this.sendJson(res, { memories, topicNotes, standIns, threads, rooms });
       } catch (err) {
         this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 500);
       }
@@ -4566,7 +4666,7 @@ export class WebServer {
     if (pathname === '/api/chat' && method === 'POST') {
       try {
         const body = await this.parseBody(req) as
-          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
+          { message?: string; visuals?: boolean; buttons?: boolean; sources?: boolean; neurons?: unknown; effort?: unknown; questions?: unknown; auto?: unknown; instant?: unknown; optimize?: unknown; visualEvent?: unknown; history?: Array<{ role?: string; content?: string }> } | null;
         // A visual panel on the page reports something: the turn is built here from the validated event, not
         // taken from the text the page chose to show. Without one, a fenced visual in the message is code the
         // page drew and the mesh never needs (its doorway keeps 200 characters), so it is replaced by "[visual]".
@@ -4602,9 +4702,12 @@ export class WebServer {
         if (isOwnerOrAdmin()) await profileWithMemory().catch(() => undefined); // the owner's profile is the owner's
         const activity = activityStart(`Chat: ${clip(message, 80)}`, clip(message));
         let response: string;
+        // What auto routing decided for this message (effort, where, how much of the network), reported by the runner.
+        let autoRoute: RouteSummary | undefined;
         try {
           // When the page asked for visuals the AI is told to act as the back end (see interface/visuals.ts).
-          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions));
+          response = await this.runner.generate(message, history, [...visualSkillsFor(body), ...promptButtonSkillsFor(body), ...sourceSkillsFor(body)], parseNeurons(body?.neurons), parseEffort(body?.effort), parseQuestions(body?.questions),
+            { request: parseAutoRoute(body), onPlan: (summary) => { autoRoute = summary; } });
         } catch (err) {
           activityEnd(activity, false, err instanceof Error ? err.message : String(err));
           throw err;
@@ -4620,6 +4723,8 @@ export class WebServer {
           const { getNeuroclawSystem } = await import('../src/index.js');
           details = (await getNeuroclawSystem()).lastTurnDetails ?? undefined;
         } catch { /* the details are not the answer; never fail the reply for them */ }
+        // The routing decision rides in the same panel as the rest of "how this answer was built".
+        if (autoRoute) details = { ...(details && typeof details === 'object' ? details as object : {}), autoRoute };
         this.sendJson(res, { response, details, timestamp: Date.now() });
       } catch (err) {
         this.sendError(res, err);
@@ -4653,6 +4758,61 @@ export class WebServer {
           prompt: typeof body?.prompt === 'string' ? body.prompt : undefined,
         });
         this.sendJson(res, result);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle — one reply as a zip: response/, plugins/ and prompts/ (see interface/response-bundle.ts).
+    // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
+    if (pathname === '/api/chat/bundle' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
+          return;
+        }
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits });
+        this.setSecurityHeaders(res);
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="neuroclaw-reply-${new Date().toISOString().slice(0, 10)}.zip"`,
+          'Content-Length': zip.length,
+        });
+        res.end(zip);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle/review — one round of review on a reply zip's edits (see interface/response-edits.ts).
+    // { response, message?, definitions?, edits, decisions?, revisions?, withdraw? } -> { done, remaining, edits, open }.
+    // A separate agent reads the zip and sends decisions; the author sends revisions for what was rejected; repeat
+    // until done is true. An edit changes the zip only once it is approved.
+    if (pathname === '/api/chat/bundle/review' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; decisions?: unknown; revisions?: unknown; withdraw?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "...", "edits": [...] } with "decisions", "revisions" or "withdraw".' }, 400);
+          return;
+        }
+        const list = (v: unknown): unknown[] => (Array.isArray(v) ? v.slice(0, 200) : []);
+        const obj = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null ? v as Record<string, unknown> : {});
+        const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+        try {
+          this.sendJson(res, reviewStep(
+            { message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits },
+            {
+              decisions: list(body.decisions).map(d => ({ id: str(obj(d).id) ?? '', approve: obj(d).approve === true, comment: str(obj(d).comment) })),
+              revisions: list(body.revisions).map(r => ({ id: str(obj(r).id) ?? '', find: str(obj(r).find), replace: str(obj(r).replace), note: str(obj(r).note), comment: str(obj(r).comment) })),
+              withdraw: list(body.withdraw).filter((x): x is string => typeof x === 'string'),
+            },
+          ));
+        } catch (err) {
+          this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 400);
+        }
       } catch (err) {
         this.sendError(res, err);
       }

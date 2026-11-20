@@ -45,9 +45,13 @@ and the permissions each OS prompts for.
 | Feature | Windows | Linux | macOS | ChromeOS / Chromebook | Android | iOS |
 | --- | --- | --- | --- | --- | --- | --- |
 | Chat | yes | yes | yes | yes | yes | yes |
+| Auto route (effort, where to answer, how much network) | yes | yes | yes | yes | yes | yes |
+| Coding jobs (write, explain, debug, technical) | yes | yes | yes | yes | yes | yes |
+| Tool scripts (a script that runs features and tools) | yes | yes | yes | no | partly | partly |
 | Chat history | yes | yes | yes | yes | yes | yes |
 | Memory | yes | yes | yes | yes | yes | yes |
 | Memory topics | yes | yes | yes | yes | yes | yes |
+| Prompt memory | yes | yes | yes | yes | yes | yes |
 | Reasoning engine | yes | yes | yes | yes | yes | yes |
 | Skills | yes | yes | yes | yes | yes | yes |
 | App skills (the auto skill maker reads each app's commands) | yes | yes | yes | yes | yes | yes |
@@ -86,6 +90,7 @@ and the permissions each OS prompts for.
 | Hive mind | yes | yes | yes | no | partly | partly |
 | AI monitor (judge agent) | yes | yes | yes | no | partly | partly |
 | Mind reader (reads the network’s firing) | yes | yes | yes | no | partly | partly |
+| Security model (the main model asks before it runs something) | yes | yes | yes | no | partly | partly |
 | Alignment protocol (kill switch) | yes | yes | yes | no | partly | partly |
 | Plugin host (route groups as plugins) | yes | yes | yes | yes | yes | yes |
 <!-- parity-matrix:end -->
