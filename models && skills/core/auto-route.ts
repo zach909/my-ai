@@ -32,6 +32,7 @@ import { chooserEnabled, defaultDeps, type RouterDeps } from "./engine-router.js
 import { parseEffort, planEffort, type EffortPlan } from "./effort.js";
 import { planIslands, scoreIslands, type IslandInfo, type IslandPlan } from "./weight-islands.js";
 import { optimizePrompt, type OptimizedPrompt } from "./prompt-optimizer.js";
+import { adjustEffortForCode, askOf, detectCodeIntent, type CodeIntent } from "./coding-jobs.js";
 
 /* ---------------------------------------------------------------- request */
 
@@ -137,6 +138,8 @@ export interface RoutePlan {
   /** local-* answers here; remote is the bigger computer. */
   where: "local" | "cloud";
   choice: Choice;
+  /** What the coding-jobs reader made of the message, or null when it is not a coding message. */
+  code: CodeIntent | null;
   compute: ComputeShare & {
     /** Null when the whole answer runs somewhere else, or there is no clean partition to gate on. */
     islands: IslandPlan | null;
@@ -159,11 +162,21 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
 
   // 2. Effort: instant, then a dial set by hand, then the estimate.
   const estimate = estimateEffort(used, historyChars);
+  // Coding jobs (core/coding-jobs.ts): what kind of coding job this is, if it is one. It is read for every message so the
+  // details panel can show it, but it only moves the effort when the effort is an estimate: a dial set by hand and
+  // instant are the person's own choice and are never adjusted.
+  const code = detectCodeIntent(used);
   let level = estimate.level;
   let source: "auto" | "manual" | "instant" = "auto";
   if (req.instant) { level = 5; source = "instant"; reasons.push("instant: lowest effort"); }
   else if (req.effort !== null) { level = req.effort; source = "manual"; reasons.push(`effort ${level} was set by hand`); }
-  else reasons.push(`effort ${level}: ${estimate.reasons.join(", ")}`);
+  else {
+    const adjusted = adjustEffortForCode(level, code, code ? estimateEffort(askOf(used), historyChars).level : 0);
+    level = adjusted.level;
+    reasons.push(`effort ${level}: ${estimate.reasons.join(", ")}`);
+    if (adjusted.note) reasons.push(adjusted.note);
+  }
+  if (code) reasons.push(`coding job: ${code.task}${code.language ? ` in ${code.language}` : ""}, ${code.difficulty} (${code.reasons.join("; ")})`);
   const effort = { ...planEffort(level), estimated: estimate.level, source };
 
   // 3. Where. The chooser sees the message as it was typed, so a secret is never missed by a tidy-up.
@@ -197,7 +210,7 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
   reasons.push(...cs.reasons);
 
   const mode = req.instant ? "instant" : source === "manual" ? "manual-effort" : "auto";
-  return { mode, prompt, effort, engine, where, choice, compute: { ...cs, islands, activeGroups }, reasons };
+  return { mode, prompt, effort, engine, where, choice, code, compute: { ...cs, islands, activeGroups }, reasons };
 }
 
 /** What the page and the details panel get: the decisions and the reasons, small and safe to send as JSON. */
@@ -207,6 +220,8 @@ export interface RouteSummary {
   where: RoutePlan["where"];
   engine: Engine;
   prompt: { optimized: boolean; changes: string[]; savedChars: number; used: string; original: string };
+  /** Present only for a coding message. */
+  code?: { task: string; difficulty: string; language: string | null };
   compute: { share: number; islandsTotal: number; islandsRun: string[]; islandsOff: string[]; ranAll: boolean };
   reasons: string[];
 }
@@ -219,6 +234,7 @@ export function routeSummary(plan: RoutePlan, sent: string): RouteSummary {
     where: plan.where,
     engine: plan.engine,
     prompt: { optimized: plan.prompt.changed, changes: plan.prompt.changes, savedChars: plan.prompt.savedChars, used: sent, original: plan.prompt.changed ? plan.prompt.original : sent },
+    ...(plan.code ? { code: { task: plan.code.task, difficulty: plan.code.difficulty, language: plan.code.language } } : {}),
     compute: { share: Math.round(plan.compute.share * 100) / 100, islandsTotal: isl?.total ?? 0, islandsRun: isl?.run ?? [], islandsOff: isl?.off ?? [], ranAll: isl ? isl.ranAll : true },
     reasons: plan.reasons,
   };

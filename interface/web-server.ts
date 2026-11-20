@@ -899,6 +899,7 @@ ${SOURCE_CSS}
       row(dl, 'effort', r.effort.level + ' (' + r.effort.mode + ', ' + (r.effort.source === 'auto' ? 'picked for this message' : r.effort.source === 'manual' ? 'set by hand' : 'instant') + ')');
       row(dl, 'answered', (r.where === 'cloud' ? 'on a bigger computer' : 'on this device') + ' (' + r.engine + ')');
       row(dl, 'processor', r.compute.islandsTotal ? Math.round(r.compute.share * 100) + '%: ' + r.compute.islandsRun.length + ' of ' + r.compute.islandsTotal + ' islands run' : 'whole network (no islands found yet)');
+      if (r.code) row(dl, 'code job', r.code.task + (r.code.language ? ' in ' + r.code.language : '') + ', ' + r.code.difficulty);
       if (r.prompt.optimized) row(dl, 'prompt tidied', r.prompt.changes.join(', '));
     }
     if (d.emotion) row(dl, 'read as', 'valence ' + d.emotion.valence + ', arousal ' + d.emotion.arousal);
