@@ -14,6 +14,7 @@
  */
 
 import { writeZip, type ZipEntry } from "../models && skills/core/zip-archive.js";
+import { applyApproved, decide, isSettled, normalizeDefinitions, normalizeEdits, open, resolveDefinitions, revise, withdraw, type Edit, type Revision } from "./response-edits.js";
 import { PROMPT_BUTTON_LABEL_MAX, PROMPT_BUTTON_PROMPT_MAX, splitPromptButtons } from "./prompt-buttons.js";
 
 export const BUNDLE_FORMAT = "neuroclaw-response";
@@ -29,6 +30,10 @@ export interface BundleInput {
   response: unknown;
   /** The turn's details as the chat route returned them. Only the parts that can be checked are used. */
   details?: unknown;
+  /** Names the reply uses as `{{name}}` and defines here, later. They are put in first, before any edit. */
+  definitions?: unknown;
+  /** Edits to the reply and prompts. Only the ones a reviewer approved change the text; the rest are listed in response/edits.json. */
+  edits?: unknown;
 }
 
 export interface ToolCallRecord {
@@ -167,10 +172,28 @@ function promptFile(kind: Kind, prompts: Prompt[]): string {
   return `# ${title}\n\n${intro}\n\n${lines.join("\n\n")}\n`;
 }
 
+const EDITABLE = (name: string): boolean => name === "response/reply.md" || name === "response/question.md" || name.startsWith("prompts/");
+
 /** The files of the zip, in a fixed order. */
 export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] {
-  const reply = text(input.response);
-  const question = text(input.message);
+  const defs = normalizeDefinitions(input.definitions);
+  const hasDefs = Object.keys(defs).length > 0;
+  let edits: Edit[] = normalizeEdits(input.edits);
+
+  // Definitions first, then the approved edits, then everything that is built from the text (the prompts).
+  const stage = (name: string, body: string, scope: (f: string) => boolean): string => {
+    const resolved = resolveDefinitions(body, defs).text;
+    const applied = applyApproved(new Map([[name, resolved]]), edits, f => f === name && scope(f));
+    edits = applied.edits;
+    return applied.files.get(name)!;
+  };
+  const missing = new Set<string>();
+  const loops = new Set<string>();
+  const note = (body: string) => { const r = resolveDefinitions(body, defs); r.missing.forEach(m => missing.add(m)); r.loops.forEach(l => loops.add(l)); };
+  note(text(input.response)); note(text(input.message));
+
+  const reply = stage("response/reply.md", text(input.response), EDITABLE);
+  const question = stage("response/question.md", text(input.message), EDITABLE);
   const plugins = pluginsFromDetails(input.details);
 
   const files: ZipEntry[] = [];
@@ -205,14 +228,31 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
     "follow-ups": [],
   };
   for (const p of promptsFromReply(reply)) buckets[classifyPrompt(p)].push(p);
-  for (const kind of ["plugins", "tools", "commands", "feedback"] as const) add(`prompts/${kind}.md`, promptFile(kind, buckets[kind]));
-  if (buckets["follow-ups"].length) add("prompts/follow-ups.md", promptFile("follow-ups", buckets["follow-ups"]));
+  for (const kind of ["plugins", "tools", "commands", "feedback"] as const) {
+    const name = `prompts/${kind}.md`;
+    add(name, stage(name, promptFile(kind, buckets[kind]), EDITABLE));
+  }
+  if (buckets["follow-ups"].length) add("prompts/follow-ups.md", stage("prompts/follow-ups.md", promptFile("follow-ups", buckets["follow-ups"]), EDITABLE));
+
+  // An approved edit whose file is not in the zip could not be applied above; send it back rather than call it done.
+  const names = new Set(files.map(f => f.name));
+  edits = edits.map(e => (e.status === "approved" && !names.has(e.file)
+    ? { ...e, status: "rejected" as const, comments: [...e.comments, { by: "system" as const, text: `There is no file ${e.file} in the zip.` }] }
+    : e));
+
+  if (hasDefs) {
+    add("response/definitions.json", JSON.stringify({ definitions: defs, missing: [...missing].sort(), loops: [...loops].sort() }, null, 2) + "\n");
+  }
+  if (edits.length) {
+    add("response/edits.json", JSON.stringify({ done: isSettled(edits), remaining: open(edits).length, edits }, null, 2) + "\n");
+  }
 
   const manifest = {
     format: BUNDLE_FORMAT,
     version: 1,
     createdAt: now.toISOString(),
     folders: { response: "the reply and how it was built", plugins: "what the turn used", prompts: "prompts to send next" },
+    editsRemaining: open(edits).length,
     files: files.map(f => f.name).concat("manifest.json").sort(),
   };
   add("manifest.json", JSON.stringify(manifest, null, 2) + "\n");
@@ -223,4 +263,39 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
 export function buildResponseBundle(input: BundleInput, now = new Date()): Buffer {
   if (typeof input.response !== "string") throw new TypeError("Send { \"response\": \"<what the agent said>\" }.");
   return writeZip(bundleEntries(input, now), now);
+}
+
+export interface ReviewStep {
+  /** The separate agent's calls on pending edits. An approval is checked against the text as it stands after the edits approved so far. */
+  decisions?: Array<{ id: string; approve: boolean; comment?: string }>;
+  /** The author's rewrites of rejected edits; each goes back to pending. */
+  revisions?: Array<Revision & { id: string }>;
+  /** Rejected edits the author gives up on. */
+  withdraw?: string[];
+}
+
+export interface ReviewState {
+  /** True only when no edit is left unapproved. */
+  done: boolean;
+  remaining: number;
+  edits: Edit[];
+  /** Edits still waiting for a reviewer (`pending`) or a rewrite (`rejected`): what the next round has to deal with. */
+  open: Edit[];
+}
+
+/**
+ * One round of the review, over HTTP or in a loop: withdrawals, then rewrites, then decisions. Throws on an unknown edit id
+ * or on revising an edit that was not rejected, and changes nothing in that case.
+ */
+export function reviewStep(input: BundleInput, step: ReviewStep): ReviewState {
+  let edits = normalizeEdits(input.edits);
+  const current = (): Map<string, string> => new Map(bundleEntries({ ...input, edits }).map(e => [e.name, e.data.toString("utf8")]));
+  for (const id of step.withdraw ?? []) edits = withdraw(edits, id);
+  for (const r of step.revisions ?? []) edits = revise(edits, r.id, r);
+  for (const d of step.decisions ?? []) {
+    const target = edits.find(e => e.id === d.id);
+    edits = decide(edits, d.id, d.approve === true, typeof d.comment === "string" ? d.comment : "", target ? current().get(target.file) : undefined);
+  }
+  const still = open(edits);
+  return { done: still.length === 0, remaining: still.length, edits, open: still };
 }

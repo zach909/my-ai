@@ -11,7 +11,7 @@ import { AppLauncher } from './app-launcher.js';
 import { EncryptionManager } from './encryption.js';
 import { ChatHistoryStore, type ChatSource } from '../models && skills/core/chat-history-store.js';
 import { exportChats, importChats } from '../models && skills/core/chat-archive.js';
-import { buildResponseBundle } from './response-bundle.js';
+import { buildResponseBundle, reviewStep } from './response-bundle.js';
 import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
@@ -4767,12 +4767,12 @@ export class WebServer {
     // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
     if (pathname === '/api/chat/bundle' && method === 'POST') {
       try {
-        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown } | null;
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown } | null;
         if (!body || typeof body.response !== 'string' || !body.response) {
           this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
           return;
         }
-        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details });
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits });
         this.setSecurityHeaders(res);
         res.writeHead(200, {
           'Content-Type': 'application/zip',
@@ -4780,6 +4780,38 @@ export class WebServer {
           'Content-Length': zip.length,
         });
         res.end(zip);
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/bundle/review — one round of review on a reply zip's edits (see interface/response-edits.ts).
+    // { response, message?, definitions?, edits, decisions?, revisions?, withdraw? } -> { done, remaining, edits, open }.
+    // A separate agent reads the zip and sends decisions; the author sends revisions for what was rejected; repeat
+    // until done is true. An edit changes the zip only once it is approved.
+    if (pathname === '/api/chat/bundle/review' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; decisions?: unknown; revisions?: unknown; withdraw?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "...", "edits": [...] } with "decisions", "revisions" or "withdraw".' }, 400);
+          return;
+        }
+        const list = (v: unknown): unknown[] => (Array.isArray(v) ? v.slice(0, 200) : []);
+        const obj = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null ? v as Record<string, unknown> : {});
+        const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+        try {
+          this.sendJson(res, reviewStep(
+            { message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits },
+            {
+              decisions: list(body.decisions).map(d => ({ id: str(obj(d).id) ?? '', approve: obj(d).approve === true, comment: str(obj(d).comment) })),
+              revisions: list(body.revisions).map(r => ({ id: str(obj(r).id) ?? '', find: str(obj(r).find), replace: str(obj(r).replace), note: str(obj(r).note), comment: str(obj(r).comment) })),
+              withdraw: list(body.withdraw).filter((x): x is string => typeof x === 'string'),
+            },
+          ));
+        } catch (err) {
+          this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, 400);
+        }
       } catch (err) {
         this.sendError(res, err);
       }
