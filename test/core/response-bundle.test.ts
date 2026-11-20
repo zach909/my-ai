@@ -26,7 +26,7 @@ describe('the reply zip', () => {
       'prompts/plugins.md', 'prompts/tools.md', 'prompts/commands.md', 'prompts/feedback.md',
     ]))
     expect(f['response/reply.md']).toBe('hello\n')
-    for (const name of Object.keys(f)) expect(/^(response|plugins|prompts)\//.test(name) || name === 'manifest.json').toBe(true)
+    for (const name of Object.keys(f)) expect(/^(response|plugins|prompts|prediction)\//.test(name) || name === 'manifest.json').toBe(true)
   })
 
   it('lists each plugin with what its tools did', () => {
