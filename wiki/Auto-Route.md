@@ -6,6 +6,7 @@ For each message the AI picks three things itself, instead of you turning dials:
 |---|---|---|
 | **Effort** (0-100) | from how big and how careful the job looks (length, code, several steps, "prove", "carefully", "briefly"). The same dial as [[Zip-IO]]'s `effort`, so it rides the Zip Loop exactly like a hand-set one. | `models && skills/core/auto-route.ts` |
 | **Where to answer** | `local-quantized`, `local-full`, or `remote` (a bigger computer you added, or your hosted server). "Cloud" means that remote engine; no outside service is used. | `engine-chooser.ts` (unchanged), called by auto-route |
+| **Questions** (0-100) | how often it asks when unsure, from how vague the message is ("fix it" asks a lot, a clear detailed request almost never). Instant never asks. With Auto on the page slider is greyed out; a hand-set `questions` still wins. | `auto-route.ts` |
 | **How much processor** | how many *islands* of the network run (below). More effort runs more; a busy or low-battery device runs fewer; an island the message needs always runs. | `weight-islands.ts` |
 
 Two switches beside the chat box:

@@ -11,7 +11,11 @@ import { AppLauncher } from './app-launcher.js';
 import { EncryptionManager } from './encryption.js';
 import { ChatHistoryStore, type ChatSource } from '../models && skills/core/chat-history-store.js';
 import { exportChats, importChats } from '../models && skills/core/chat-archive.js';
+import { buildResponseBundle, bundleEntries, reviewStep } from './response-bundle.js';
+import { ORB_CLIENT_JS, ORB_CSS, orbMedia } from './voice-orb.js';
+import { ZipError, readZip } from '../models && skills/core/zip-archive.js';
 import { buildResponseBundle, reviewStep } from './response-bundle.js';
+import { resolvePrediction, scorePrediction } from './response-prediction.js';
 import { ZipError } from '../models && skills/core/zip-archive.js';
 import { UserProfileStore, type ProfileList } from '../models && skills/core/user-profile-store.js';
 import type { NetworkStateSnapshot } from '../models && skills/core/onebrain.js';
@@ -771,6 +775,7 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     z-index: 1;
   }
 ${VISUAL_CSS}
+${ORB_CSS}
 ${PROMPT_BUTTON_CSS}
 ${SOURCE_CSS}
 ${UPLOAD_CSS}
@@ -808,6 +813,7 @@ ${UPLOAD_CSS}
   <button id="send-btn">Send</button>
 </div>
 <script>${VISUAL_CLIENT_JS}</script>
+<script>${ORB_CLIENT_JS}</script>
 <script>${PROMPT_BUTTON_CLIENT_JS}</script>
 <script>${SOURCE_CLIENT_JS}</script>
 <script>${UPLOAD_CLIENT_JS}</script>
@@ -856,6 +862,12 @@ ${UPLOAD_CSS}
     if (routeInstantEl.checked) routeAutoEl.checked = true;
     routeAutoEl.disabled = routeInstantEl.checked;
     routeOptimizeEl.disabled = routeInstantEl.checked;
+    // With Auto on the AI picks how often to ask, so the slider is not used.
+    questionsEl.disabled = routeAutoEl.checked;
+    document.getElementById('questions-wrap').style.opacity = routeAutoEl.checked ? '0.4' : '';
+    const qw = document.getElementById('questions-wrap');
+    if (!qw.dataset.title) qw.dataset.title = qw.title;
+    qw.title = routeAutoEl.checked ? 'Questions: Auto picks this for each message. Turn Auto off to set it by hand.' : qw.dataset.title;
   }
   loadRoute(routeAutoEl, 'nc-route-auto', true);
   loadRoute(routeInstantEl, 'nc-route-instant', false);
@@ -922,6 +934,7 @@ ${UPLOAD_CSS}
     if (d.autoRoute) {
       const r = d.autoRoute;
       row(dl, 'effort', r.effort.level + ' (' + r.effort.mode + ', ' + (r.effort.source === 'auto' ? 'picked for this message' : r.effort.source === 'manual' ? 'set by hand' : 'instant') + ')');
+      if (r.questions) row(dl, 'questions', r.questions.level + ' (' + r.questions.mode + ', ' + (r.questions.source === 'auto' ? 'picked for this message' : r.questions.source === 'manual' ? 'set by hand' : 'instant never asks') + ')');
       row(dl, 'answered', (r.where === 'cloud' ? 'on a bigger computer' : 'on this device') + ' (' + r.engine + ')');
       row(dl, 'processor', r.compute.islandsTotal ? Math.round(r.compute.share * 100) + '%: ' + r.compute.islandsRun.length + ' of ' + r.compute.islandsTotal + ' islands run' : 'whole network (no islands found yet)');
       if (r.code) row(dl, 'code job', r.code.task + (r.code.language ? ' in ' + r.code.language : '') + ', ' + r.code.difficulty);
@@ -1049,6 +1062,29 @@ ${UPLOAD_CSS}
     };
   }
 
+  // What the voice orb is asked to play: the reply as written (visual blocks kept, so a visual can be cast onto the
+  // orb), the question that led to it, and the details of its turn.
+  function orbBody(entry, text) {
+    let question = '';
+    if (entry) {
+      const at = chatHistory.indexOf(entry);
+      for (let i = at - 1; i >= 0; i--) {
+        if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
+      }
+    }
+    return { message: question, response: text, details: entry && entry.details };
+  }
+  // Alt+Space opens the orb on the latest reply, and closes it again.
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    ncOrb.toggleOpen(() => {
+      let last = null;
+      for (let i = chatHistory.length - 1; i >= 0; i--) { if (chatHistory[i].role === 'assistant') { last = chatHistory[i]; break; } }
+      ncOrb.openReply(last ? orbBody(last, last.content) : null);
+    });
+  });
+
   function addMessage(type, text, time, entry) {
     const div = document.createElement('div');
     div.className = 'message ' + type;
@@ -1142,12 +1178,20 @@ ${UPLOAD_CSS}
             if (chatHistory[i].role === 'user') { question = ncVisuals.plain(chatHistory[i].content); break; }
           }
         }
+        // The message the person sent after this reply, if there is one: the guess in prediction/ is scored against it.
+        let actualNext = undefined;
+        if (entry) {
+          const here = chatHistory.indexOf(entry);
+          for (let i = here + 1; i < chatHistory.length; i++) {
+            if (chatHistory[i].role === 'user') { actualNext = ncVisuals.plain(chatHistory[i].content); break; }
+          }
+        }
         zip.disabled = true;
         try {
           const r = await fetch('/api/chat/bundle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details })
+            body: JSON.stringify({ message: question, response: ncVisuals.plain(current), details: entry && entry.details, prediction: (entry && entry.prediction) || undefined, actualNext })
           });
           if (!r.ok) throw new Error('no zip');
           const url = URL.createObjectURL(await r.blob());
@@ -1162,6 +1206,15 @@ ${UPLOAD_CSS}
         finally { zip.disabled = false; }
       };
       ts.appendChild(zip);
+
+      // Orb, next to Zip: the reply's audio file (or the system voice) on a circle that swells with the volume.
+      const orb = document.createElement('button');
+      orb.className = 'dots-btn orb-btn';
+      orb.textContent = 'Orb';
+      orb.title = 'Hear this reply on the voice orb (Alt+Space)';
+      orb.setAttribute('aria-label', 'Play this reply on the voice orb');
+      orb.onclick = () => ncOrb.openReply(orbBody(entry, current));
+      ts.appendChild(orb);
     }
     const stamp = document.createElement('span');
     stamp.textContent = time || new Date().toLocaleTimeString();
@@ -1248,7 +1301,7 @@ ${UPLOAD_CSS}
           buttons: true,
           sources: sourceMode !== 'off',
           neurons: Number(neuronsEl.value),
-          questions: Number(questionsEl.value),
+          questions: routeAutoEl.checked ? null : Number(questionsEl.value),
           auto: routeAutoEl.checked,
           instant: routeInstantEl.checked,
           optimize: routeOptimizeEl.checked && !routeInstantEl.checked,
@@ -1265,7 +1318,7 @@ ${UPLOAD_CSS}
         // The entry is pushed BEFORE the message is rendered, and handed to
         // it: the pen edits this object in place, so it has to be the same
         // object the transcript is saved from.
-        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details};
+        const entry = {role: 'assistant', content: data.response, time: aiTime, details: data.details, prediction: data.prediction};
         chatHistory.push(entry);
         addMessage('ai', data.response, aiTime, entry);
         save();
@@ -2309,13 +2362,31 @@ export class WebServer {
 
   getPort(): number { return this.port; }
 
+  /**
+   * What the mesh currently expects the user to say next (ContinuousLearner.currentPrediction), as a prediction record's
+   * input, or null if it has none or cannot be asked quickly. Never throws and never waits long: the reply does not depend on it.
+   */
+  private async currentNextMessageGuess(): Promise<{ predicted: string; source: 'mesh' } | null> {
+    try {
+      const guess = await Promise.race([
+        (async () => (await (await import('../src/index.js')).getNeuroclawSystem()).continuousLearner.currentPrediction())(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 2000)),
+      ]);
+      return typeof guess === 'string' ? { predicted: guess, source: 'mesh' } : null;
+    } catch {
+      return null;
+    }
+  }
+
   private setSecurityHeaders(res: http.ServerResponse): void {
     // Security: Restricted CORS and standard security headers
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+    // img-src and media-src add only data: and blob: (the voice orb plays a reply's audio file from a blob and casts its picture
+    // from a data: address). Nothing is fetched from outside; everything else still falls back to 'self'.
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:;");
   }
 
   private sendJson(res: http.ServerResponse, data: unknown, statusCode = 200): void {
@@ -4786,7 +4857,9 @@ export class WebServer {
         } catch { /* the details are not the answer; never fail the reply for them */ }
         // The routing decision rides in the same panel as the rest of "how this answer was built".
         if (autoRoute) details = { ...(details && typeof details === 'object' ? details as object : {}), autoRoute };
-        this.sendJson(res, { response, details, timestamp: Date.now() });
+        // What the mesh expects the user to say next, so the reply can carry it (prediction/ in the reply zip) and it can be scored.
+        const prediction = await this.currentNextMessageGuess();
+        this.sendJson(res, { response, details, prediction, timestamp: Date.now() });
       } catch (err) {
         this.sendError(res, err);
       }
@@ -4853,12 +4926,12 @@ export class WebServer {
     // Takes what the page already has ({ message?, response, details? }); it runs nothing and asks the mesh nothing.
     if (pathname === '/api/chat/bundle' && method === 'POST') {
       try {
-        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown } | null;
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown; definitions?: unknown; edits?: unknown; prediction?: unknown; actualNext?: unknown } | null;
         if (!body || typeof body.response !== 'string' || !body.response) {
           this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
           return;
         }
-        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits });
+        const zip = buildResponseBundle({ message: body.message, response: body.response, details: body.details, definitions: body.definitions, edits: body.edits, prediction: body.prediction ?? (typeof body.actualNext === 'string' && body.actualNext.trim() ? null : await this.currentNextMessageGuess()), actualNext: body.actualNext });
         this.setSecurityHeaders(res);
         res.writeHead(200, {
           'Content-Type': 'application/zip',
@@ -4868,6 +4941,51 @@ export class WebServer {
         res.end(zip);
       } catch (err) {
         this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/chat/orb — what the voice orb plays for one reply: its audio file if the reply zip has one, else its text
+    // for the system voice, plus a visual file if there is one (see interface/voice-orb.ts). Same body as /api/chat/bundle.
+    // Runs nothing and asks the mesh nothing; the 855-format folder is left out because the orb never reads it.
+    if (pathname === '/api/chat/orb' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 2 * 1024 * 1024) as { message?: unknown; response?: unknown; details?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || !body.response) {
+          this.sendJson(res, { error: 'Send { "response": "<what the agent said>" }.' }, 400);
+          return;
+        }
+        this.sendJson(res, orbMedia(bundleEntries({ message: body.message, response: body.response, details: body.details, formats: false })));
+    // POST /api/chat/bundle/prediction — score the guess at the next message against the message that really came
+    // (see interface/response-prediction.ts). { response, prediction, actual } -> { prediction } with its outcome.
+    // One guess, one score: a prediction already scored keeps its first outcome.
+    if (pathname === '/api/chat/bundle/prediction' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 256 * 1024) as { response?: unknown; prediction?: unknown; actual?: unknown } | null;
+        if (!body || typeof body.response !== 'string' || typeof body.actual !== 'string' || !body.actual.trim()) {
+          this.sendJson(res, { error: 'Send { "response": "...", "prediction": ..., "actual": "<the next message>" }.' }, 400);
+          return;
+        }
+        this.sendJson(res, { prediction: scorePrediction(resolvePrediction(body.prediction, body.response), body.actual) });
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
+    // POST /api/orb/zip — the same, for a response zip the person picked or dropped on the orb: { zip: "<base64>" }.
+    // The zip is read by the hostile-input reader (models && skills/core/zip-archive.ts), with tighter limits than its default.
+    if (pathname === '/api/orb/zip' && method === 'POST') {
+      try {
+        const body = await this.parseBody(req, 24 * 1024 * 1024) as { zip?: unknown } | null;
+        if (!body || typeof body.zip !== 'string' || !body.zip) {
+          this.sendJson(res, { error: 'Send { "zip": "<the zip file, base64>" }.' }, 400);
+          return;
+        }
+        const entries = readZip(Buffer.from(body.zip, 'base64'), { maxEntries: 5000, maxEntryBytes: 16 * 1024 * 1024, maxTotalBytes: 64 * 1024 * 1024 });
+        this.sendJson(res, orbMedia(entries));
+      } catch (err) {
+        this.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, err instanceof ZipError ? 400 : 500);
       }
       return;
     }

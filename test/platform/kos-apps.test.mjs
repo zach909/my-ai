@@ -25,7 +25,7 @@ test('a name nobody registered is an app on the computer, opened with the button
   const out = await K.openApp('kos://Firefox', { apps: K.BUILTIN_APPS, edition: 'extension', run: r.run, platform: 'linux' });
   assert.equal(out.status, 'ran');
   assert.equal(out.app.discovered, true);
-  assert.deepEqual(r.calls, [['desktop', 'launch the app Firefox']]);
+  assert.deepEqual(r.calls, [['desktop', 'desktop launch the app Firefox']]);
 });
 
 test('everything is an app: the layers have front ends in the same list', () => {
@@ -37,7 +37,7 @@ test('every request goes through a layer, to that layer\'s tool and no other', a
   const r = recorder();
   const apps = [...K.BUILTIN_APPS, K.validateApp({ id: 'notes', name: 'Notes', scope: 'extension', open: [{ layer: 'app', request: 'run notes --sync' }, { layer: 'gui', request: 'launch the app notes' }] })];
   await K.openApp('kos://notes', { apps, edition: 'extension', run: r.run, platform: 'linux' });
-  assert.deepEqual(r.calls, [['terminal', 'run notes --sync'], ['desktop', 'launch the app notes']]);
+  assert.deepEqual(r.calls, [['terminal', 'run notes --sync'], ['desktop', 'desktop launch the app notes']]);
 });
 
 test('extension version: system apps and the kernel layer are closed', async () => {
@@ -58,7 +58,7 @@ test('system version: system apps open on Linux through the kernel layer, and on
   const r = recorder();
   const ok = await K.openApp('kos://kernel', { apps: K.BUILTIN_APPS, edition: 'system', run: r.run, platform: 'linux' });
   assert.equal(ok.status, 'ran');
-  assert.deepEqual(r.calls, [['linux-permission-tools', 'list the system services']]);
+  assert.deepEqual(r.calls, [['os-commands', 'os list the system services']]);
   const mac = await K.openApp('kos://kernel', { apps: K.BUILTIN_APPS, edition: 'system', run: r.run, platform: 'darwin' });
   assert.equal(mac.status, 'unavailable');
   assert.equal(r.calls.length, 1);

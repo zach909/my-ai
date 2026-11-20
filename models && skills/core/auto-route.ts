@@ -30,6 +30,7 @@ import type { DeviceProfile } from "./device-profile.js";
 import { Chooser, looksLikeSecret, rewardFor, taskSize, type Choice, type Engine } from "./engine-chooser.js";
 import { chooserEnabled, defaultDeps, type RouterDeps } from "./engine-router.js";
 import { parseEffort, planEffort, type EffortPlan } from "./effort.js";
+import { parseQuestions, planQuestions, type QuestionsPlan } from "./questions.js";
 import { planIslands, scoreIslands, type IslandInfo, type IslandPlan } from "./weight-islands.js";
 import { optimizePrompt, type OptimizedPrompt } from "./prompt-optimizer.js";
 import { adjustEffortForCode, askOf, detectCodeIntent, type CodeIntent } from "./coding-jobs.js";
@@ -43,6 +44,8 @@ export interface AutoRouteRequest {
   optimize: boolean;
   /** A dial set by hand, 0-100. Null when nobody set one. */
   effort: number | null;
+  /** The Questions dial (how often it asks when unsure) set by hand. Null: Auto picks it. */
+  questions: number | null;
 }
 
 /** Read the switches from a request body. Only a real `true` turns a switch on; anything else is off. */
@@ -50,7 +53,7 @@ export function parseAutoRoute(body: unknown): AutoRouteRequest {
   const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   const instant = b.instant === true;
   const optimize = b.optimize === true;
-  return { auto: b.auto === true || instant, instant, optimize, effort: parseEffort(b.effort) };
+  return { auto: b.auto === true || instant, instant, optimize, effort: parseEffort(b.effort), questions: parseQuestions(b.questions) };
 }
 
 /* ----------------------------------------------------------------- effort */
@@ -85,6 +88,40 @@ export function estimateEffort(prompt: string, historyChars = 0): EffortEstimate
   if (why.length === 0) why.push("short and plain");
   return { level: Math.round(Math.min(100, Math.max(0, level))), reasons: why };
 }
+
+/* -------------------------------------------------------------- questions */
+
+const VAGUE_TARGET = /\b(it|this|that|them|these|those|the thing|stuff)\b/i;
+const VAGUE_VERB = /^\s*(?:please\s+)?(?:fix|make|change|update|improve|do|redo|finish|clean|handle|add|remove|try)\b/i;
+const FACT_Q = /^\s*(?:what|who|when|where|which|how many|how much|is|are|does|do|can)\b[^]*\?\s*$/i;
+
+export interface QuestionsEstimate {
+  level: number;
+  reasons: string[];
+}
+
+/**
+ * How often to ask when unsure, 0-100, from how under-specified the message looks. A clear factual question or
+ * a message full of detail needs no questions; a short "fix it" with nothing to point at needs them.
+ */
+export function estimateQuestions(prompt: string, historyChars = 0): QuestionsEstimate {
+  const text = prompt.trim();
+  if (SMALL_TALK.test(text)) return { level: 0, reasons: ["small talk"] };
+  const n = words(text);
+  const reasons: string[] = [];
+  let level = 40;
+  if (FACT_Q.test(text) && n >= 4) { level -= 20; reasons.push("a clear question"); }
+  if (n <= 6 && VAGUE_VERB.test(text)) { level += 25; reasons.push("a short instruction"); }
+  if (VAGUE_TARGET.test(text) && historyChars === 0 && n <= 12) { level += 15; reasons.push("points at something with no earlier conversation"); }
+  const { size } = taskSize(text, historyChars);
+  if (size >= 3 && text.length < 200) { level += 15; reasons.push("a big job in few words"); }
+  if (text.length > 600 || /```/.test(text)) { level -= 15; reasons.push("plenty of detail given"); }
+  if (QUICK.test(text)) { level -= 15; reasons.push("asks for it quick"); }
+  if (reasons.length === 0) reasons.push("nothing unclear");
+  return { level: Math.round(Math.min(100, Math.max(0, level))), reasons };
+}
+
+const words = (s: string): number => (s.trim().match(/\S+/g) ?? []).length;
 
 /* ------------------------------------------------------------------ share */
 
@@ -134,6 +171,8 @@ export interface RoutePlan {
   mode: "auto" | "manual-effort" | "instant";
   prompt: OptimizedPrompt;
   effort: EffortPlan & { estimated: number; source: "auto" | "manual" | "instant" };
+  /** How often it asks when unsure. Instant never asks. */
+  questions: QuestionsPlan & { estimated: number; source: "auto" | "manual" | "instant" };
   engine: Engine;
   /** local-* answers here; remote is the bigger computer. */
   where: "local" | "cloud";
@@ -179,6 +218,15 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
   if (code) reasons.push(`coding job: ${code.task}${code.language ? ` in ${code.language}` : ""}, ${code.difficulty} (${code.reasons.join("; ")})`);
   const effort = { ...planEffort(level), estimated: estimate.level, source };
 
+  // 2b. Questions: instant never stops to ask, then a dial set by hand, then the estimate.
+  const qEst = estimateQuestions(used, historyChars);
+  let qLevel = qEst.level;
+  let qSource: "auto" | "manual" | "instant" = "auto";
+  if (req.instant) { qLevel = 0; qSource = "instant"; reasons.push("instant: never stops to ask"); }
+  else if (req.questions !== null) { qLevel = req.questions; qSource = "manual"; reasons.push(`questions ${qLevel} was set by hand`); }
+  else reasons.push(`questions ${qLevel}: ${qEst.reasons.join(", ")}`);
+  const questions = { ...planQuestions(qLevel), estimated: qEst.level, source: qSource };
+
   // 3. Where. The chooser sees the message as it was typed, so a secret is never missed by a tidy-up.
   let choice = chooser.choose({
     device: input.device, prompt: input.prompt, historyChars, remote: input.remote,
@@ -210,6 +258,7 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
   reasons.push(...cs.reasons);
 
   const mode = req.instant ? "instant" : source === "manual" ? "manual-effort" : "auto";
+  return { mode, prompt, effort, questions, engine, where, choice, compute: { ...cs, islands, activeGroups }, reasons };
   return { mode, prompt, effort, engine, where, choice, code, compute: { ...cs, islands, activeGroups }, reasons };
 }
 
@@ -217,6 +266,7 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
 export interface RouteSummary {
   mode: RoutePlan["mode"];
   effort: { level: number; mode: string; checks: number; tryAnother: boolean; source: string; estimated: number };
+  questions: { level: number; mode: string; source: string; estimated: number };
   where: RoutePlan["where"];
   engine: Engine;
   prompt: { optimized: boolean; changes: string[]; savedChars: number; used: string; original: string };
@@ -231,6 +281,7 @@ export function routeSummary(plan: RoutePlan, sent: string): RouteSummary {
   return {
     mode: plan.mode,
     effort: { level: plan.effort.level, mode: plan.effort.mode, checks: plan.effort.checks, tryAnother: plan.effort.tryAnother, source: plan.effort.source, estimated: plan.effort.estimated },
+    questions: { level: plan.questions.level, mode: plan.questions.mode, source: plan.questions.source, estimated: plan.questions.estimated },
     where: plan.where,
     engine: plan.engine,
     prompt: { optimized: plan.prompt.changed, changes: plan.prompt.changes, savedChars: plan.prompt.savedChars, used: sent, original: plan.prompt.changed ? plan.prompt.original : sent },

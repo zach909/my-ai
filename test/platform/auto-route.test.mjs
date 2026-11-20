@@ -242,8 +242,8 @@ const BIG = 'Design and implement a rate limiter for our API, then write the tes
 const HARD = 'Prove carefully that sqrt(2) is irrational and double-check each step. Explain the edge cases.';
 
 test('only a real true turns a switch on, and instant brings auto with it', () => {
-  assert.deepEqual(A.parseAutoRoute({ auto: true, instant: false, optimize: true, effort: '70' }), { auto: true, instant: false, optimize: true, effort: 70 });
-  assert.deepEqual(A.parseAutoRoute({ auto: 'true', instant: 1, optimize: 'yes' }), { auto: false, instant: false, optimize: false, effort: null });
+  assert.deepEqual(A.parseAutoRoute({ auto: true, instant: false, optimize: true, effort: '70' }), { auto: true, instant: false, optimize: true, effort: 70, questions: null });
+  assert.deepEqual(A.parseAutoRoute({ auto: 'true', instant: 1, optimize: 'yes' }), { auto: false, instant: false, optimize: false, effort: null, questions: null });
   assert.equal(A.parseAutoRoute({ instant: true }).auto, true);
   for (const junk of [null, undefined, 'x', 5, []]) assert.equal(A.parseAutoRoute(junk).auto, false);
 });
@@ -281,7 +281,7 @@ test('more effort runs more of the network, and a busy or low device runs less',
 
 /* -------------------------------------------------------------------- plan */
 
-const request = (over = {}) => ({ auto: true, instant: false, optimize: false, effort: null, ...over });
+const request = (over = {}) => ({ auto: true, instant: false, optimize: false, effort: null, questions: null, ...over });
 const input = (prompt, dev, over = {}) => ({
   prompt, device: dev, remote: { available: true }, fullModelBytes: 4 * GB, quantizedModelBytes: 1 * GB, request: request(), ...over,
 });
@@ -449,4 +449,32 @@ test('NEUROCLAW_AUTO_ROUTE=1 switches it on for the whole install', () => {
   assert.equal(A.autoRouteForced(), false);
   process.env.NEUROCLAW_AUTO_ROUTE = '1';
   try { assert.equal(A.autoRouteForced(), true); } finally { delete process.env.NEUROCLAW_AUTO_ROUTE; }
+});
+
+/* --------------------------------------------------------------- questions */
+
+test('it asks more when the message is vague and less when it is clear or detailed', () => {
+  const q = (t, h = 0) => A.estimateQuestions(t, h).level;
+  assert.equal(q('thanks!'), 0, 'small talk never asks');
+  assert.ok(q('fix it') > q('what is the capital of France?'), 'a bare instruction asks more than a clear question');
+  assert.ok(q('make this better') > q('make this better', 500), 'earlier conversation means it can see what "this" is');
+  const detailed = BIG + ' ' + 'Use Redis, 100 requests a minute per key, return 429 with a Retry-After header. '.repeat(8);
+  assert.ok(detailed.length > 600);
+  assert.ok(q('Design and implement a rate limiter, then write the tests, and explain it.') > q(detailed), 'a big job in few words asks more than one with the detail given');
+  assert.ok(q('briefly, fix it') < q('fix it'));
+  for (const t of ['', '???', 'x'.repeat(5000)]) { const l = q(t); assert.ok(Number.isInteger(l) && l >= 0 && l <= 100); }
+  assert.ok(A.estimateQuestions('fix it').reasons.length > 0);
+});
+
+test('questions: instant never asks, a dial set by hand wins, otherwise it is picked and explained', () => {
+  const auto = A.planRoute(input('fix it', device()));
+  assert.equal(auto.questions.source, 'auto');
+  assert.ok(auto.questions.level >= 50);
+  assert.equal(A.planRoute(input('fix it', device(), { request: request({ questions: 10 }) })).questions.level, 10);
+  assert.equal(A.planRoute(input('fix it', device(), { request: request({ questions: 10 }) })).questions.source, 'manual');
+  const instant = A.planRoute(input('fix it', device(), { request: request({ instant: true, questions: 90 }) }));
+  assert.equal(instant.questions.level, 0);
+  assert.equal(instant.questions.mode, 'never');
+  assert.ok(auto.reasons.some((r) => /^questions \d+:/.test(r)));
+  assert.equal(A.routeSummary(auto, 'fix it').questions.level, auto.questions.level);
 });
