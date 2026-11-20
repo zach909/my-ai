@@ -258,8 +258,7 @@ export function planRoute(input: RouteInput, chooser: Chooser = new Chooser()): 
   reasons.push(...cs.reasons);
 
   const mode = req.instant ? "instant" : source === "manual" ? "manual-effort" : "auto";
-  return { mode, prompt, effort, questions, engine, where, choice, compute: { ...cs, islands, activeGroups }, reasons };
-  return { mode, prompt, effort, engine, where, choice, code, compute: { ...cs, islands, activeGroups }, reasons };
+  return { mode, prompt, effort, questions, engine, where, choice, code, compute: { ...cs, islands, activeGroups }, reasons };
 }
 
 /** What the page and the details panel get: the decisions and the reasons, small and safe to send as JSON. */
