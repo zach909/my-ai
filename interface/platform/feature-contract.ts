@@ -55,6 +55,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
+    id: 'uploads', title: 'Attach a file or a folder', description: 'File and Folder buttons (and drag and drop) beside the message box. Each file goes up as raw bytes into the user\'s own data folder; the chat turn carries small text files whole and lists the rest by name and size.',
+    implementation: ['interface/uploads.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/uploads'],
+    needs: ENGINE, tests: [v('test/core/uploads.test.ts')],
+  },
+  {
     id: 'auto-route', title: 'Auto route (effort, where to answer, how much network)', description: 'For each message it picks how hard to try, whether to answer on this device or a bigger computer, and how many islands of the network run (parts that are wired to each other and to nothing else, found from the weights as 0/1). Instant answers fast; Optimize prompt tidies the message first.',
     implementation: ['models && skills/core/auto-route.ts', 'models && skills/core/weight-islands.ts', 'models && skills/core/prompt-optimizer.ts', 'models && skills/core/engine-chooser.ts', 'models && skills/core/engine-router.ts', 'interface/runner.ts'],
     routes: ['POST /api/chat'],
