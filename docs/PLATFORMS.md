@@ -45,6 +45,7 @@ and the permissions each OS prompts for.
 | Feature | Windows | Linux | macOS | ChromeOS / Chromebook | Android | iOS |
 | --- | --- | --- | --- | --- | --- | --- |
 | Chat | yes | yes | yes | yes | yes | yes |
+| Attach a file or a folder | yes | yes | yes | yes | yes | yes |
 | Auto route (effort, where to answer, how much network) | yes | yes | yes | yes | yes | yes |
 | Coding jobs (write, explain, debug, technical) | yes | yes | yes | yes | yes | yes |
 | Tool scripts (a script that runs features and tools) | yes | yes | yes | no | partly | partly |
