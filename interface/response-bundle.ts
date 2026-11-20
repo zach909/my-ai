@@ -1,7 +1,7 @@
 /**
  * The agent's reply as a zip.
  *
- *   response/   the reply itself (reply.md) and a spoken copy of it (reply.wav), the reply in every converter format (formats/), the question that led to it (question.md) and how the turn was built (details.json)
+ *   response/   the reply itself (reply.md), a spoken copy of it (reply.wav), the first visual block of the reply as visual.html if it has one, the reply in every converter format (formats/), the question that led to it (question.md) and how the turn was built (details.json)
  *   plugins/    one file per plugin the turn used, with the tools it called and whether each worked, plus an index
  *   prompts/    ready-to-send prompts, as [[ask: Label | prompt]] lines (the same syntax a reply's own buttons use, so
  *               a line pasted into the chat becomes a button): plugins.md, tools.md, commands.md, feedback.md, and
@@ -17,6 +17,7 @@ import { writeZip, type ZipEntry } from "../models && skills/core/zip-archive.js
 import { applyApproved, decide, isSettled, normalizeDefinitions, normalizeEdits, open, resolveDefinitions, revise, withdraw, type Edit, type Revision } from "./response-edits.js";
 import { renderSpeechWav } from "./response-audio.js";
 import { SOURCE_FORMAT, formatEntries } from "./response-formats.js";
+import { splitVisuals } from "./visuals.js";
 import { PROMPT_BUTTON_LABEL_MAX, PROMPT_BUTTON_PROMPT_MAX, splitPromptButtons } from "./prompt-buttons.js";
 
 export const BUNDLE_FORMAT = "neuroclaw-response";
@@ -217,6 +218,9 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
     formatCount = r.entries.length;
     add("response/formats/index.json", JSON.stringify({ source: SOURCE_FORMAT, total: r.total, written: r.written.length, skipped: r.skipped.length, files: r.written, notSent: r.skipped }, null, 2) + "\n");
   }
+  // A visual block in the reply as its own file, so a player (the voice orb) can show it without reading the reply. The block as written, a fragment.
+  const visual = splitVisuals(reply).find(p => p.kind === "visual");
+  if (visual) add("response/visual.html", visual.text + (visual.text.endsWith("\n") ? "" : "\n"));
   if (question) add("response/question.md", question + (question.endsWith("\n") ? "" : "\n"));
   if (input.details !== undefined) {
     let json = "";
