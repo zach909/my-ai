@@ -50,9 +50,9 @@ const ENGINE: CapabilityId[][] = [['localEngine'], ['remoteEngine']];
 export const FEATURES: Feature[] = [
   {
     id: 'chat', title: 'Chat', description: 'Talk to the agent; replies come from the OneBrain mesh through the bit-level Zip Loop.',
-    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'interface/response-bundle.ts', 'interface/response-edits.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'interface/response-bundle.ts', 'interface/response-edits.ts', 'interface/response-audio.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
     routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'POST /api/chat/bundle', 'POST /api/chat/bundle/review', 'GET /api/status'],
-    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
     id: 'auto-route', title: 'Auto route (effort, where to answer, how much network)', description: 'For each message it picks how hard to try, whether to answer on this device or a bigger computer, and how many islands of the network run (parts that are wired to each other and to nothing else, found from the weights as 0/1). Instant answers fast; Optimize prompt tidies the message first.',

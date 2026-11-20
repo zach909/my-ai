@@ -1,7 +1,7 @@
 /**
  * The agent's reply as a zip.
  *
- *   response/   the reply itself (reply.md), the question that led to it (question.md) and how the turn was built (details.json)
+ *   response/   the reply itself (reply.md) and a spoken copy of it (reply.wav), the question that led to it (question.md) and how the turn was built (details.json)
  *   plugins/    one file per plugin the turn used, with the tools it called and whether each worked, plus an index
  *   prompts/    ready-to-send prompts, as [[ask: Label | prompt]] lines (the same syntax a reply's own buttons use, so
  *               a line pasted into the chat becomes a button): plugins.md, tools.md, commands.md, feedback.md, and
@@ -15,6 +15,7 @@
 
 import { writeZip, type ZipEntry } from "../models && skills/core/zip-archive.js";
 import { applyApproved, decide, isSettled, normalizeDefinitions, normalizeEdits, open, resolveDefinitions, revise, withdraw, type Edit, type Revision } from "./response-edits.js";
+import { renderSpeechWav } from "./response-audio.js";
 import { PROMPT_BUTTON_LABEL_MAX, PROMPT_BUTTON_PROMPT_MAX, splitPromptButtons } from "./prompt-buttons.js";
 
 export const BUNDLE_FORMAT = "neuroclaw-response";
@@ -34,6 +35,8 @@ export interface BundleInput {
   definitions?: unknown;
   /** Edits to the reply and prompts. Only the ones a reviewer approved change the text; the rest are listed in response/edits.json. */
   edits?: unknown;
+  /** Set false to leave out response/reply.wav (the spoken copy). On by default. */
+  audio?: boolean;
 }
 
 export interface ToolCallRecord {
@@ -200,6 +203,9 @@ export function bundleEntries(input: BundleInput, now = new Date()): ZipEntry[] 
   const add = (name: string, body: string) => files.push({ name, data: Buffer.from(body, "utf8") });
 
   add("response/reply.md", reply + (reply.endsWith("\n") ? "" : "\n"));
+  // The spoken copy, made from the reply as it now reads (definitions in, approved edits applied).
+  const wav = input.audio === false ? null : renderSpeechWav(reply);
+  if (wav) files.push({ name: "response/reply.wav", data: wav });
   if (question) add("response/question.md", question + (question.endsWith("\n") ? "" : "\n"));
   if (input.details !== undefined) {
     let json = "";
