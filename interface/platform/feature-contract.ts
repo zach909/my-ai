@@ -67,6 +67,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [n('test/platform/coding-jobs.test.mjs'), n('test/platform/auto-route.test.mjs')],
   },
   {
+    id: 'tool-scripts', title: 'Tool scripts (a script that runs features and tools)', description: 'A short script, written as "script: ..." in chat, that calls features and tools with tools.call(name, request) instead of one call per message. It runs in a separate, locked-down process (Node\'s own permission model: no files, no programs, no environment, a hard time limit) that can only send plain-text tool requests back, and every request goes through the same approval gate as chat, one at a time: a risky tool is held for you and the script stops there. It fails closed where the runtime cannot start such a process. Node\'s permission model does not restrict the network, which is stated in the file rather than hidden.',
+    implementation: ['models && skills/core/script-runner.ts', 'plugins/scripts.ts', 'plugins/index.ts', 'plugin_manager/registry.ts'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/tool-scripts.test.mjs')],
+  },
+  {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
     implementation: ['models && skills/core/chat-history-store.ts'],
     routes: ['GET /api/chat-history/threads', 'POST /api/chat-history/save', 'GET /api/chat-history/search', 'GET /api/chat-history/export', 'POST /api/chat-history/import'],
