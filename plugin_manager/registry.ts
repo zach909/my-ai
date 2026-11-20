@@ -520,6 +520,12 @@ export class PluginRegistry {
     return { considered: this.lastRouting, handledBy: this.lastHandledBy };
   }
 
+  /** The router itself, for measurement and tuning (scripts/joint-tune.mjs). */
+  getRouter(): CapabilityRouter {
+    this.ensureRoutingIndex();
+    return this.router;
+  }
+
   /** Rank plugins for a message without calling any of them. */
   rankPlugins(input: string, intent = ""): Ranked[] {
     this.ensureRoutingIndex();
