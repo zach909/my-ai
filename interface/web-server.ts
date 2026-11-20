@@ -4919,6 +4919,12 @@ export class WebServer {
           return;
         }
         this.sendJson(res, orbMedia(bundleEntries({ message: body.message, response: body.response, details: body.details, formats: false })));
+      } catch (err) {
+        this.sendError(res, err);
+      }
+      return;
+    }
+
     // POST /api/chat/bundle/prediction — score the guess at the next message against the message that really came
     // (see interface/response-prediction.ts). { response, prediction, actual } -> { prediction } with its outcome.
     // One guess, one score: a prediction already scored keeps its first outcome.
