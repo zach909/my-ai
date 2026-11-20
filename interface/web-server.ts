@@ -2041,7 +2041,13 @@ export class WebServer {
     // own doc comment for what this actually does and why it belongs here.
     this.loadedExtensions = await this.loadSavedExtensions();
     return new Promise<void>((resolve, reject) => {
-      this.server = http.createServer((req, res) => this.handleRequest(req, res));
+      // No .catch() here used to mean one throwing request ended the whole process.
+      this.server = http.createServer((req, res) => {
+        this.handleRequest(req, res).catch((err) => {
+          if (!res.headersSent) this.sendError(res, err);
+          else res.end();
+        });
+      });
       // The desktop app's own window: requests arrive through serveEmbedded(), so no port is opened.
       if (options.listen === false) { resolve(); return; }
       this.server.listen(port, host, () => resolve());
@@ -2972,6 +2978,7 @@ export class WebServer {
    */
   /** What the route plugins (interface/server-plugins.ts) get for one request: this server's own helpers, nothing more. */
   private routeContext(req: http.IncomingMessage, res: http.ServerResponse, pathname: string, method: string, url: URL): ServerRouteContext {
+    const self = this;
     return {
       req, res, pathname, method, url,
       parseBody: (r, max) => this.parseBody(r, max),
@@ -2985,7 +2992,9 @@ export class WebServer {
       act: message => this.whileAgentLives(() => this.runner.generate(message)),
       running: () => this.runner.getStatus().running,
       uptime: () => this.runner.getStatus().uptime,
-      chatHistory: this.chatHistory,
+      // A getter, not a value: the store throws for a visitor who is not logged in,
+      // and this context is built for every request, the login page included.
+      get chatHistory() { return self.chatHistory; },
       learnFromFiling: text => this.learnFromFiling(text),
     };
   }
