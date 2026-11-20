@@ -84,7 +84,10 @@ export class ReasoningEngine {
     const generated = this.deps.solveSub ? String(await this.deps.solveSub(problem, 0)) : "";
     const result = available.length > 0 ? available[0] : generated;
 
-    const failed = !result || /\[(error|unsolved|base):/i.test(result);
+    // Judge the solver's own output when there is a solver: recalled memory
+    // being present must not hide a solver that failed.
+    const judged = this.deps.solveSub ? generated : result;
+    const failed = !judged || /\[(error|unsolved|base):/i.test(judged);
     const verified = !failed;
     const confidence = clamp01(0.4 + (verified ? 0.25 : 0) + (available.length > 0 ? 0.1 : 0));
 
