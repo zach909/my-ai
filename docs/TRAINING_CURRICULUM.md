@@ -367,14 +367,6 @@ label source.
 owner has made some. Report the synthetic score and the real-voice score separately, because the gap
 between them is the honest measure.
 
-**The language list (owner, 2026-11-15).** The owner's list of human languages is stored as given in
-`training_data/human_languages.json`: 8,623 languages (every row of the uploaded `languages.csv` whose
-Level is "language"), each with its name, Glottocode, ISO 639-3 code, macroarea and countries. Families
-(4,879) and dialects (13,773) in the file are not copied. It is names and codes only, with no sounds,
-text or ranking. Open for the owner: the file has no column marking which languages are wanted first, so
-the order is the file's own, and each language still needs a written phoneme table, vocabulary and
-grammar before a generator can speak it. At today's capacity, start with a handful, not 8,623.
-
 ## Stage 6: Voice to text
 
 The owner's wording was "train how to text using the voice to text". Read here as: **the network

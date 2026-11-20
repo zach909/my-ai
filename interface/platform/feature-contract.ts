@@ -61,6 +61,18 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [n('test/platform/auto-route.test.mjs'), v('test/core/engine-chooser.test.ts'), v('test/core/engine-router.test.ts')],
   },
   {
+    id: 'coding-jobs', title: 'Coding jobs (write, explain, debug, technical)', description: 'Reads each message to see whether it is a coding job (write code, explain code, debug an error or a stack trace, or an engineering question) and how hard it looks. A hard job, debugging most of all, gets more of the effort dial (more checks, and at the top a second way tried and compared); a plain one is held at a steady setting. A dial set by hand, or instant, is never adjusted, and it does not change which engine answers. Counts and patterns only, no model and no outside code.',
+    implementation: ['models && skills/core/coding-jobs.ts', 'models && skills/core/auto-route.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/coding-jobs.test.mjs'), n('test/platform/auto-route.test.mjs')],
+  },
+  {
+    id: 'tool-scripts', title: 'Tool scripts (a script that runs features and tools)', description: 'A short script, written as "script: ..." in chat, that calls features and tools with tools.call(name, request) instead of one call per message. It runs in a separate, locked-down process (Node\'s own permission model: no files, no programs, no environment, a hard time limit) that can only send plain-text tool requests back, and every request goes through the same approval gate as chat, one at a time: a risky tool is held for you and the script stops there. It fails closed where the runtime cannot start such a process. Node\'s permission model does not restrict the network, which is stated in the file rather than hidden.',
+    implementation: ['models && skills/core/script-runner.ts', 'plugins/scripts.ts', 'plugins/index.ts', 'plugin_manager/registry.ts'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/tool-scripts.test.mjs')],
+  },
+  {
     id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
     implementation: ['models && skills/core/chat-history-store.ts'],
     routes: ['GET /api/chat-history/threads', 'POST /api/chat-history/save', 'GET /api/chat-history/search', 'GET /api/chat-history/export', 'POST /api/chat-history/import'],

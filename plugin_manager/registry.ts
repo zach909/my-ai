@@ -69,6 +69,9 @@ export class PluginRegistry {
   register(definition: PluginDefinition, instance: BasePlugin): void {
     this.definitions.set(definition.id, definition);
     this.plugins.set(definition.id, instance);
+    // A plugin that has to run other tools (the scripts plugin) is handed this registry, so it reaches them through
+    // runTool(), the same gate chat uses, rather than holding a way around it.
+    (instance as { attachRegistry?: (host: PluginRegistry) => void }).attachRegistry?.(this);
     // The routing index is a function of the plugin set, so it has to be
     // rebuilt when that set changes -- not per message, which is the cost this
     // whole design exists to avoid.
