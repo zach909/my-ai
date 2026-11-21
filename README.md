@@ -26,7 +26,6 @@ Downloads are attached to each GitHub release, with `release-manifest.json` and 
 | macOS | `NeuroClaw.app` in a `.dmg` (or `.zip`) | Drag it to Applications and open it. Until it is signed with a Developer ID, macOS asks you to confirm opening it the first time. |
 | Chromebook / Chrome | the Chrome extension | One click opens your NeuroClaw server. The engine cannot live inside an extension, so it needs a server: see `browser-extension/README.md`. |
 | Android | `.apk` (debug-signed; Play Store later) | Sideload it, enter your PC's address. |
-| Android (standalone) | build from [`mobile/android-standalone`](mobile/android-standalone/README.md) | Runs OneBrain fully on the phone, no PC needed. Built from source for now. |
 | iPhone / iPad | not yet distributable | CI proves the app compiles; a device build needs an Apple developer team. |
 
 Everything about the platforms, what is shared, what is limited and what is unfinished is in

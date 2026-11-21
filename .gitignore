@@ -24,11 +24,6 @@ extension-builder/installed/.usage.json
 # Python bytecode (asi_core and the model manager run under python3).
 __pycache__/
 
-# Gradle caches and build output (the standalone Android app is built, never committed).
-.gradle/
-mobile/android-standalone/**/build/
-mobile/android-standalone/local.properties
-
 # Knowledge pipeline: downloaded and derived data (rebuild with `node training/knowledge/cli.mjs run`).
 training_data/knowledge/raw/
 training_data/knowledge/processed/
