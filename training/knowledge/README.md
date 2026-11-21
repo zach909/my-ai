@@ -9,7 +9,7 @@ node --test test/training/knowledge.test.mjs
 ```
 
 Other commands: `sources` `probe` `collect [id..]` `validate` `extract` `train [--no-tune]` `eval` `status` `rollback <component> <version>`
-`research "<question>"` `verify "<claim>"` `check "<text or request>"` `report`.
+`compose [--seed N --mode M --bars N --bpm N]` `research "<question>"` `verify "<claim>"` `check "<text or request>"` `report`.
 
 ## Layout
 
@@ -23,6 +23,7 @@ Other commands: `sources` `probe` `collect [id..]` `validate` `extract` `train [
 | `reason/lang.mjs`, `kb/core_science.kb` | Compact reasoning language (FACT/RULE/COND/NOT/FUNC/EXCL/ASSUME), forward-chaining engine with proofs, contradiction detection |
 | `retrieval.mjs`, `verify.mjs`, `research.mjs` | BM25 search, ranking metrics, claim verification, source comparison, cited extractive answers |
 | `audio.mjs` | Recognise (features + kNN), classify (family), interpret (AudioSet ontology path): three separate capabilities |
+| `compose.mjs` | Music from theory + a seeded randomizer: scales, diatonic triads, functional-harmony progression ending V-I, rule-constrained melody, MIDI + WAV output, and an analyzer that checks the result against the same rules |
 | `train.mjs`, `registry.mjs` | 8 Training of independent components, 10 versioned checkpoints, promotion gate, rollback |
 | `evaluate.mjs`, `eval/*.jsonl` | Benchmarks and labelled suites; `RESULTS.md` is generated from them |
 

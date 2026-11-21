@@ -18,3 +18,4 @@ mobile/server/bundle/
 training_data/knowledge/raw/
 training_data/knowledge/processed/
 training_data/knowledge/checkpoints/
+training_data/knowledge/compositions/
