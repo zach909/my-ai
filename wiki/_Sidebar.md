@@ -26,6 +26,7 @@
 ## Extension System
 - [[Builder|Builder]]
 - [[Plugins|Plugins]]
+- [[Knowledge-Training|Knowledge Training]]
 - [[Memory-Topics|Memory Topics]]
 - [[Prompt-Memory|Prompt Memory]]
 - [[Skills|Skills]]
