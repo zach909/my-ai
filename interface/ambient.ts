@@ -221,29 +221,6 @@ export const AMBIENT_JS = String.raw`(function () {
     }
     ctx.closePath();
   }
-  var EYES = [[-0.35, -0.2, 1], [0.1, -0.38, 0.8], [0.38, -0.05, 1.1], [-0.12, 0.12, 0.9], [0.2, 0.34, 0.7], [-0.4, 0.28, 0.6]];
-  /* A shoggoth, clipped to its sphere: green body, many eyes that follow the pointer and blink out of step. */
-  function drawHiveShoggoth(cx, cy, sr, bx, by, r0, t, seed, eyeCount, glow) {
-    ctx.save();
-    ctx.beginPath(); ctx.arc(cx, cy, sr * 0.985, 0, 6.2832); ctx.clip();
-    var halo = ctx.createRadialGradient(bx, by, r0 * 0.3, bx, by, sr);
-    halo.addColorStop(0, 'rgba(143,227,168,' + (0.22 + glow * 0.2).toFixed(2) + ')'); halo.addColorStop(1, 'rgba(143,227,168,0)');
-    ctx.fillStyle = halo; ctx.fillRect(cx - sr, cy - sr, sr * 2, sr * 2);
-    blobOutline(bx, by, r0, t, seed);
-    var fill = ctx.createRadialGradient(bx - r0 * 0.25, by - r0 * 0.3, r0 * 0.1, bx, by, r0 * 1.3);
-    fill.addColorStop(0, 'rgba(176,240,196,.95)'); fill.addColorStop(0.55, 'rgba(110,200,140,.92)'); fill.addColorStop(1, 'rgba(38,104,66,.9)');
-    ctx.fillStyle = fill; ctx.fill();
-    ctx.strokeStyle = 'rgba(143,227,168,.55)'; ctx.lineWidth = Math.max(1, sr * 0.012); ctx.stroke();
-    var dir = Math.atan2(ptr.sy, ptr.sx), mag = Math.min(1, Math.hypot(ptr.sx, ptr.sy));
-    for (var k = 0; k < eyeCount; k++) {
-      var e = EYES[k], ex = bx + e[0] * r0 * 1.05, ey = by + e[1] * r0 * 1.05, er = r0 * 0.13 * e[2];
-      var blink = reduce ? 1 : (Math.sin(t * 0.7 + k * 2.3 + seed) > 0.97 ? 0.1 : 1);
-      ctx.fillStyle = '#f8ede9'; ctx.beginPath(); ctx.ellipse(ex, ey, er, er * blink, 0, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = '#110c0e'; ctx.beginPath();
-      ctx.ellipse(ex + Math.cos(dir) * er * 0.4 * mag, ey + Math.sin(dir) * er * 0.4 * mag * blink, er * 0.45, er * 0.45 * blink, 0, 0, 6.2832); ctx.fill();
-    }
-    ctx.restore();
-  }
   function blobAt(cx, cy, sr, t) {
     return { x: cx + Math.sin(t * 0.5) * sr * 0.06 + ptr.sx * sr * 0.06, y: cy + Math.cos(t * 0.43) * sr * 0.06 + ptr.sy * sr * 0.06, r: sr * 0.52 };
   }
@@ -309,6 +286,10 @@ export const AMBIENT_JS = String.raw`(function () {
     packed[n] = best;
     return best;
   }
+  /* Every shoggoth in the sphere is the same drawing at the same size and pose, the centre agent's included:
+     these two are the only place that size and bob are decided. */
+  function figureScale(r) { return r * (agents.length ? 0.4 : 0.5); }
+  function figureLift(u, tt) { return -u * 0.19 + (reduce ? 0 : Math.sin(tt * 1.6) * u * 0.025); }
   /* Where each shoggoth's sphere sits this frame, slot 0 being the agent in the middle. Equal size, equal spacing,
      turning slowly together; a hair smaller than the best fit so they never touch. */
   function agentSlots(cx, cy, sr, t) {
@@ -322,7 +303,7 @@ export const AMBIENT_JS = String.raw`(function () {
   }
   /* A small sphere and shoggoth for every hive agent, all inside the big sphere, as large as they can be. The thinking
      ones glow brightest; the rest of a working hive glow softly. Clipped to the sphere so nothing spills out. */
-  function drawAgents(cx, cy, sr, t, slots) {
+  function drawAgents(cx, cy, sr, t, slots, tt) {
     var m = agents.length;
     if (!m) return;
     ctx.save();
@@ -339,8 +320,8 @@ export const AMBIENT_JS = String.raw`(function () {
       core.addColorStop(0, 'rgb(96,50,52)'); core.addColorStop(0.6, 'rgb(44,22,26)'); core.addColorStop(1, 'rgb(26,13,16)');
       ctx.fillStyle = core; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
       if (a) {
-        var bl = { x: x + Math.sin(t * 0.6 + ph) * r * 0.08, y: y + Math.cos(t * 0.5 + ph) * r * 0.08, r: r * 0.5 };
-        drawHiveShoggoth(x, y, r, bl.x, bl.y, bl.r, t, ph, Math.max(2, Math.min(6, Math.round(r / sr * 12))), glow);
+        var fu = figureScale(r);
+        drawShoggoth(x, y + figureLift(fu, tt), fu, 0, 1, tt);
         tips.push({ x: x, y: y - r, label: 'Hive agent · ' + a.name + (a.thinking ? ' (thinking)' : a.working ? ' (working)' : ''), kind: 'agent' });
       }
       ctx.strokeStyle = 'rgba(255,196,180,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
@@ -548,7 +529,7 @@ export const AMBIENT_JS = String.raw`(function () {
     var since = broken ? agent.t - brokenAt : 0;
     var coreAlpha = broken ? 1 - ease(clamp01(since / 2.6)) : 1;
     var slots = agentSlots(cx, cy, sr, sceneT), home = slots[0];
-    var u = home.r * (slots.length > 1 ? 0.4 : 0.5); /* the agent in the middle takes the first slot: the whole sphere when it is alone */
+    var u = figureScale(home.r); /* the agent in the middle takes the first slot: the whole sphere when it is alone */
     var figure = function () {
       if (leaving) {
         var crawl = ease(clamp01(agent.t / 0.9));
@@ -557,7 +538,7 @@ export const AMBIENT_JS = String.raw`(function () {
         if (broken && since > 3) { agent.mode = 'gone'; showNote(true); }
       } else {
         var pop = agent.mode === 'arriving' ? ease(clamp01((agent.t - 0.8) / 1.0)) : 1;
-        drawShoggoth(home.x, home.y - u * 0.19 + (reduce ? 0 : Math.sin(tt * 1.6) * u * 0.025), u * (0.7 + 0.3 * pop), 0, pop, tt);
+        drawShoggoth(home.x, home.y + figureLift(u, tt), u * (0.7 + 0.3 * pop), 0, pop, tt);
       }
     };
     var figureDone = false;
@@ -591,7 +572,7 @@ export const AMBIENT_JS = String.raw`(function () {
        The agent itself is figure() below, so the alignment protocol's removal still plays on the centre one. */
     var bl = blobAt(cx, cy, sr, sceneT);
     drawTentacles(cx, cy, sr, bl, sceneT);
-    drawAgents(cx, cy, sr, sceneT, slots);
+    drawAgents(cx, cy, sr, sceneT, slots, tt);
 
     /* The agent sits inside the sphere, under the near half of the ring; once it has crawled out it is drawn on top. */
     if (!leaving || off < sr * 0.9) { figure(); figureDone = true; }
