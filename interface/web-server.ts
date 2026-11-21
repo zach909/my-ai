@@ -4616,6 +4616,22 @@ export class WebServer {
         // combinations of expertise" indistinguishable from a story about a
         // network that does not. Strongest pair first, with the neurons the
         // two hold in common.
+        // ?counts=1 is what the page behind every screen asks for, every 20 seconds per open page.
+        // It draws one tentacle per skill, sized by how many neurons the skill holds, plus one for
+        // each region that has appeared in a pair; it never read the id lists or the pair scores,
+        // which are the bulk of this answer and cost O(skills^2 x neurons) to compute. So it gets
+        // counts and names. Without the parameter the answer is exactly what it always was.
+        if (parsedUrl.searchParams.get('counts') === '1') {
+          const names = engine.skillNames();
+          this.sendJson(res, {
+            neuronCount: engine.getNeuronCount(),
+            dimensions: engine.getDimensions(),
+            skills: graftedSkills(engine).map(entry => ({ skill: entry.skill, count: engine.neuronsInGroup(entry.skill).length })),
+            // A region only showed up through affinity when it had a partner, so a lone one stays out.
+            names: names.length >= 2 ? names : [],
+          });
+          return;
+        }
         this.sendJson(res, {
           neuronCount: engine.getNeuronCount(),
           dimensions: engine.getDimensions(),

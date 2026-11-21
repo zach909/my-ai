@@ -95,17 +95,17 @@
   function loadScene() {
     if (!/^https?:$/.test(location.protocol) || !window.fetch) return;
     var json = function (r) { return r.ok ? r.json() : null; };
-    fetch('/api/net-skills', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
+    fetch('/api/net-skills?counts=1', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
       if (!d) return;
       var list = [], most = 1, seen = {};
       (d.skills || []).forEach(function (s) {
-        var n = Array.isArray(s.neurons) ? s.neurons.length : Object.keys(s.ids || {}).length;
+        var n = typeof s.count === 'number' ? s.count : Array.isArray(s.neurons) ? s.neurons.length : Object.keys(s.ids || {}).length;
         most = Math.max(most, n); seen[s.skill] = 1; list.push({ name: String(s.skill), neurons: n });
       });
       /* Skill regions the network already has show up in its affinity pairs even before anything is grafted. */
-      (d.affinity || []).forEach(function (p) {
-        [p.a, p.b].forEach(function (name) { if (name && !seen[name]) { seen[name] = 1; list.push({ name: String(name), neurons: 1 }); } });
-      });
+      var extra = Array.isArray(d.names) ? d.names : [];
+      (d.affinity || []).forEach(function (p) { extra.push(p.a, p.b); });
+      extra.forEach(function (name) { if (name && !seen[name]) { seen[name] = 1; list.push({ name: String(name), neurons: 1 }); } });
       list.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
       skills = list.map(function (s) {
         return { name: s.name, neurons: s.neurons, size: Math.sqrt(s.neurons / most), phase: hashOf(s.name) * 6.283, jit: hashOf(s.name + '#'), born: clock };
