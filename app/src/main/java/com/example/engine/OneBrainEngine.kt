@@ -59,6 +59,19 @@ class OneBrainEngine(private val context: Context) {
 
     val oneBrainVersion: Long get() = brain.version
 
+    /** Low power mode: fewer neurons run when the battery is low and unplugged (threshold adapts to use). */
+    private val lowPower = LowPowerGovernor(PHONE_NEURONS)
+
+    val isLowPower: Boolean get() = lowPower.active
+
+    private fun lowPowerNeuronCount(): Int {
+        val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+            ?: return PHONE_NEURONS
+        val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        if (level < 0) return PHONE_NEURONS
+        return lowPower.activeNeurons(level / 100f, bm.isCharging, System.currentTimeMillis())
+    }
+
     init {
         loadBundledOneBrain()
         registerDefaultRegions()
@@ -182,7 +195,7 @@ class OneBrainEngine(private val context: Context) {
         // Propagate across mesh with Vale-weighted plasticity (high-vale neurons resist rapid drift)
         var maxSim = -1f
         var bestIdx = 0
-        for (i in 0 until PHONE_NEURONS) {
+        for (i in 0 until lowPowerNeuronCount()) {
             val sim = HDVector.cosineSimilarity(inputVec, brain.neuronStates[i])
             if (sim > maxSim) {
                 maxSim = sim
