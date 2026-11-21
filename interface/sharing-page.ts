@@ -216,7 +216,15 @@ export const SHARING_PAGE = `<!DOCTYPE html>
   });
 
   refresh();
-  setInterval(refresh, 15000);
+  // Refresh only while this tab is visible, and catch up the moment it returns: a hidden tab polling
+  // keeps a phone's radio and CPU awake for a page nobody is looking at.
+  var refreshTimer = null;
+  function startRefreshing() { if (refreshTimer === null) refreshTimer = setInterval(refresh, 15000); }
+  function stopRefreshing() { if (refreshTimer !== null) { clearInterval(refreshTimer); refreshTimer = null; } }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopRefreshing(); else { refresh(); startRefreshing(); }
+  });
+  if (!document.hidden) startRefreshing();
 })();
 </script>
 </body>
