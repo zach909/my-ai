@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Every screen of the app. Dark warm ground, coral accents, light text, no action bar (the screens draw their own
+      title). Replaces Theme.Material.Light.DarkActionBar, whose default accents are teal and blue. The system dialogs
+      for permissions are Android's own and are not themed by an app.
+    -->
+    <style name="Theme.NeuroClaw" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/nc_ground</item>
+        <item name="android:colorBackground">@color/nc_ground</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/nc_ground</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorPrimary">@color/nc_ground_2</item>
+        <item name="android:colorPrimaryDark">@color/nc_ground</item>
+        <item name="android:colorAccent">@color/nc_accent</item>
+        <item name="android:colorControlActivated">@color/nc_accent</item>
+        <item name="android:colorControlNormal">@color/nc_dim</item>
+        <item name="android:colorControlHighlight">@color/nc_highlight</item>
+        <item name="android:textColorPrimary">@color/nc_ink</item>
+        <item name="android:textColorSecondary">@color/nc_dim</item>
+        <item name="android:textColorHint">@color/nc_faint</item>
+        <item name="android:textColorHighlight">@color/nc_highlight</item>
+        <item name="android:textColorLink">@color/nc_accent_soft</item>
+    </style>
+</resources>

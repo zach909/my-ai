@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- The look comes from ambient.css / ambient.js, generated from interface/ambient.ts (node scripts/sync-ambient.mjs). -->
+<link rel="stylesheet" href="ambient.css">
+<style>
+  body { margin:0 auto; max-width:360px; min-width:300px; font:14px/1.45 ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { padding:16px; display:flex; flex-direction:column; gap:12px; }
+  h1 { font-size:16px; margin:0; }
+  #idea { padding:16px 18px; min-height:60px; text-align:center; font-size:15px; display:flex; align-items:center; justify-content:center; border-radius:24px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row .nc-btn { flex:1; }
+  .row .nc-input { flex:1; min-width:0; }
+  small { min-height:1.2em; }
+</style>
+</head>
+<body class="nc-soft">
+<main>
+  <h1>🎲 Chance</h1>
+  <div id="idea" class="nc-glass">Press the button for a random idea.</div>
+  <div class="row">
+    <button id="roll" class="nc-btn primary">Surprise me</button>
+    <button id="try" class="nc-btn" disabled>Try it in chat</button>
+  </div>
+  <form id="add" class="row">
+    <input id="draft" class="nc-input" placeholder="Add your own idea…">
+    <button type="submit" class="nc-btn" style="flex:0 0 auto">Add</button>
+  </form>
+  <small id="status" class="nc-dim"></small>
+</main>
+<script src="ambient.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
