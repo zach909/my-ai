@@ -21,6 +21,14 @@ from .neural_core import (
     NeuronType
 )
 
+from .quantum_net import (
+    QuantumConfig,
+    QuantumBlock,
+    QuantumLayer,
+    amplitude_encode,
+    barren_plateau_probe,
+)
+
 from .neural_states import (
     NeuralState,
     SynapticState,
@@ -137,6 +145,12 @@ __all__ = [
     "NeuronState",
     "SynapticConnection",
     "create_mesh",
+    # Quantum neural network backend (optional, switchable)
+    "QuantumConfig",
+    "QuantumBlock",
+    "QuantumLayer",
+    "amplitude_encode",
+    "barren_plateau_probe",
     # Neural Core
     "NeuralCore",
     "NeuralLayer",
