@@ -1,0 +1,10 @@
+<resources>
+    <color name="ground">#110C0E</color>
+    <color name="ground_light">#FDF6F4</color>
+    <color name="ground_secondary">#1B1216</color>
+    <color name="ink">#F8EDE9</color>
+    <color name="coral_accent">#E3A99D</color>
+    <color name="coral_soft">#EFD0C8</color>
+    <color name="shoggoth_green">#8FE3A8</color>
+    <color name="error_pink">#FF9AA8</color>
+</resources>

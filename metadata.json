@@ -1,0 +1,6 @@
+{
+  "name": "NeuroClaw",
+  "description": "Local-first AI agent powered by OneBrain neural mesh, hyperdimensional computing, NeuroLang extensions, and self-improvement.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
