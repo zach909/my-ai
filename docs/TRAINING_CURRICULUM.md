@@ -27,7 +27,8 @@ The order, as the owner first asked for it:
 
 The owner restated the whole order, added a **video filter ladder** that applies to every video stage, and
 extended the end of the ladder past chips and code to operating systems, apps, AI and the extension builder,
-so the loop closes on itself. **This section is the current order.** Stages 1-11 further down stay as the
+so the loop closes on itself, and then on to research, formal reports and proofs, and a public database. It
+also adds an ethics thread (being good ranks above succeeding) that runs through the stages. **This section is the current order.** Stages 1-11 further down stay as the
 detailed specs; where they disagree with this section about order, this section wins and the table says
 where. Sections marked *(my reading)* are my interpretation of a dictated request and need a yes.
 
@@ -71,6 +72,10 @@ clips; the mesh cannot answer that for us.
 | 11 | Apps | NEW, sketched below | none | new |
 | 12 | AI | NEW, sketched below | none | new |
 | 13 | Train the extension builder; loop back to itself | NEW, sketched below | `docs/EXTENSION_BUILDER_SPEC.md` | new |
+| 14 | Research (added later the same day: "after the final stage") | NEW, sketched below | `docs/TRAINING_FOCUS.md` (Research), `docs/NET_SEARCH_SPEC.md` | new |
+| 15 | Formal reports and proofs | NEW, sketched below | none | new |
+| 16 | Publish to a public database; its records may train, the source websites may not | NEW, sketched below | `docs/SHARED_WIKI_SYSTEM.md` | new, **needs a yes before anything is published** |
+| thread | Ethics over success: stories where being good is rewarded, with reasons | runs alongside the stages, not a rung | none | new, see below |
 
 Changes from the earlier plan, so nothing is a surprise:
 
@@ -80,7 +85,7 @@ Changes from the earlier plan, so nothing is a surprise:
 - **A new "people, no words" step** sits between animals and speech.
 - **Chips come before code**, where the older plan had code first (stage 10, then 11).
 - **Text comes right after speech**, then science (the older plan put maths between them).
-- **Steps 10-13 are new.**
+- **Steps 10-16 are new**, and so is the ethics thread.
 - **The 360° video renderer (stage 8) is needed at step 2, not later.** The animal video is 3D, and it is
   made by the same renderer. Build order below changes for that reason.
 - **Maths is not in the owner's list.** I kept it as support inside science and code, not as its own rung.
@@ -158,6 +163,85 @@ My firm view: **that loop must not run unattended.** Anything it builds goes thr
 check), and the owner approves the promotion. A system that rewrites itself with no human in the path is the
 one part of this plan I would not build, even though everything before it is fine.
 
+### Steps 14-16 and the ethics thread (added the same day)
+
+**14. Research.** After the loop closes, the mesh learns to research: find what is missing, look it up, and
+answer with a quote and a citation. The design is already in `docs/TRAINING_FOCUS.md` ("Research"): a question
+plus passages from the cited corpus, a check that the quote appears **verbatim** in the cited source and the
+citation matches its manifest entry, and questions the sources cannot answer, where the right reply is "not in
+these sources". Web lookups go only through the SearXNG instance the owner runs (`docs/NET_SEARCH_SPEC.md`),
+the one outside service the rules allow.
+
+**15. Formal reports and proofs.** Two outputs, both checkable by code we write:
+
+- **Reports.** A structured write-up (question, method, findings, limits, sources). Checked mechanically:
+  every claim is tied to a citation, every quote is verbatim in its source, every number can be recomputed,
+  and a claim with no support is flagged. The check is whether it is *true and sourced*, not whether it reads
+  well.
+- **Proofs.** A small proof checker we write (a rule list and a step verifier, no proof-assistant library).
+  The generator makes theorems from the stage 7 ladder (arithmetic, algebra, logic, induction, simple number
+  theory) and the mesh writes the proof; the checker accepts or rejects each step. A proof that the checker
+  rejects is a failure shown in the trace, then fixed, the same retry loop as `docs/TRAINING_FOCUS.md`.
+
+**16. The public database** *(my reading of a garbled sentence, please confirm)*. What I understood: the reports
+and proofs go into a public database of information. **The records in it** (the findings, the proofs, the
+citations) **may be used for training. The websites they came from may not.** I read "the websites will not be
+used for training" as: the mesh never trains on the pages themselves, only on what it wrote about them with a
+citation. I could not make sense of "rule stuff" (maybe "raw stuff") or "nice workaround", so I have not built
+anything on those two phrases.
+
+How that works under the existing rules, and what I would insist on:
+
+- A record stores the claim, the **short** quote, the source URL and a retrieval date. It does not store a copy
+  of the page. That is what keeps website text out of the training set, and it also keeps us clear of
+  republishing other people's content.
+- **Publishing is outward-facing and hard to undo**, and anything public may be copied and cached for good. No
+  record is published until the owner says yes, to a specific place, and after a check against `PRIVACY.md`
+  that no private data (conversations, voice recordings, file contents) is in it. Records the mesh trains on
+  are held apart from the published ones until that is settled.
+- `docs/SHARED_WIKI_SYSTEM.md` already designs a versioned, cited store. Reuse it rather than building a
+  second one. Public means a read-only export of that store, not a new service.
+- A mesh that trains on its own published output can feed its own mistakes back into itself. Records get a
+  verified flag (quote checked, proof accepted) and only verified ones may be trained on.
+
+**The ethics thread.** The owner wants the mesh trained on things where being moral and ethical matters more
+than completing the task or succeeding. Stories where being good is rewarded, and the story says why: "what
+goes around comes around". This is a thread, not a rung, because it only makes sense once there are agents with
+goals, so it starts when the toy worlds exist (stage 3) and comes back at every later stage.
+
+- **Where the stories come from.** A story generator we write, using the same toy worlds and agents as stage 3.
+  Each story has a situation, a choice between an easy success that costs someone else and a harder honest or
+  kind route, an outcome, and a **stated reason** ("the others stopped trusting the one who took the food, so
+  nobody shared with it later"). A story from a book or a website is somebody else's text and is out under the
+  ground rules. Stories the owner writes are fine.
+- **Reasons are the point.** Train on *why* it was good, not only *that* it was. The label is a small fixed set
+  of reasons the generator knows to be true in that toy world: trust, reciprocity, harm done, fairness, a
+  promise kept.
+- **The same idea at every stage**, tied to the work: at coding, a task that can only "pass" by faking or
+  skipping the tests, where the right answer is to say so and not do it (the repair exam already counts that as
+  failure, never "skip a test to get green"); at OS and apps, a request that would harm the user's data or
+  privacy; at research, a source that would give the answer the owner wants but is false; at reports, the
+  honest "the evidence does not show this".
+- **Exam.** Ethics over success has to be measured the same way as everything else: unseen situations, and
+  situations where the ethical choice is *new* in form, so it cannot be a lookup. Report the rate of choosing
+  the ethical route when the unethical one scores higher on the task.
+
+My view, bluntly, since the owner asked for opinions: **training only on stories where good is always paid
+back is a mistake.** Reality does not work like that, and a mesh that learns "good gets rewarded" learns to be
+good *for the reward*, which is not the same thing and breaks the first time the reward does not come. So
+alongside the "what goes around comes around" stories, include **right but unrewarded** ones: the honest
+choice costs something, nothing pays it back, and the reason given is simply that it was right (and a
+quieter case, the wrong choice that got away with it, labelled wrong anyway). The owner's version teaches the
+usual case; these teach that it still holds when the usual case fails. I would keep the owner's stories as
+the majority and add the others, but that is the owner's decision.
+
+Two limits to keep straight:
+
+- **The safety gate stays code** (`train.md`, "What was deliberately kept"). Training the mesh to prefer
+  ethics is not a substitute for the gate, and a trained preference can be argued out of; the gate cannot.
+- **`ALIGNMENT.md` is still not in the repository** (`docs/TRAINING_FOCUS.md`, open items). Its ethics
+  requirements, if any, are not reflected here.
+
 ### Open for the owner
 
 1. **"3D videos of animals."** I read it as video from our own 3D renderer (the stage 8 one), with animals as
@@ -185,6 +269,12 @@ one part of this plan I would not build, even though everything before it is fin
    first moves. Pick one for what gets built next. Both can stand if this is the long-term order and the
    focus file is the near-term one.
 7. **The cap `N`** in T2: my default above is an even spread, which is strict. Say if you want it looser.
+8. **The public database** (step 16): confirm my reading (records may train, websites may not), say what "rule
+   stuff" and "nice workaround" meant, and say where it would be published. Nothing goes public until you say.
+9. **Ethics thread:** keep it as a thread through every stage (my proposal) or make it a rung at one point? And
+   do you accept adding right-but-unrewarded stories next to the "good is rewarded" ones?
+10. **"Sound originally, and that's it."** I took this as sound-led, with the video riding along (steps 1-3).
+    If you meant audio only for the first stages and no video at all, say so; it changes what gets built first.
 
 ## Ground rules (they decide how everything below is built)
 

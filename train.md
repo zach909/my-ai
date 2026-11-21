@@ -9,7 +9,8 @@ problem to the hive / neural runner. Whatever shape the thinking takes is meant 
 network.
 
 What the network is trained *on*, and in what order (music with art, animals, people without words, speech,
-text, science, chips, code, operating systems, apps, AI, the extension builder), is in
+text, science, chips, code, operating systems, apps, AI, the extension builder, then research, reports and
+proofs, with an ethics thread through all of it), is in
 `docs/TRAINING_CURRICULUM.md`.
 
 The old code is still in git history if you want to read it:
