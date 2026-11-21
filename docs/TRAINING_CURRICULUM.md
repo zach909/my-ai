@@ -7,7 +7,9 @@ A plan for what the mesh is trained on, in what order, and how we know each step
 drill generators noted below. `train.md` is about how to train *reasoning*; this file is about
 what *material* the mesh learns from.
 
-The order, as the owner asked for it:
+> **2026-11-21: the owner restated the order** and added a video filter ladder and four new stages after chips and code. The current order is in "Owner's revised ladder" below. The list that follows is the earlier order and is kept for reference.
+
+The order, as the owner first asked for it:
 
 1. Music, made by a rule-following program
 2. Art video, made by a rule-following program, played together with the music
@@ -20,6 +22,169 @@ The order, as the owner asked for it:
 9. Simulations that teach science and math
 10. Coding
 11. Computer and chip design
+
+## Owner's revised ladder (2026-11-21, dictated)
+
+The owner restated the whole order, added a **video filter ladder** that applies to every video stage, and
+extended the end of the ladder past chips and code to operating systems, apps, AI and the extension builder,
+so the loop closes on itself. **This section is the current order.** Stages 1-11 further down stay as the
+detailed specs; where they disagree with this section about order, this section wins and the table says
+where. Sections marked *(my reading)* are my interpretation of a dictated request and need a yes.
+
+### Why this order
+
+- **Sound first.** The owner wants the early training to be sound-led. Picture is secondary: art plays
+  behind the music "because I don't know what else to put in there". So in every early stage the audio is the
+  main signal and the video rides along on the same seed.
+- **Animals before people.** The reasoning: people are the hardest case, so understand the simpler
+  signallers first, then people. This matches the signal-system rungs A-F and the 60-animal ladder in stage 3.
+- **People, but not words, before words.** Learn how people *sound* when they talk (pauses, stress, rise and
+  fall, who goes when) from speech with the content removed, then add the words.
+- **Each rung is the prerequisite for the next.** Chips explain how a computer works, so code makes sense;
+  code explains operating systems; those explain apps; apps explain AI; AI is what builds extensions, which
+  closes the loop.
+
+**The music hypothesis (the owner's research question).** People love music because it is predictable, so
+find out why it is predictable and you may understand people better. My view, stated bluntly: *predictable*
+is only half of it. A metronome is the most predictable sound there is and nobody loves it. The usual
+account in music psychology is a middle: mostly what you expected, plus some surprise that then resolves.
+I am saying that from memory, not from a source I checked here. It is testable in this project: the stage 1
+generator gets a **surprise rate** knob (how often the rule-legal dice pick an unlikely option instead of a
+likely one), and we plot the mesh's own prediction error against that knob. What the mesh finds hard is
+measurable now. Whether *people* like the middle needs real listeners, so the owner would have to rate some
+clips; the mesh cannot answer that for us.
+
+### The order, mapped onto the existing stages
+
+| # | Owner's step | What it is | Existing spec | Status |
+|---|---|---|---|---|
+| 1 | Art and music, art video behind the music | stages 1 and 2 as one stage, audio-led | Stage 1 + Stage 2 | designed, not built |
+| 2 | "Dumb" animals, 3D video with their noises | animal sound plus an animal video, simple signal systems first | Stage 3 rungs A-C, first groups of the 60-animal ladder | designed, not built |
+| 3 | "Smart" animals | the same, complex signal systems | Stage 3 rungs D-F, later groups | designed, not built |
+| 4 | People not talking, just "blah blah" | speech with the words removed: nonsense syllables that keep real pauses, stress, pitch contour and turn-taking between two speakers | extends Stage 4 (babble) | **extended** *(my reading, see below)* |
+| 5 | People talking | speech with words | Stage 5 | designed, not built |
+| 6 | Talking in text | voice to text, then text on its own | Stage 6 | designed, not built |
+| 7 | How science works | simulations and exams; maths only as far as science needs it | Stage 9 (Stage 7 as support) | partly exists (drills) |
+| 8 | How chips are made | gates to adder to CPU to a verified layout | Stage 11 | **moved before code** |
+| 9 | Code | the existing coding ladder | Stage 10 | **moved after chips** |
+| 10 | How operating systems function | NEW, sketched below | none | new |
+| 11 | Apps | NEW, sketched below | none | new |
+| 12 | AI | NEW, sketched below | none | new |
+| 13 | Train the extension builder; loop back to itself | NEW, sketched below | `docs/EXTENSION_BUILDER_SPEC.md` | new |
+
+Changes from the earlier plan, so nothing is a surprise:
+
+- **Music and art are one stage now**, not two (art is the backing video, as before).
+- **Animals split into dumb then smart** in the owner's words. Same material as stage 3, cut at the point
+  where signals start to carry order and structure.
+- **A new "people, no words" step** sits between animals and speech.
+- **Chips come before code**, where the older plan had code first (stage 10, then 11).
+- **Text comes right after speech**, then science (the older plan put maths between them).
+- **Steps 10-13 are new.**
+- **The 360° video renderer (stage 8) is needed at step 2, not later.** The animal video is 3D, and it is
+  made by the same renderer. Build order below changes for that reason.
+- **Maths is not in the owner's list.** I kept it as support inside science and code, not as its own rung.
+
+**"Blah blah" (step 4), my reading.** "People saying things like blah blah, so it learns how people talk and
+think without the talking part, with the pauses and nuances" I take to mean *prosody without content*:
+syllables with no meaning ("ba da la") spoken with the pitch, stress, rhythm, hesitations and turn-taking of
+real talk, between two speakers, so the mesh learns conversation shape before words. It is built from the
+stage 4 voice with a dialogue timing model on top. The generator knows the truth (who spoke, where the
+pauses were, whether it was a question) so every clip has an exact label.
+
+### The video filter ladder (every video stage: art, animals, 360°)
+
+One video, one seed, several views of the **same** frames. The mesh gets the plain view first and the others
+once it passes the one before.
+
+| View | What the mesh sees | The rule |
+|---|---|---|
+| **0 Plain** | RGB pixels | as in stage 8 |
+| **T1 Nearest-character text** | one character per pixel, best match for that pixel | the character whose ink is closest to the pixel's brightness. **As the owner predicted, this collapses to nearly all periods.** Kept on purpose as the baseline that shows the collapse; always report its character histogram |
+| **T2 Capped** | as T1 | no character may be used more than a cap `N` times in a frame |
+| **T3 Full set** | as T2 | the cap, plus every character in the set must appear at least once in the frame. Every character carries its own colour. The set covers every kind of character, emoji included |
+| **C Code** | a program that draws the frame | one program per coding language, run to check it (below) |
+
+**How T2 and T3 are made without a model** *(my reading)*: this is an assignment problem and a plain rule solves
+it. Rank every cell of the frame by brightness, cut the ranking into equal-sized bins, and give one bin to
+each character in the ink-ordered set (histogram equalisation). Every character then appears about equally
+often, which satisfies the cap and the use-everything rule in one pass. Edge cells can still take direction
+characters from the local gradient, within their bin. `N` is set to `ceil(cells / set size)` times a small
+slack. The colour plane keeps the pixel's true RGB, as in stage 8, so the picture is still recoverable.
+
+**Exam per view:** round-trip pixel error (view to pixels and pixels to view) on unseen scenes, the character
+histogram (max count at or below the cap, min count at least 1 for T3), and the stage's own tasks answered
+from that view alone.
+
+**The code view ("drawing with code").** The generator already knows the scene it drew, so it can write the
+program that draws it, and the check is to **run that program and compare the pixels**. Levels, so the mesh
+gets an early feel for code before the coding stage:
+
+1. one `put pixel` call per pixel (exact, huge),
+2. runs and rectangles,
+3. shapes (circles, lines, polygons) with colours,
+4. loops, functions and parameters, so the program is short and says why the picture looks as it does.
+
+Every program uses a small drawing API **we define** (`pixel`, `rect`, `line`, `circle`, `fill`) and writes a
+pixel buffer. Nothing here uses a graphics library.
+
+### Steps 10-13, sketched
+
+Same contract as every other stage: generated, answers known, checked by running something, no tokenizer,
+no outside code or models.
+
+**10. Operating systems.** A toy OS and the toy CPU from the chip stage (stage 11, rung 6), both written here.
+Processes and a scheduler, virtual memory and paging, a file system, system calls, interrupts, locks and
+deadlock. Tasks: predict the scheduler's output for a given workload, find the deadlock, write the system-call
+sequence that does X, fix a bug injected into the toy kernel. **Check:** run it on the toy CPU and compare to a
+reference run. This teaches *how an OS is built*, not how Windows or Linux is; their code is third-party and
+stays out.
+
+**11. Apps.** Toy apps: an event loop, UI state machines, storage, a simulated network. Tasks: write an app from
+a spec, add a feature, fix a bug. **Check:** scripted user actions replayed against the app, with the final
+state compared to the expected one. This project's own plugins (`plugins/`, `plugin_manager/`) are our own
+code and are fair material.
+
+**12. AI.** The project's own mesh and trainer, not an outside framework. Tasks: write a training loop for a
+generated task, predict what a run will do (converge, diverge, forget an earlier task), diagnose a failing
+run, choose a fix. **Check:** actually run the trainer on a generated task and read the exam score. This is
+also where the mesh studies the generators and exams it was itself trained with.
+
+**13. The extension builder, and the loop.** The mesh learns to use `extension-builder/` and `plugin_manager/`
+(`docs/EXTENSION_BUILDER_SPEC.md`): describe a capability, build it, train it until the builder's own
+constraint loss converges, register it. Closing the loop means it can build extensions that improve itself.
+My firm view: **that loop must not run unattended.** Anything it builds goes through the one permission gate
+(`CLAUDE.md`), must pass every earlier stage's exam again before it can replace anything live (the forgetting
+check), and the owner approves the promotion. A system that rewrites itself with no human in the path is the
+one part of this plan I would not build, even though everything before it is fine.
+
+### Open for the owner
+
+1. **"3D videos of animals."** I read it as video from our own 3D renderer (the stage 8 one), with animals as
+   simple rigged shapes moving in a scene and their calls on the soundtrack. The shapes carry little
+   information; the sound does. Real animal footage is somebody else's content and is out under the ground
+   rules. Is that what you meant?
+2. **Emoji and "every type of character."** The ink-ordered set needs a darkness value per character. For
+   ASCII we can write a small bitmap and count lit pixels ourselves. For the rest of Unicode and for emoji
+   there is no bitmap in this repo and a font is third-party. Proposal: pick a few hundred characters (all of
+   ASCII, box and block drawing, some symbols, a set of single-code-point emoji) and give each an ink value by
+   hand, in a data file. Emoji keep only a symbol role; the pixel's colour is what gets stored. Sequence emoji
+   (joined with zero-width joiners) are out because "one pixel, one character" needs one code point. Text
+   stays raw UTF-8 bytes, with no index table, because the no-tokenizer rule forbids one. That means an emoji
+   cell is 3-4 bytes. OK?
+3. **"Every coding language."** We can run, with no installs, JavaScript (Node) and, where Python is already on
+   the machine, the Python standard library. Languages that need a compiler (C, Rust, Go, Java and so on) need
+   third-party tools. Options: only languages we can run, plus drawing formats we write our own renderer for
+   (an SVG subset, an HTML/CSS box subset); or write small interpreters for subsets of more languages (a lot of
+   work); or include languages as *unverified* text, which loses the check. I recommend the first. Which?
+4. **Chips before code and text right after speech.** This reverses the earlier order. Confirm.
+5. **Maths** is not in your list. Keep it as support only?
+6. **Conflict with `docs/TRAINING_FOCUS.md`.** That file (2026-11-14) says research, code, skills, the extension
+   builder and plugins, and fixing mistakes come first and the music-to-chips stages are not the priority.
+   This section restates the long-term order and does not change that file, so the two now point at different
+   first moves. Pick one for what gets built next. Both can stand if this is the long-term order and the
+   focus file is the near-term one.
+7. **The cap `N`** in T2: my default above is an even spread, which is strict. Say if you want it looser.
 
 ## Ground rules (they decide how everything below is built)
 
@@ -555,8 +720,10 @@ All of it is Node built-ins and `node:test` or the existing vitest, nothing new 
 2. Music rules and synth, plus its exam, and **run the mesh on it** to get the first capacity curve.
    If the mesh cannot do stage 1 at the smallest size, fix capacity before building more generators.
 3. Voice source-filter (it is shared by stages 3, 4, 5 and 6), then animals, then noises, then speech.
-4. The text-twin and 360° renderer, since it is the most unusual part and decides the byte budget.
-5. Everything else in the stated order.
+4. The text-twin and 360° renderer, since it is the most unusual part and decides the byte budget. Since
+   2026-11-21 it is also the source of the animal video (step 2 of the revised ladder), so it comes before the
+   animal generators, not after. Build the filter views (plain, T1, T2, T3) with it; the code view comes later.
+5. Everything else in the revised order (see "Owner's revised ladder").
 
 ## Things I read into the request (please confirm)
 
