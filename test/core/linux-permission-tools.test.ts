@@ -50,7 +50,9 @@ describe("Linux permission tools", () => {
     const source = readFileSync(new URL("../../plugin_manager/registry-data.ts", import.meta.url), "utf8");
     const entries = source.split("\n").filter(line => line.trim().startsWith('"linux-permission-tools":'));
     expect(entries).toHaveLength(1);
-    const declared = new Set(Array.from(entries[0].split("capabilities:")[1].matchAll(/"([a-z0-9-]+)"/g), m => m[1]));
+    // The entry's capability list may run over several lines; read from the entry to the closing bracket.
+    const list = source.slice(source.indexOf(entries[0])).split("capabilities:")[1].split("]")[0];
+    const declared = new Set(Array.from(list.matchAll(/"([a-z0-9-]+)"/g), m => m[1]));
     const missing = LINUX_PERMISSION_TOOLS.map(tool => tool.permission).filter(permission => !declared.has(permission));
     expect(missing).toEqual([]);
   });
