@@ -4,7 +4,8 @@ Native Android implementation of **NeuroClaw** — a local-first AI agent powere
 
 ## Core Architecture & Features
 
-- **Local-First OneBrain Engine (`OneBrainEngine.kt`, `HDVector.kt`)**:
+- **Local-First OneBrain Engine (`OneBrainEngine.kt`, `OneBrainModel.kt`, `HDVector.kt`)**:
+  - **One model, one engine**: `OneBrainModel` holds everything OneBrain knows (byte graph, hyperdimensional mesh, Vale ledger, skill regions, memories, Yes/No examples) and is the only place it is loaded, merged and exported. `OneBrainEngine` is the only thing that runs it, and Chat's Yes/No hint and the Yes/No Trainer share a single scorer.
   - Loads bundled OneBrain byte-transition graph (`memory_input_b*` → `memory_output_b*`).
   - Encodes UTF-8 bytes directly into partitioned hyperdimensional vectors (`sem`, `ctx`, `val`, `tmp`, `meta`) with zero-sum Vale plasticity conservation across 32 hyper-neurons × 32 dimensions.
   - Consolidates surprise-gated associative memories and routes requests to active skill regions.
