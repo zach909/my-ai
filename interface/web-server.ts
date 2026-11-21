@@ -49,6 +49,11 @@ import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPag
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
 import { createServerHost, type ServerRouteContext } from './server-plugins.js';
+import { contentEtag, sendBody } from './http-compress.js';
+
+/** ETags of the two fixed ambient assets, computed on first request. */
+let ambientCssEtag: string | undefined;
+let ambientJsEtag: string | undefined;
 import type { PluginHost } from '../plugin_manager/host.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
@@ -2395,14 +2400,13 @@ export class WebServer {
 
   private sendJson(res: http.ServerResponse, data: unknown, statusCode = 200): void {
     this.setSecurityHeaders(res);
-    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(data));
+    // gzip and a content-hash ETag (a 304 with no body when nothing changed): see http-compress.ts.
+    sendBody(res, statusCode, 'application/json', JSON.stringify(data), { etag: true });
   }
 
   private sendHtml(res: http.ServerResponse, html: string): void {
     this.setSecurityHeaders(res);
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(injectAmbient(html));
+    sendBody(res, 200, 'text/html; charset=utf-8', injectAmbient(html), { etag: true });
   }
 
   /**
@@ -3339,11 +3343,12 @@ export class WebServer {
     if (isAmbientRoute(pathname, method)) {
       this.setSecurityHeaders(res);
       const css = pathname === '/ambient.css';
-      res.writeHead(200, {
-        'Content-Type': css ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
-        'Cache-Control': 'no-cache',
+      // Fixed content: one ETag per asset for the life of the process, and its gzipped copy kept (bounded).
+      sendBody(res, 200, css ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8', css ? AMBIENT_CSS : AMBIENT_JS, {
+        headers: { 'Cache-Control': 'no-cache' },
+        etag: css ? (ambientCssEtag ??= contentEtag(AMBIENT_CSS)) : (ambientJsEtag ??= contentEtag(AMBIENT_JS)),
+        cacheCompressed: true,
       });
-      res.end(method === 'HEAD' ? undefined : css ? AMBIENT_CSS : AMBIENT_JS);
       return;
     }
 
