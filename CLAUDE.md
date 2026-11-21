@@ -28,6 +28,7 @@ When the owner says "optimized" or "optimize", it means **everything**, not whic
 - **Network:** fewer and smaller requests, caching, local-first. SearXNG stays the only outside service.
 - **Computer access:** files, desktop, browser, camera, microphone and OS control that work reliably with little friction.
 - **Ease of use:** setup, first run, error messages and UI need fewer steps and no manual fixes.
+- **Repository size:** the whole repo takes as little space as possible, both the checkout and `.git`. Measure `du -sh .git` and the checkout separately, and list the largest tracked files. Remove dead code, duplicates, generated files that can be rebuilt, and unused data; compress or split large data the project itself produces; keep logs and generated output out of git. Rewriting git history (squashing, filter-branch, force-push) is destructive and affects every clone: never do it without a fresh, explicit yes from the owner. Deleting files the owner may still want (training data, docs, the `src/` dashboard source) also needs a yes; propose it first.
 - **Battery:** idle costs almost nothing; timers and polling stop or slow when hidden or unplugged; animation and heavy work scale down on battery; sensors are event-driven, not polled. The phone (`mobile/`, `/app`) matters most.
 
 **How to do it:**
