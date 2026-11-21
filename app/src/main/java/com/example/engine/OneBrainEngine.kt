@@ -17,13 +17,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.tanh
 
 /**
- * Local-first OneBrain neural mesh engine in pure Kotlin:
+ * The one OneBrain engine. It runs the one [OneBrainModel] (the only place any state lives) in pure Kotlin:
  * - Reads bundled `assets/onebrain/model.json` (`memory_input_b*` -> `memory_output_b*` edges)
  * - Runs raw UTF-8 byte-level Zip Loop projection (no tokenizer)
  * - Maintains a 32-neuron x 32-dim Hyperdimensional Mesh with zero-sum Vale conservation
@@ -31,23 +30,6 @@ import kotlin.math.tanh
  * - Tracks surprise-gated associative memories and self-improvement drills
  */
 class OneBrainEngine(private val context: Context) {
-
-    data class ByteEdge(val fromByte: Int, val toByte: Int, val weight: Float)
-
-    data class SkillRegion(
-        val id: String,
-        val name: String,
-        val meaning: String,
-        val anchor: HDVector,
-        val definitions: List<String> = emptyList()
-    )
-
-    data class MemoryTrace(
-        val cue: HDVector,
-        val text: String,
-        val surprise: Float,
-        val timestampMs: Long
-    )
 
     data class ChatTurnOutput(
         val reply: String,
@@ -59,29 +41,23 @@ class OneBrainEngine(private val context: Context) {
     )
 
     companion object {
-        const val PHONE_NEURONS = 32
-        const val PHONE_DIMENSIONS = 32
-        private const val INITIAL_VALE_TOTAL = 32.0f
+        const val PHONE_NEURONS = OneBrainModel.NEURONS
+        const val PHONE_DIMENSIONS = OneBrainModel.DIMENSIONS
+        private const val INITIAL_VALE_TOTAL = OneBrainModel.VALE_TOTAL
         private const val LEARNING_RATE = 0.05f
         private const val INFLUENCE_DECAY = 0.95f
-        private val INPUT_EDGE_REGEX = Regex("""^memory_(input|output)_b(\d+)$""")
+
+        /** Chat only mentions a yes/no doorway whose examples resemble the message at least this much. */
+        private const val YES_NO_HINT_MIN_SIMILARITY = 0.25f
     }
 
     private val lock = Any()
     val deviceTools = DeviceTools(context)
-    private val neuronStates = Array(PHONE_NEURONS) { idx ->
-        HDVector.random(PHONE_DIMENSIONS, seed = 1000L + idx * 37L)
-    }
-    private val valeLedger = FloatArray(PHONE_NEURONS) { INITIAL_VALE_TOTAL / PHONE_NEURONS }
-    private val byteEdges = ArrayList<ByteEdge>()
-    private val regions = LinkedHashMap<String, SkillRegion>()
-    private val memoryTraces = ArrayList<MemoryTrace>()
-    private val yesNoExamples = ArrayList<YesNoExample>()
 
-    var oneBrainVersion: Long = 0L
-        private set
-    private var cyclesRun: Int = 0
-    private var lastSurpriseAvg: Float = 0.18f
+    /** The one model: every piece of state this engine reads or learns lives in here. */
+    private val brain = OneBrainModel()
+
+    val oneBrainVersion: Long get() = brain.version
 
     init {
         loadBundledOneBrain()
@@ -96,42 +72,7 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun parseOneBrainModel(modelJson: String): Int = synchronized(lock) {
-        val obj = JSONObject(modelJson)
-        oneBrainVersion = obj.optLong("modifiedAt", obj.optLong("updatedAt", 0L))
-
-        val sideMap = HashMap<String, Pair<Boolean, Int>>()
-        val neuronsArr = obj.optJSONArray("neurons")
-        if (neuronsArr != null) {
-            for (i in 0 until neuronsArr.length()) {
-                val pair = neuronsArr.optJSONArray(i) ?: continue
-                val nObj = pair.optJSONObject(1) ?: continue
-                val id = nObj.optString("id")
-                val label = nObj.optString("label")
-                val m = INPUT_EDGE_REGEX.matchEntire(label) ?: continue
-                val isInput = m.groupValues[1] == "input"
-                val byteVal = m.groupValues[2].toIntOrNull() ?: continue
-                sideMap[id] = isInput to byteVal
-            }
-        }
-
-        val weightsArr = obj.optJSONArray("weights")
-        val connArr = obj.optJSONArray("connections")
-        byteEdges.clear()
-        if (connArr != null && weightsArr != null) {
-            for (i in 0 until connArr.length()) {
-                val pair = connArr.optJSONArray(i) ?: continue
-                val cObj = pair.optJSONObject(1) ?: continue
-                val from = sideMap[cObj.optString("fromNeuronId")] ?: continue
-                val to = sideMap[cObj.optString("toNeuronId")] ?: continue
-                if (!from.first || to.first) continue
-                val wIdx = cObj.optInt("weightIndex", -1)
-                if (wIdx in 0 until weightsArr.length() && !weightsArr.isNull(wIdx)) {
-                    val w = weightsArr.optDouble(wIdx, 0.0).toFloat()
-                    byteEdges.add(ByteEdge(from.second, to.second, w))
-                }
-            }
-        }
-        byteEdges.size
+        brain.loadByteGraph(modelJson)
     }
 
     private fun registerDefaultRegions() {
@@ -173,18 +114,11 @@ class OneBrainEngine(private val context: Context) {
         meaning: String,
         definitions: List<String> = emptyList()
     ) = synchronized(lock) {
-        val bytes = "$name $meaning ${definitions.joinToString(" ")}".toByteArray(Charsets.UTF_8)
-        regions[id] = SkillRegion(
-            id = id,
-            name = name,
-            meaning = meaning,
-            anchor = HDVector.encodeBytes(bytes, PHONE_DIMENSIONS),
-            definitions = definitions
-        )
+        brain.registerRegion(id, name, meaning, definitions)
     }
 
     fun unregisterRegion(id: String) = synchronized(lock) {
-        regions.remove(id)
+        brain.regions.remove(id)
     }
 
     fun graftExtension(ext: BuiltExtension) {
@@ -203,16 +137,16 @@ class OneBrainEngine(private val context: Context) {
         synchronized(lock) {
             val anchor = HDVector.encodeBytes(ext.code.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
             val targetIdx = abs(ext.name.hashCode()) % PHONE_NEURONS
-            neuronStates[targetIdx] = HDVector.bundle(neuronStates[targetIdx], anchor, 0.6f, 0.4f)
+            brain.neuronStates[targetIdx] = HDVector.bundle(brain.neuronStates[targetIdx], anchor, 0.6f, 0.4f)
         }
     }
 
     fun recallBytes(text: String, topK: Int = 5): List<String> = synchronized(lock) {
-        if (byteEdges.isEmpty()) return emptyList()
+        if (brain.byteEdges.isEmpty()) return emptyList()
         val active = HashSet<Int>()
         for (b in text.toByteArray(Charsets.UTF_8)) active.add(b.toInt() and 0xFF)
         val scores = HashMap<Int, Float>()
-        for (edge in byteEdges) {
+        for (edge in brain.byteEdges) {
             if (edge.fromByte in active) {
                 scores[edge.toByte] = (scores[edge.toByte] ?: 0f) + edge.weight
             }
@@ -226,7 +160,7 @@ class OneBrainEngine(private val context: Context) {
     fun selectRegions(text: String, topK: Int = 3): List<SkillRegion> = synchronized(lock) {
         val inputVec = HDVector.encodeBytes(text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
         val lower = text.lowercase()
-        return regions.values
+        return brain.regions.values
             .map { reg ->
                 val sim = HDVector.cosineSimilarity(inputVec, reg.anchor)
                 val keywordBoost = if (
@@ -249,33 +183,33 @@ class OneBrainEngine(private val context: Context) {
         var maxSim = -1f
         var bestIdx = 0
         for (i in 0 until PHONE_NEURONS) {
-            val sim = HDVector.cosineSimilarity(inputVec, neuronStates[i])
+            val sim = HDVector.cosineSimilarity(inputVec, brain.neuronStates[i])
             if (sim > maxSim) {
                 maxSim = sim
                 bestIdx = i
             }
-            val plasticity = (LEARNING_RATE / (0.5f + valeLedger[i])).coerceIn(0.005f, 0.08f)
+            val plasticity = (LEARNING_RATE / (0.5f + brain.valeLedger[i])).coerceIn(0.005f, 0.08f)
             val mixWeight = max(0f, sim + 0.25f) * plasticity
             if (mixWeight > 0f) {
-                neuronStates[i] = HDVector.bundle(neuronStates[i], inputVec, 1f - mixWeight, mixWeight)
+                brain.neuronStates[i] = HDVector.bundle(brain.neuronStates[i], inputVec, 1f - mixWeight, mixWeight)
             }
         }
 
         // Surprise-gated associative memory consolidation + zero-sum Vale transfer
         val surprise = (1f - ((maxSim + 1f) * 0.5f)).coerceIn(0.02f, 0.98f)
-        lastSurpriseAvg = lastSurpriseAvg * INFLUENCE_DECAY + surprise * (1f - INFLUENCE_DECAY)
-        if (surprise > 0.28f || memoryTraces.size < 4) {
-            if (memoryTraces.size >= 64) memoryTraces.removeAt(0)
-            memoryTraces.add(MemoryTrace(inputVec, message.trim(), surprise, System.currentTimeMillis()))
+        brain.lastSurpriseAvg = brain.lastSurpriseAvg * INFLUENCE_DECAY + surprise * (1f - INFLUENCE_DECAY)
+        if (surprise > 0.28f || brain.memoryTraces.size < 4) {
+            if (brain.memoryTraces.size >= 64) brain.memoryTraces.removeAt(0)
+            brain.memoryTraces.add(MemoryTrace(inputVec, message.trim(), surprise, System.currentTimeMillis()))
         }
         redistributeValeZeroSum(winnerIdx = bestIdx, delta = 0.08f)
 
         val matchedRegions = selectRegions(message)
         val recalled = recallBytes(message)
-        cyclesRun++
+        brain.cyclesRun++
 
         // Recall closest prior episodic memory if relevant
-        val closestMemory = memoryTraces
+        val closestMemory = brain.memoryTraces
             .filter { it.text != message.trim() }
             .map { it to HDVector.cosineSimilarity(inputVec, it.cue) }
             .filter { it.second > 0.38f }
@@ -318,11 +252,11 @@ class OneBrainEngine(private val context: Context) {
             "Coder" to "verify invariants and syntax paths",
             "Critic" to "check edge cases and mistake guards",
             "DeviceOps" to "route permissions and Android hardware tools",
-            "MemoryWeaver" to "bind associative traces across ${memoryTraces.size} cues"
+            "MemoryWeaver" to "bind associative traces across ${brain.memoryTraces.size} cues"
         )
         return personas.mapIndexed { idx, (name, role) ->
             val pVec = HDVector.encodeBytes("$name $role".toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-            val neuronSim = HDVector.cosineSimilarity(msgVec, neuronStates[(idx * 5) % PHONE_NEURONS])
+            val neuronSim = HDVector.cosineSimilarity(msgVec, brain.neuronStates[(idx * 5) % PHONE_NEURONS])
             val sim = (0.55f + 0.35f * HDVector.cosineSimilarity(msgVec, pVec) + 0.1f * neuronSim).coerceIn(0.45f, 0.98f)
             val regionHint = matchedRegions.getOrNull(idx % max(1, matchedRegions.size))?.name ?: "OneBrain"
             val stance = when (name) {
@@ -338,41 +272,51 @@ class OneBrainEngine(private val context: Context) {
         val share = delta / max(1, PHONE_NEURONS - 1)
         for (i in 0 until PHONE_NEURONS) {
             if (i == winnerIdx) {
-                valeLedger[i] = (valeLedger[i] + delta).coerceAtMost(4.0f)
+                brain.valeLedger[i] = (brain.valeLedger[i] + delta).coerceAtMost(4.0f)
             } else {
-                valeLedger[i] = (valeLedger[i] - share).coerceAtLeast(0.1f)
+                brain.valeLedger[i] = (brain.valeLedger[i] - share).coerceAtLeast(0.1f)
             }
         }
         // Re-normalize to preserve exact zero-sum total
-        val sum = valeLedger.sum()
+        val sum = brain.valeLedger.sum()
         if (sum > 0f) {
             val scale = INITIAL_VALE_TOTAL / sum
-            for (i in 0 until PHONE_NEURONS) valeLedger[i] *= scale
+            for (i in 0 until PHONE_NEURONS) brain.valeLedger[i] *= scale
         }
     }
 
+    /**
+     * The one yes/no scorer: every example votes with its similarity to the input, so the same
+     * examples and input give the same verdict whether Chat's doorway hint or the Trainer asks.
+     */
+    private class YesNoTally(val pos: Float, val neg: Float) {
+        val total: Float get() = pos + neg
+        val answer: Boolean get() = pos >= neg
+        val confidence: Float get() = (abs(pos - neg) / max(1e-5f, total)).coerceIn(0.5f, 0.99f)
+    }
+
+    private fun tallyYesNo(examples: List<YesNoExample>, qVec: HDVector): YesNoTally {
+        var pos = 0f
+        var neg = 0f
+        for (ex in examples) {
+            val eVec = HDVector.encodeBytes(ex.text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
+            val sim = max(0f, HDVector.cosineSimilarity(qVec, eVec))
+            if (ex.answer) pos += sim else neg += sim
+        }
+        return YesNoTally(pos, neg)
+    }
+
     private fun findBestYesNoMatch(text: String): YesNoQueryResult? {
-        if (yesNoExamples.isEmpty()) return null
+        if (brain.yesNoExamples.isEmpty()) return null
         val qVec = HDVector.encodeBytes(text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-        val grouped = yesNoExamples.groupBy { it.question }
+        val grouped = brain.yesNoExamples.groupBy { it.question }
         var best: YesNoQueryResult? = null
         var bestStrength = 0f
         for ((q, list) in grouped) {
-            var pos = 0f
-            var neg = 0f
-            for (ex in list) {
-                val eVec = HDVector.encodeBytes(ex.text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-                val sim = max(0f, HDVector.cosineSimilarity(qVec, eVec))
-                if (ex.answer) pos += sim else neg += sim
-            }
-            val total = pos + neg
-            if (total > 0.25f) {
-                val ans = pos >= neg
-                val conf = (abs(pos - neg) / total).coerceIn(0.5f, 0.99f)
-                if (total > bestStrength) {
-                    bestStrength = total
-                    best = YesNoQueryResult(q, ans, conf, list.size)
-                }
+            val tally = tallyYesNo(list, qVec)
+            if (tally.total > YES_NO_HINT_MIN_SIMILARITY && tally.total > bestStrength) {
+                bestStrength = tally.total
+                best = YesNoQueryResult(q, tally.answer, tally.confidence, list.size)
             }
         }
         return best
@@ -408,18 +352,18 @@ class OneBrainEngine(private val context: Context) {
         return buildString {
             when {
                 lower.contains("hello") || lower == "hi" || lower.startsWith("hey") -> {
-                    append("OneBrain mesh is awake on this device (${byteEdges.size} byte edges, ${regions.size} active skill regions). ")
+                    append("OneBrain mesh is awake on this device (${brain.byteEdges.size} byte edges, ${brain.regions.size} active skill regions). ")
                     append("Every character you send enters through the Zip Loop as raw UTF-8 bytes without a tokenizer.")
                     append("\n\n[[ask: Inspect mesh stats | What is the current mesh and vale state?]]")
                     append(" [[ask: Audit permissions | tool: permission_audit]]")
                     append(" [[put: Pin Audit | tool: permission_audit | desktop]]")
                 }
                 lower.contains("vale") || lower.contains("mesh") || lower.contains("stat") -> {
-                    val totalVale = valeLedger.sum()
+                    val totalVale = brain.valeLedger.sum()
                     append("Mesh state: $PHONE_NEURONS hyper-neurons x $PHONE_DIMENSIONS dims, ")
-                    append("${byteEdges.size} OneBrain byte connections, ")
+                    append("${brain.byteEdges.size} OneBrain byte connections, ")
                     append("Vale budget conserved at ${"%.2f".format(totalVale)}/${"%.2f".format(INITIAL_VALE_TOTAL)}. ")
-                    append("Cycle surprise is ${"%.2f".format(surprise)} across ${memoryTraces.size} consolidated traces.")
+                    append("Cycle surprise is ${"%.2f".format(surprise)} across ${brain.memoryTraces.size} consolidated traces.")
                     append("\n\n[[ask: Teach Yes/No | How do I teach OneBrain a new yes/no rule?]]")
                     append(" [[ask: Build NeuroLang skill | Show a NeuroLang skill example]]")
                 }
@@ -439,7 +383,7 @@ class OneBrainEngine(private val context: Context) {
                 }
                 lower.contains("teach") || lower.contains("yes/no") -> {
                     append("You can teach OneBrain binary concepts using the Teach button in Chat or the Yes/No Trainer on the Mesh tab. ")
-                    append("Currently holding ${yesNoExamples.size} local training example(s).")
+                    append("Currently holding ${brain.yesNoExamples.size} local training example(s).")
                 }
                 else -> {
                     append("Processed ${message.toByteArray().size} raw bytes via ")
@@ -472,7 +416,7 @@ class OneBrainEngine(private val context: Context) {
     fun teachYesNo(question: String, text: String, answer: Boolean): YesNoQueryResult = synchronized(lock) {
         val cleanQ = question.trim()
         val cleanT = text.trim()
-        yesNoExamples.add(YesNoExample(cleanQ, cleanT, answer))
+        brain.yesNoExamples.add(YesNoExample(cleanQ, cleanT, answer))
         registerRegion(
             id = "yes-no:${cleanQ.lowercase()}",
             name = cleanQ,
@@ -483,34 +427,26 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun askYesNo(question: String, text: String): YesNoQueryResult = synchronized(lock) {
-        val matching = yesNoExamples.filter { it.question.equals(question.trim(), ignoreCase = true) }
-        if (matching.isEmpty()) {
-            return YesNoQueryResult(question, answer = false, confidence = 0.5f, matchedExamples = 0)
-        }
+        val matching = brain.yesNoExamples.filter { it.question.equals(question.trim(), ignoreCase = true) }
         val qVec = HDVector.encodeBytes(text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-        var pos = 0f
-        var neg = 0f
-        for (ex in matching) {
-            val eVec = HDVector.encodeBytes(ex.text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-            val weight = exp(HDVector.cosineSimilarity(qVec, eVec) * 2f)
-            if (ex.answer) pos += weight else neg += weight
+        val tally = tallyYesNo(matching, qVec)
+        // No example, or none that resembles the input at all, is no evidence: answer No at the 0.5 floor.
+        if (tally.total <= 1e-5f) {
+            return YesNoQueryResult(question, answer = false, confidence = 0.5f, matchedExamples = matching.size)
         }
-        val total = max(1e-5f, pos + neg)
-        val ans = pos >= neg
-        val conf = (abs(pos - neg) / total).coerceIn(0.5f, 0.99f)
-        YesNoQueryResult(question, ans, conf, matching.size)
+        YesNoQueryResult(question, tally.answer, tally.confidence, matching.size)
     }
 
     fun loadYesNoExamples(examples: List<YesNoExample>) = synchronized(lock) {
-        yesNoExamples.clear()
-        yesNoExamples.addAll(examples)
+        brain.yesNoExamples.clear()
+        brain.yesNoExamples.addAll(examples)
         examples.map { it.question }.distinct().forEach { q ->
             registerRegion("yes-no:${q.lowercase()}", q, "Yes/No doorway for $q")
         }
     }
 
     fun listYesNoQuestions(): List<String> = synchronized(lock) {
-        yesNoExamples.map { it.question }.distinct()
+        brain.yesNoExamples.map { it.question }.distinct()
     }
 
     fun runDrill(drill: CapabilityDrill): DrillRunResult = synchronized(lock) {
@@ -525,7 +461,7 @@ class OneBrainEngine(private val context: Context) {
                 ok to "bind(a,b) orthogonality sim=${"%.3f".format(sim)}"
             }
             "Vale" -> {
-                val sum = valeLedger.sum()
+                val sum = brain.valeLedger.sum()
                 val ok = abs(sum - INITIAL_VALE_TOTAL) < 0.05f
                 ok to "Vale sum=${"%.3f".format(sum)} (expected $INITIAL_VALE_TOTAL)"
             }
@@ -551,21 +487,21 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun runSelfHealing(extensionCount: Int): List<HealingCheck> = synchronized(lock) {
-        val valeSum = valeLedger.sum()
+        val valeSum = brain.valeLedger.sum()
         val valeOk = abs(valeSum - INITIAL_VALE_TOTAL) < 0.1f
         if (!valeOk) {
             val scale = INITIAL_VALE_TOTAL / max(0.01f, valeSum)
-            for (i in 0 until PHONE_NEURONS) valeLedger[i] *= scale
+            for (i in 0 until PHONE_NEURONS) brain.valeLedger[i] *= scale
         }
-        val normOk = neuronStates.all { abs(it.norm() - 1f) < 0.05f }
+        val normOk = brain.neuronStates.all { abs(it.norm() - 1f) < 0.05f }
         if (!normOk) {
-            for (i in 0 until PHONE_NEURONS) neuronStates[i] = neuronStates[i].normalized()
+            for (i in 0 until PHONE_NEURONS) brain.neuronStates[i] = brain.neuronStates[i].normalized()
         }
         listOf(
             HealingCheck(
                 component = "OneBrain Byte Graph",
-                healthy = byteEdges.isNotEmpty(),
-                detail = "${byteEdges.size} learned byte edges loaded (v$oneBrainVersion)"
+                healthy = brain.byteEdges.isNotEmpty(),
+                detail = "${brain.byteEdges.size} learned byte edges loaded (v$oneBrainVersion)"
             ),
             HealingCheck(
                 component = "Vale Zero-Sum Ledger",
@@ -580,7 +516,7 @@ class OneBrainEngine(private val context: Context) {
             HealingCheck(
                 component = "Extension & Skill Regions",
                 healthy = true,
-                detail = "${regions.size} active regions ($extensionCount user-built)"
+                detail = "${brain.regions.size} active regions ($extensionCount user-built)"
             )
         )
     }
@@ -591,18 +527,18 @@ class OneBrainEngine(private val context: Context) {
         pendingPhotos: Int,
         lastSyncMs: Long
     ): MeshStatsSnapshot = synchronized(lock) {
-        val sum = valeLedger.sum()
+        val sum = brain.valeLedger.sum()
         MeshStatsSnapshot(
             neuronCount = PHONE_NEURONS,
             dimensions = PHONE_DIMENSIONS,
-            oneBrainEdges = byteEdges.size,
+            oneBrainEdges = brain.byteEdges.size,
             oneBrainVersion = oneBrainVersion,
-            activeRegions = regions.values.map { it.name },
+            activeRegions = brain.regions.values.map { it.name },
             valeTotal = sum,
             valeConserved = abs(sum - INITIAL_VALE_TOTAL) < 0.1f,
-            averageSurprise = lastSurpriseAvg,
-            memoryEntries = memoryTraces.size,
-            cyclesRun = cyclesRun,
+            averageSurprise = brain.lastSurpriseAvg,
+            memoryEntries = brain.memoryTraces.size,
+            cyclesRun = brain.cyclesRun,
             unsyncedTurns = unsyncedTurns,
             unsyncedExamples = unsyncedExamples,
             pendingPhotos = pendingPhotos,
@@ -611,13 +547,13 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun getValeDistribution(): List<Float> = synchronized(lock) {
-        valeLedger.toList()
+        brain.valeLedger.toList()
     }
 
     fun recordMistake(mistake: MistakeRecord) = synchronized(lock) {
         val corrVec = HDVector.encodeBytes(mistake.correction.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-        if (memoryTraces.size >= 64) memoryTraces.removeAt(0)
-        memoryTraces.add(MemoryTrace(corrVec, mistake.correction, 0.92f, mistake.timestampMs))
+        if (brain.memoryTraces.size >= 64) brain.memoryTraces.removeAt(0)
+        brain.memoryTraces.add(MemoryTrace(corrVec, mistake.correction, 0.92f, mistake.timestampMs))
         registerRegion(
             id = "mistake:${mistake.id.take(8)}",
             name = "Correction",
@@ -625,7 +561,7 @@ class OneBrainEngine(private val context: Context) {
             definitions = listOf("Prefer: ${mistake.correction}")
         )
         val idx = abs(mistake.prompt.hashCode()) % PHONE_NEURONS
-        neuronStates[idx] = HDVector.bundle(neuronStates[idx], corrVec, 0.45f, 0.55f)
+        brain.neuronStates[idx] = HDVector.bundle(brain.neuronStates[idx], corrVec, 0.45f, 0.55f)
     }
 
     fun runEnduranceTraining(rounds: Int, mistakes: List<MistakeRecord>): List<EnduranceRoundResult> = synchronized(lock) {
@@ -648,7 +584,7 @@ class OneBrainEngine(private val context: Context) {
                 if (out.activeRegions.isNotEmpty() || out.recalledBytes.isNotEmpty()) passes++
             }
             val avgSurp = totalSurprise / max(1, prompts.size)
-            val spread = (valeLedger.maxOrNull() ?: 1f) - (valeLedger.minOrNull() ?: 1f)
+            val spread = (brain.valeLedger.maxOrNull() ?: 1f) - (brain.valeLedger.minOrNull() ?: 1f)
             val accuracy = ((passes.toFloat() / max(1, prompts.size)) * (1f - avgSurp * 0.15f)).coerceIn(0.6f, 0.99f)
             val elapsedMs = max(1L, (System.nanoTime() - started) / 1_000_000L)
             results.add(
@@ -665,7 +601,7 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun topByteEdges(limit: Int = 18): List<ByteEdgePreview> = synchronized(lock) {
-        byteEdges
+        brain.byteEdges
             .sortedByDescending { abs(it.weight) }
             .take(limit)
             .map { e -> ByteEdgePreview(byteLabel(e.fromByte), byteLabel(e.toByte), e.weight) }
@@ -674,73 +610,28 @@ class OneBrainEngine(private val context: Context) {
     fun captureCheckpoint(label: String): BrainCheckpoint = synchronized(lock) {
         BrainCheckpoint(
             id = UUID.randomUUID().toString(),
-            label = label.ifBlank { "Checkpoint #${cyclesRun}" },
-            edgesCount = byteEdges.size,
-            valeTotal = valeLedger.sum(),
-            memoriesCount = memoryTraces.size,
-            valeSnapshot = valeLedger.toList()
+            label = label.ifBlank { "Checkpoint #${brain.cyclesRun}" },
+            edgesCount = brain.byteEdges.size,
+            valeTotal = brain.valeLedger.sum(),
+            memoriesCount = brain.memoryTraces.size,
+            valeSnapshot = brain.valeLedger.toList()
         )
     }
 
     fun restoreCheckpoint(cp: BrainCheckpoint): Boolean = synchronized(lock) {
         if (cp.valeSnapshot.size != PHONE_NEURONS) return false
         for (i in 0 until PHONE_NEURONS) {
-            valeLedger[i] = cp.valeSnapshot[i]
+            brain.valeLedger[i] = cp.valeSnapshot[i]
         }
         true
     }
 
     fun exportMeshDeltaJson(): String = synchronized(lock) {
-        val obj = JSONObject()
-        obj.put("format", "neuroclaw-mesh-delta-v1")
-        obj.put("oneBrainVersion", oneBrainVersion)
-        obj.put("cyclesRun", cyclesRun)
-        obj.put("valeLedger", JSONArray().apply { valeLedger.forEach { put(it.toDouble()) } })
-        val regionsArr = JSONArray()
-        regions.values.forEach { reg ->
-            regionsArr.put(
-                JSONObject()
-                    .put("id", reg.id)
-                    .put("name", reg.name)
-                    .put("meaning", reg.meaning)
-                    .put("definitions", JSONArray(reg.definitions))
-            )
-        }
-        obj.put("regions", regionsArr)
-        obj.toString(2)
+        brain.exportDelta()
     }
 
     fun importMeshDeltaJson(raw: String): Pair<Boolean, String> = synchronized(lock) {
-        val obj = runCatching { JSONObject(raw) }.getOrNull()
-            ?: return false to "Invalid JSON mesh delta."
-        if (obj.has("neurons") && obj.has("connections")) {
-            val edgeCount = parseOneBrainModel(raw)
-            return true to "Imported full OneBrain model ($edgeCount byte edges)."
-        }
-        val valeArr = obj.optJSONArray("valeLedger")
-        if (valeArr != null && valeArr.length() == PHONE_NEURONS) {
-            for (i in 0 until PHONE_NEURONS) {
-                valeLedger[i] = valeArr.optDouble(i, 1.0).toFloat()
-            }
-        }
-        val regArr = obj.optJSONArray("regions")
-        var importedRegions = 0
-        if (regArr != null) {
-            for (i in 0 until regArr.length()) {
-                val rObj = regArr.optJSONObject(i) ?: continue
-                val id = rObj.optString("id").takeIf { it.isNotBlank() } ?: continue
-                val name = rObj.optString("name").ifBlank { id }
-                val meaning = rObj.optString("meaning")
-                val defs = ArrayList<String>()
-                val dArr = rObj.optJSONArray("definitions")
-                if (dArr != null) {
-                    for (j in 0 until dArr.length()) defs.add(dArr.optString(j))
-                }
-                registerRegion(id, name, meaning, defs)
-                importedRegions++
-            }
-        }
-        true to "Applied mesh delta ($importedRegions regions merged)."
+        brain.mergeDelta(raw)
     }
 
     private fun byteLabel(b: Int): String =
