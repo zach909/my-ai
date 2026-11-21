@@ -14,11 +14,6 @@ native/target/
 # NeuroClaw's server bundled for the phone (node scripts/release/build-mobile-server.mjs); regenerated, not source.
 mobile/server/bundle/
 
-# Knowledge pipeline: downloaded and derived data (rebuild with `node training/knowledge/cli.mjs run`).
-training_data/knowledge/raw/
-training_data/knowledge/processed/
-training_data/knowledge/checkpoints/
-
 # Runtime/test output the engine writes into a checkout; never source.
 # A clone of this repo inside itself (the integrity test requires this line).
 .my-ai/
@@ -33,3 +28,8 @@ __pycache__/
 .gradle/
 mobile/android-standalone/**/build/
 mobile/android-standalone/local.properties
+
+# Knowledge pipeline: downloaded and derived data (rebuild with `node training/knowledge/cli.mjs run`).
+training_data/knowledge/raw/
+training_data/knowledge/processed/
+training_data/knowledge/checkpoints/
