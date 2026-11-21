@@ -337,6 +337,52 @@
             "checked": "2026-11-21",
             "against": "v1"
           }
+        },
+        {
+          "version": "v3",
+          "status": "rejected",
+          "created": "2026-11-21",
+          "params": {
+            "minScore": 25,
+            "k": 5
+          },
+          "metrics": {
+            "verify.acc": 0.5433,
+            "verify.majority_baseline": 0.4133,
+            "verify.support_precision": 0.4527,
+            "verify.n": 300,
+            "verify.train_acc": 0.513
+          },
+          "note": "NEI threshold chosen on train claims; retriever v2",
+          "artifact": "training_data/knowledge/checkpoints/verifier.claims/v3.json",
+          "artifactSha256": "6f5b95748f9d2865ad3205742ea94136da6fe355e6122968c01af40f3f1a088a",
+          "artifactBytes": 21,
+          "inputs": [
+            {
+              "source": "scifact",
+              "license": "CC BY-NC 2.0 per the dataset authors (UNVERIFIED here: the repo README states no licence, and the Hugging Face BEIR copy is labelled CC BY-SA 4.0). The stricter reading is applied.",
+              "nc": true,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "f832fb0d1af35f4c",
+            "node": "v22.23.5",
+            "commit": "dcc424df",
+            "parent": "v1"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "verify.acc 0.5433 -> 0.5433 (delta 0) is below the required +0.005"
+            ],
+            "checked": "2026-11-21",
+            "against": "v1"
+          }
         }
       ]
     },
@@ -433,6 +479,96 @@
             ],
             "checked": "2026-11-21",
             "against": "v1"
+          }
+        },
+        {
+          "version": "v3",
+          "status": "rejected",
+          "created": "2026-11-21",
+          "params": {
+            "mode": "knn",
+            "k": 5,
+            "cvAcc": 0.7916666666666666
+          },
+          "metrics": {
+            "audio.accuracy": 0.7917,
+            "audio.chance": 0.1667,
+            "audio.n_test": 48,
+            "audio.n_train": 192
+          },
+          "note": "6 ESC-50 classes, train folds 1-4, test fold 5; model chosen by fold-CV (knn5=0.79, knn7=0.79, knn3=0.77, centroid=0.67)",
+          "artifact": "training_data/knowledge/checkpoints/audio.recognizer/v3.json",
+          "artifactSha256": "6ee761e88884f6919604e5931da4ac907aa480073076cff72950be43f2a348eb",
+          "artifactBytes": 276841,
+          "inputs": [
+            {
+              "source": "esc50",
+              "license": "CC BY-NC 3.0",
+              "nc": true,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "f832fb0d1af35f4c",
+            "node": "v22.23.5",
+            "commit": "dcc424df",
+            "parent": "v1"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "audio.accuracy 0.7917 -> 0.7917 (delta 0) is below the required +0.01"
+            ],
+            "checked": "2026-11-21",
+            "against": "v1"
+          }
+        }
+      ]
+    },
+    "music.composer": {
+      "current": "v1",
+      "versions": [
+        {
+          "version": "v1",
+          "status": "current",
+          "created": "2026-11-21",
+          "params": {
+            "generator": "compose.mjs",
+            "seeds": 300
+          },
+          "metrics": {
+            "music.first_try_pass_rate": 0.99,
+            "music.final_rule_pass_rate": 1,
+            "music.distinct_melody_rate": 1,
+            "music.mean_attempts": 1.01,
+            "music.n": 300
+          },
+          "note": "theory rules + seeded randomizer; synthetic corpus kept in processed/synthetic",
+          "artifact": "training_data/knowledge/checkpoints/music.composer/v1.json",
+          "artifactSha256": "8689a3751996e952cb2c5b8fc77751386b17bb98e81761a10b5866bee44fa288",
+          "artifactBytes": 39,
+          "inputs": [],
+          "restrictions": {
+            "nonCommercial": false,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "f832fb0d1af35f4c",
+            "node": "v22.23.5",
+            "commit": "dcc424df",
+            "parent": null
+          },
+          "gate": {
+            "pass": true,
+            "reasons": [
+              "first version: music.first_try_pass_rate=0.99 meets floor 0.9"
+            ],
+            "checked": "2026-11-21",
+            "against": null
           }
         }
       ]

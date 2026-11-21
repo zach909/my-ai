@@ -28,6 +28,7 @@ Other commands: `sources` `probe` `collect [id..]` `validate` `extract` `train [
 | `evaluate.mjs`, `eval/*.jsonl` | Benchmarks and labelled suites; `RESULTS.md` is generated from them |
 
 Data lives in `training_data/knowledge/` (`raw/`, `processed/`, `checkpoints/` are git-ignored and rebuilt by `run`; `reports/` and `catalog.json` are small and committed).
+`music.composer` is trained and versioned as its own component from synthetic data only (`processed/synthetic/`, never read by any other component), so it carries no licence restrictions and cannot contaminate real-data models.
 Each domain is its own collection (`science`, `code`, `audio-text`, `symbols`, `music`), so one can be re-collected and retrained alone: `collect scifact && extract && train`.
 
 ## Rules the pipeline enforces

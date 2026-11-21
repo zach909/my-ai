@@ -63,3 +63,12 @@ test('WAV rendering is audible, normalised and has the expected length', () => {
   let peak = 0; for (const v of w.samples) peak = Math.max(peak, Math.abs(v)); assert.ok(peak > 0.6 && peak <= 0.81);
   const f = features(w.samples, w.sr); assert.ok(f.every(Number.isFinite));
 });
+
+test('music.composer is a separate registered component; its synthetic data is never in the real collections', async () => {
+  const fs = await import('node:fs'), path = await import('node:path');
+  const reg = JSON.parse(fs.readFileSync('training/knowledge/registry.json', 'utf8')).components['music.composer'];
+  assert.ok(reg && reg.current); const v = reg.versions.find((x) => x.version === reg.current);
+  assert.deepEqual(v.inputs, []); assert.equal(v.restrictions.nonCommercial, false); assert.ok(v.metrics['music.first_try_pass_rate'] >= 0.9);
+  const root = 'training_data/knowledge/processed/collections';
+  if (fs.existsSync(root)) for (const f of fs.readdirSync(root)) for (const l of fs.readFileSync(path.join(root, f), 'utf8').split('\n').filter(Boolean)) assert.ok(!JSON.parse(l).synthetic);
+});
