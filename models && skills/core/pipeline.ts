@@ -1,7 +1,7 @@
 import { NetSkillRouter } from './net-skill-router.js';
 import { SkillAccuracyLedger } from './net-skill-accuracy.js';
 import { ElasticDistricts } from './elastic-district.js';
-import { HyperDimensionalEngine } from './onebrain.js';
+import { HyperDimensionalEngine, type FiringSetting } from './onebrain.js';
 import { RLMTrainer } from './rlm.js';
 import { ValueRangeAllocator } from './value-range.js';
 import { QuantumNeuralNet } from './onebrain.js';
@@ -54,6 +54,28 @@ export interface PipelineConfig {
    * budget gives it, exactly as before.
    */
   elasticDistricts?: boolean;
+  /**
+   * Firing thresholds for the one network (see "Firing thresholds" in
+   * onebrain.ts): 'off', 'balanced', 'saver', or a scale from 0 to 1. Off
+   * unless set, which is exactly the network as it was before thresholds
+   * existed. When omitted the NEUROCLAW_FIRING_MODE environment variable is
+   * used, if there is one. Can be changed later on the live engine with
+   * getHyperEngine()?.setFiringMode(...).
+   */
+  firingMode?: FiringSetting;
+}
+
+/**
+ * The firing setting to build the engine with: the config's, else the
+ * environment's, else none (off). `process` does not exist in the phone's bare
+ * JavaScript context, hence the typeof guard. The environment's value is any
+ * string, so it is passed on unchecked: the engine reads an unrecognised one as
+ * off rather than throwing.
+ */
+function firingSetting(configured: FiringSetting | undefined): { firingMode?: string | number } {
+  const fromEnv = typeof process !== 'undefined' ? process.env?.NEUROCLAW_FIRING_MODE : undefined;
+  const setting = configured ?? fromEnv;
+  return setting === undefined || setting === '' ? {} : { firingMode: setting };
 }
 
 export interface PipelineStep {
@@ -255,6 +277,7 @@ export class NeuroPipeline {
       // nothing on a settled network, because the loop now stops when the
       // residual stops falling rather than running to the ceiling.
       propagationSteps: 32,
+      ...firingSetting(this.config.firingMode),
       ...(this.config.hyperSustainedDivergenceTicks !== undefined
         ? { sustainedDivergenceTicks: this.config.hyperSustainedDivergenceTicks } : {}),
       ...(this.config.hyperDivergenceTolerance !== undefined
