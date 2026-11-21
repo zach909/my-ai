@@ -784,7 +784,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
     var healthy = names.filter(function (n) { return status[n]; }).length;
     $('heal-line').textContent = names.length ? (healthy + ' of ' + names.length + ' component(s) healthy.') : 'Nothing registered yet.';
     var box = $('heal-components');
-    box.innerHTML = '';
+    box.textContent = '';
     names.forEach(function (n) {
       var p = document.createElement('p');
       p.className = 'nc-dim';
@@ -798,7 +798,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
       (r.repaired ? ', ' + r.repaired + ' repaired' : '') + (r.restored ? ', ' + r.restored + ' restored' : '') +
       (r.unrecoverable && r.unrecoverable.length ? ', ' + r.unrecoverable.length + ' unrecoverable: ' + r.unrecoverable.join(', ') : '.');
     var box = $('heal-components');
-    box.innerHTML = '';
+    box.textContent = '';
     (r.results || []).forEach(function (c) {
       var p = document.createElement('p');
       p.className = 'nc-dim';
