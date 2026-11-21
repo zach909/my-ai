@@ -194,10 +194,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts'), v('test/core/task-training.test.ts')],
   },
   {
-    id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',
-    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs'],
-    routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],
-    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts')],
+    id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer. Self-debug: the AI finds what goes wrong in a net, looks at the weights behind it and their history, edits them a little through the weight editor, has a critic check whether it got better or worse, keeps or undoes the change and goes on; when weights cannot fix a wrong answer it makes a skill with the Extension Builder, and after enough skills proposes a plugin that is installed off until the owner approves it.',
+    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'models && skills/core/self-debug.ts', 'interface/self-debug-routes.ts', 'interface/platform/self-improvement-page.ts'],
+    routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop', 'GET /api/self-improvement/self-debug', 'GET /api/self-improvement/self-debug/sessions/:id', 'POST /api/self-improvement/self-debug/run', 'POST /api/self-improvement/self-debug/auto', 'POST /api/self-improvement/self-debug/plugins/:id'],
+    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts'), v('test/core/self-debug.test.ts'), v('test/core/self-debug-routes.test.ts')],
   },
   {
     id: 'desktop-control', title: 'Desktop control', description: 'See and drive windows through the OS, natively on each: X11 and Wayland on Linux, PowerShell with user32 on Windows, osascript and screencapture on macOS. Only windows of programs the agent started itself can be driven.',
@@ -386,7 +386,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/self-debug-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))

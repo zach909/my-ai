@@ -60,6 +60,11 @@ const nets = new Map<string, Made>();
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** The nets made so far, with the editors that change them: what the self-debug loop (self-debug-routes.ts) looks after. */
+export function madeNets(): Array<{ id: string; name: string; kind: string; net: BuiltNet; editor: WeightEditor }> {
+  return Array.from(nets.values()).map(m => ({ id: m.id, name: m.name, kind: m.kind, net: m.net, editor: m.editor }));
+}
+
 export const isWeightsRoute = (pathname: string): boolean =>
   pathname === "/api/nets" || pathname.startsWith("/api/nets/") || pathname === "/api/compile" || pathname === "/api/task-training";
 
