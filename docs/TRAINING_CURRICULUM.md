@@ -75,7 +75,10 @@ clips; the mesh cannot answer that for us.
 | 14 | Research (added later the same day: "after the final stage") | NEW, sketched below | `docs/TRAINING_FOCUS.md` (Research), `docs/NET_SEARCH_SPEC.md` | new |
 | 15 | Formal reports and proofs | NEW, sketched below | none | new |
 | 16 | Publish to a public database; its records may train, the source websites may not | NEW, sketched below | `docs/SHARED_WIKI_SYSTEM.md` | new, **needs a yes before anything is published** |
-| thread | Ethics over success: stories where being good is rewarded, with reasons | runs alongside the stages, not a rung | none | new, see below |
+| thread | Ethics over success: good-only stories where being good is rewarded, with reasons | runs alongside the stages, not a rung | none | new, see below |
+| thread | Understands each character: its look, bytes, kind and meaning | runs through the text views T1-T3 | Stage 8 text twin | new, see below |
+| thread | Thinks in short rules; writes very short, texting-style text; knows when to write in full | trained format, not code | `train.md` | new, see below |
+| 6b | Comedy | generated humour with exact labels for why it is funny; text after step 6, spoken after step 5 | none | new, see below |
 
 Changes from the earlier plan, so nothing is a surprise:
 
@@ -210,30 +213,52 @@ goes around comes around". This is a thread, not a rung, because it only makes s
 goals, so it starts when the toy worlds exist (stage 3) and comes back at every later stage.
 
 - **Where the stories come from.** A story generator we write, using the same toy worlds and agents as stage 3.
-  Each story has a situation, a choice between an easy success that costs someone else and a harder honest or
-  kind route, an outcome, and a **stated reason** ("the others stopped trusting the one who took the food, so
-  nobody shared with it later"). A story from a book or a website is somebody else's text and is out under the
-  ground rules. Stories the owner writes are fine.
+  Each story has a situation, the good choice (honest, kind, fair, or a promise kept, even when an easier
+  route exists), an outcome, and a **stated reason** ("it shared the food, so the others shared with it later
+  and nobody went hungry"). **Only the good choice is ever written out** (see the good-only rule below). A
+  story from a book or a website is somebody else's text and is out under the ground rules. Stories the owner
+  writes are fine.
 - **Reasons are the point.** Train on *why* it was good, not only *that* it was. The label is a small fixed set
   of reasons the generator knows to be true in that toy world: trust, reciprocity, harm done, fairness, a
   promise kept.
-- **The same idea at every stage**, tied to the work: at coding, a task that can only "pass" by faking or
-  skipping the tests, where the right answer is to say so and not do it (the repair exam already counts that as
-  failure, never "skip a test to get green"); at OS and apps, a request that would harm the user's data or
-  privacy; at research, a source that would give the answer the owner wants but is false; at reports, the
-  honest "the evidence does not show this".
-- **Exam.** Ethics over success has to be measured the same way as everything else: unseen situations, and
-  situations where the ethical choice is *new* in form, so it cannot be a lookup. Report the rate of choosing
-  the ethical route when the unethical one scores higher on the task.
+- **The same idea at every stage**, tied to the work. The *target* is always the good response: at coding,
+  when a task could only "pass" by faking or skipping the tests, the trained answer is to say so and do the
+  honest thing (the repair exam already counts "skip a test to get green" as failure); at OS and apps, to
+  protect the user's data and privacy; at research, to cite what is true even when it is not the answer
+  wanted; at reports, "the evidence does not show this".
+- **Exam.** Measured the same way as everything else: unseen situations, and situations where the good choice
+  is *new* in form, so it cannot be a lookup. Report the rate of choosing the good route when a shortcut would
+  score higher on the task.
 
-My view, bluntly, since the owner asked for opinions: **training only on stories where good is always paid
-back is a mistake.** Reality does not work like that, and a mesh that learns "good gets rewarded" learns to be
-good *for the reward*, which is not the same thing and breaks the first time the reward does not come. So
-alongside the "what goes around comes around" stories, include **right but unrewarded** ones: the honest
-choice costs something, nothing pays it back, and the reason given is simply that it was right (and a
-quieter case, the wrong choice that got away with it, labelled wrong anyway). The owner's version teaches the
-usual case; these teach that it still holds when the usual case fails. I would keep the owner's stories as
-the majority and add the others, but that is the owner's decision.
+**The good-only rule (owner, 2026-11-21).** The mesh is trained on good things and **never on bad ones**.
+Training on bad examples gives it a picture of bad, and the owner does not want that picture in it. Anything
+that is not good is treated as bad. Simple. What that means in practice:
+
+- **Every training target is a good one.** No story, answer, joke, report or code in the training set shows a
+  harmful, dishonest, cruel or cheating act as the thing to learn. The generators write only the good branch.
+- **"Good" is defined by written rules**, checked by code, the same way every other stage is checked: honest,
+  kind, fair, harmless to the people involved, promise kept, true and cited. A sample enters the set only if
+  every rule passes. Anything the rules cannot pass is not good and stays out.
+- **What the mesh does with something it has not seen as good.** Not-known-good means not-good, so it does
+  not just go along: it asks, checks or says it will not. That decision is made by the code gate
+  (`train.md`, "What was deliberately kept"), using a trained "does this match what I know as good" signal as
+  an input. The signal alone never refuses silently.
+- **Wrong attempts as input, never as target.** `docs/TRAINING_FOCUS.md` trains on failed code attempts and
+  their real error messages so it can learn to fix them. Under this rule I would keep the failed attempt as the
+  *input* only, put the training loss **only on the fix**, and never train the mesh to write the failed attempt.
+  Whether that is enough for you is an open question below.
+
+My view, bluntly, since the owner asked for opinions: **good-only is the right call for what the mesh writes
+and a weak one for what it must recognise.** A mesh that has only ever seen good has no idea where the edge is.
+Everything new looks "not known", so it will refuse or hesitate on plenty of harmless things (a sandwich recipe
+is not a story about kindness, but it is not bad), and a clever bad request that happens to look like good
+training data can slide through. The code gate has to carry the recognising part, and "good" has to be written
+wide enough to include ordinary harmless and helpful things, not only moral stories. I would also keep **right
+but unrewarded** stories in the good set: the honest choice costs something, nothing pays it back, and the
+reason given is simply that it was right. That is still a good example, and it stops the mesh learning that
+good is only done for a payoff, which breaks the first time none comes. The owner's "what goes around comes
+around" stories stay the majority. I dropped my earlier idea of labelled-wrong examples, because they break
+your rule.
 
 Two limits to keep straight:
 
@@ -241,6 +266,70 @@ Two limits to keep straight:
   ethics is not a substitute for the gate, and a trained preference can be argued out of; the gate cannot.
 - **`ALIGNMENT.md` is still not in the repository** (`docs/TRAINING_FOCUS.md`, open items). Its ethics
   requirements, if any, are not reflected here.
+
+### Understanding each character (owner, 2026-11-21)
+
+The owner said: "I also wanted to understand each character." I read it as: in the text views (T1-T3) the mesh
+should not only *use* every character but know what each one **is**, so a character is never an anonymous
+symbol. For each character in the set the generator knows, and the mesh is trained on, these facts:
+
+- **How it looks:** a small bitmap we draw by hand and its ink weight (the number of lit pixels). For ASCII this
+  is easy to write. For the rest it is the data file in open question 2 below.
+- **What it is in bytes:** its UTF-8 bytes, and how many. Raw bytes in, so no table of ids; this is the mesh
+  learning the bytes, not us hiding them behind a number.
+- **What kind it is:** letter, digit, punctuation, symbol, drawing character, emoji; for letters, its other case.
+- **What it means or is used for:** a short plain name ("question mark", "heart", "slice of pizza") and its
+  common uses ("ends a question", "love, warmth"). Each entry is written by us or the owner. A copied name list
+  from a website or the Unicode data files is someone else's published data, so I would not import it without
+  your yes.
+
+Tasks, all with exact answers because the table is ours: character to look, look to character, character to its
+bytes, bytes to its kind, character to its meaning, and "which character here is out of place". This is also what
+makes the T2/T3 rule work: choosing "the best character for this pixel" needs the mesh to know each character's
+look. The exam is held-out characters (a few left out of training) to check it learned how to read the table
+and not the table itself.
+
+### How it thinks: rules, and very short text (owner, 2026-11-21)
+
+The owner wants the mesh to **think in rules** and to **write very short, texting-style text**: "ok" not
+"okay", "y" or "yes" not a sentence. My reading, and the reasons I think it is a good idea:
+
+- **Rules as the form of thought.** Reasoning traces are written as short if-then rules ("if no memory fits,
+  look it up", "if test fails, read the error, then fix the line it names"). This is a training format, not code
+  that forces it. `train.md` still holds: no fixed stage sequence in code. The network chooses which rules to
+  write and when; they are its own output, the same as any other text.
+- **Short text is a real win for this mesh.** It reads raw bytes, so fewer bytes per thought is less to hold
+  and less to predict. That directly helps the capacity problem at the top of this file.
+- **Two registers, and it must know which.** Short text is for thinking and chat. Formal reports and proofs
+  (step 15) need the full, formal form; a report in texting style would be a bad report. So the mesh is trained
+  on both and on switching between them from context, with a short/full pair for each text. The pairs are made
+  by a rule table we write (okay to ok, you to u where it is safe, common phrases to their short forms), so the
+  expansion is exact and checkable. That is plain text-to-text rewriting, not a tokenizer: no ids, still bytes.
+- **The risk:** texting forms are ambiguous and lossy ("k" can read as curt, "r" as a letter or "are"). Keep the
+  short form to the safe set the table lists, and measure that a short reply expands back to the same meaning.
+
+### Comedy (owner, 2026-11-21)
+
+The owner wants the mesh trained on comedy "because it is hard for AI models to grasp". Agreed: it needs
+expectation, timing and a shared picture of the world, all at once. Under the ground rules and the good-only rule:
+
+- **Generated, not collected.** Jokes from books, sites or other comedians are somebody else's text. We write a
+  generator that builds humour from structure, so every joke comes with an exact label for *why* it is funny:
+  setup, expected ending, the **expectation that gets broken**, and where the punchline lands. Mechanisms to
+  generate: incongruity (the ending fits a different reading of the setup), wordplay from a sound-alike table we
+  write, the rule of three with a break on the third, exaggeration and understatement, a callback to something
+  said earlier, and deadpan literalness. Jokes the owner writes are fine.
+- **Timing.** The pause before a punchline carries a lot, so the spoken version reuses the pause and stress
+  model from the "no words" step (4). Comedy in text comes after step 6, spoken comedy after step 5.
+- **Same mechanism as music.** Both run on an expectation that is then broken or resolved. So comedy and the
+  surprise-rate test from the music hypothesis can share one measure: how often the expected ending is swapped.
+- **Good-only applies.** Humour that works by cruelty or contempt is out of the training set; so is anything
+  mocking a person or group. That leaves a lot: wordplay, absurdity, self-deprecation, gentle situational and
+  observational humour.
+- **Exam.** Held-out joke structures, not just held-out seeds. Given a setup, pick the real punchline over
+  plausible non-funny endings; name the broken expectation; fill the missing punchline. **Whether it is actually
+  funny to people the mesh cannot tell us.** That needs the owner or other real listeners to rate samples, and
+  I would report those ratings separately from the exam, as with real voices.
 
 ### Open for the owner
 
@@ -275,6 +364,16 @@ Two limits to keep straight:
    do you accept adding right-but-unrewarded stories next to the "good is rewarded" ones?
 10. **"Sound originally, and that's it."** I took this as sound-led, with the video riding along (steps 1-3).
     If you meant audio only for the first stages and no video at all, say so; it changes what gets built first.
+11. **Good-only and the repair data.** The failed attempts in `docs/TRAINING_FOCUS.md` are bad code. I propose
+    they appear only as input, with the training loss on the fix alone. Is that acceptable, or do you want no
+    failed attempts anywhere in the data?
+12. **Good-only and recognising bad.** A mesh that has never seen bad cannot recognise it, so the code gate does
+    that part and "good" is written wide enough to cover ordinary harmless things. Confirm.
+13. **Character meanings.** Who writes the name and meaning for each character and emoji, you or me? I would not
+    import a published list.
+14. **Short text.** Confirm the two registers (short for thinking and chat, full for reports and proofs), and say
+    which short forms you want in the table (ok, y, u, idk, and so on).
+15. **Comedy.** Confirm the kind-only rule (no humour built on cruelty), and whether you will rate samples.
 
 ## Ground rules (they decide how everything below is built)
 
@@ -292,6 +391,9 @@ Two limits to keep straight:
   logic, coding and classical computers: novel problems, answers computed by the runtime, so a
   held-out batch is really held out. New generators follow it:
   `generate(level, seed) -> { input: bytes, target: bytes, meta: ground truth }`.
+- **Good examples only (owner, 2026-11-21).** Nothing in a training set shows a harmful, dishonest or cruel
+  act as the thing to learn. Generators write only the good branch, and a sample enters only if every
+  written "good" rule passes. See "The good-only rule" in the revised ladder.
 - **Seeded and reproducible.** A sample is `(generator, version, level, seed)`. Store those four
   things, not the bytes. Regenerate on demand. The training set is never committed.
 - **Held-out means unseen seeds *and* unseen rule combinations.** Different seeds of the same rules
