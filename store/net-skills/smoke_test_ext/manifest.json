@@ -5,12 +5,12 @@
   "description": "A Net Skill grafted into the live mesh: 1 neuron, all-to-all with the rest of the network. Not installable as a file -- see the descriptor for what it means, and net-skill-graft.ts for how a mesh grows one.",
   "author": "neuroclaw-agent",
   "publishedAt": "2026-09-02T21:18:09.947Z",
-  "updatedAt": "2026-11-20T12:05:17.021Z",
+  "updatedAt": "2026-11-21T19:14:35.686Z",
   "files": [
     {
       "filename": "smoke_test_ext.net-skill.json",
       "bytes": 166,
-      "sha256": "82adf6c5f6f796bdad6316408a4142b07b8cec2df1f242b120e719c7555d1706"
+      "sha256": "b5a50dee27c6765a687bae076a1c09ef44e910991c8c16669e8620425ca219a9"
     }
   ]
 }
