@@ -9,20 +9,36 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, mkdtempSync, copyFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 const ROOT = path.resolve(__dirname, '../..')
 const EXT_DIR = path.join(ROOT, 'extension-builder', 'extensions')
 const PROBE = 'good_bits_test_VITEST_PROBE.ext.json'
 
+// The agent writes its baseline and report on every run. Point it at a scratch
+// copy so this suite does not rewrite tracked files in config/ with new
+// timestamps (write churn, and a dirty tree after every test run).
+const STATE_DIR = mkdtempSync(path.join(tmpdir(), 'neuroclaw-optimize-state-'))
+copyFileSync(path.join(ROOT, 'config', 'optimization-baseline.json'), path.join(STATE_DIR, 'optimization-baseline.json'))
+
 function runAgent(): string {
   return execFileSync('node', ['scripts/optimize-agent.mjs', '--once'], {
     cwd: ROOT,
+    env: { ...process.env, CORONA_OPTIMIZE_STATE_DIR: STATE_DIR },
     encoding: 'utf8',
     timeout: 180_000,
     maxBuffer: 32 * 1024 * 1024,
   })
+}
+
+// Checks that plant nothing all see the same clean tree, so one run serves
+// them all instead of paying for the full scan (git, unreachable-export
+// analysis) once per assertion.
+let cleanRun: string | undefined
+function runAgentClean(): string {
+  return (cleanRun ??= runAgent())
 }
 
 beforeEach(() => {
@@ -45,23 +61,23 @@ describe('catching what it is meant to catch', () => {
   it('checks that the memory store can still accept something new', () => {
     // The worst bug found so far: pinned knowledge exceeding capacity meant
     // every new memory was discarded on creation and the agent could not learn.
-    expect(runAgent()).toMatch(/memory-accepts-new\s+yes/)
+    expect(runAgentClean()).toMatch(/memory-accepts-new\s+yes/)
   }, 200_000)
 
   it('checks that state writes survive a power cut', () => {
     // A plain writeFileSync truncates before it writes; losing power in
     // between made a published store item vanish from the catalogue entirely.
-    expect(runAgent()).toMatch(/non-atomic-state-writes\s+none in the watched files/)
+    expect(runAgentClean()).toMatch(/non-atomic-state-writes\s+none in the watched files/)
   }, 200_000)
 
   it('checks the repository does not contain itself', () => {
-    expect(runAgent()).toMatch(/unexplained-gitlinks\s+none/)
+    expect(runAgentClean()).toMatch(/unexplained-gitlinks\s+none/)
   }, 200_000)
 
   it('counts unreachable exports rather than failing to look', () => {
     // -1 is how each check reports "I could not run", and a monitor that
     // cannot run must not read as a pass.
-    const out = runAgent()
+    const out = runAgentClean()
     expect(out).toMatch(/tested-but-unreachable\s+\d+ exports/)
     expect(out).not.toMatch(/tested-but-unreachable\s+check failed/)
   }, 200_000)
@@ -69,8 +85,8 @@ describe('catching what it is meant to catch', () => {
 
 describe('the baseline is a ratchet', () => {
   it('records a report each run', () => {
-    runAgent()
-    const report = JSON.parse(readFileSync(path.join(ROOT, 'config', 'optimization-report.json'), 'utf8'))
+    runAgentClean()
+    const report = JSON.parse(readFileSync(path.join(STATE_DIR, 'optimization-report.json'), 'utf8'))
     expect(report.checks.map((c: { name: string }) => c.name).sort()).toEqual([
       'memory-accepts-new',
       'non-atomic-state-writes',
@@ -82,7 +98,7 @@ describe('the baseline is a ratchet', () => {
   }, 200_000)
 
   it('only moves the baseline in the improving direction', () => {
-    const file = path.join(ROOT, 'config', 'optimization-baseline.json')
+    const file = path.join(STATE_DIR, 'optimization-baseline.json')
     runAgent()
     const before = JSON.parse(readFileSync(file, 'utf8'))
 

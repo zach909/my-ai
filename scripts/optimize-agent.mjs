@@ -45,8 +45,12 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 
 const ROOT = process.cwd()
-const BASELINE = path.join(ROOT, 'config', 'optimization-baseline.json')
-const REPORT = path.join(ROOT, 'config', 'optimization-report.json')
+// Where the ratchet baseline and the last report live. Defaults to the repo's
+// config/ (unchanged behaviour); tests point it at a scratch directory so a
+// run does not rewrite tracked files with fresh timestamps.
+const STATE_DIR = process.env.CORONA_OPTIMIZE_STATE_DIR || path.join(ROOT, 'config')
+const BASELINE = path.join(STATE_DIR, 'optimization-baseline.json')
+const REPORT = path.join(STATE_DIR, 'optimization-report.json')
 const CYCLE_MS = Number(process.env.CORONA_OPTIMIZE_CYCLE_MS) || 6 * 60 * 60 * 1000
 
 /** Files a test is documented to write into a live directory. Safe to delete. */
