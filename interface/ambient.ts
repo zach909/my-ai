@@ -201,7 +201,7 @@ export const AMBIENT_JS = String.raw`(function () {
     fetch('/api/hive-agents', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
       if (!d) return;
       agents = (d.agents || []).map(function (a) {
-        return { id: String(a.id), name: String(a.name || a.id), working: !!a.working, phase: hashOf(String(a.id)) * 6.283, orbit: hashOf(String(a.id) + 'o') };
+        return { id: String(a.id), name: String(a.name || a.id), working: !!a.working, thinking: !!a.thinking, phase: hashOf(String(a.id)) * 6.283, orbit: hashOf(String(a.id) + 'o') };
       });
       if (reduce && !hidden) draw(performance.now());
     }).catch(function () { /* same */ });
@@ -285,28 +285,67 @@ export const AMBIENT_JS = String.raw`(function () {
       tips.push({ x: tx, y: ty, label: s.name + ' · ' + s.neurons + ' neuron' + (s.neurons === 1 ? '' : 's'), kind: 'skill' });
     }
   }
-  /* One small sphere and shoggoth per hive agent, drifting round the big one. A working hive's agents glow. */
-  function drawAgents(cx, cy, sr, t) {
-    /* They live inside the crown: in the band between the big sphere (1 sr) and the ring's reach (about 1.4 sr),
-       so each is sized to fit the band, and smaller still when there are many. */
-    var m = agents.length, ar = Math.min(sr * 0.15, (6.2832 * sr * 1.2 / Math.max(m, 1)) * 0.42);
-    for (var k = 0; k < m; k++) {
-      var a = agents[k], th = (k / m) * 6.2832 + (reduce ? 0 : t * 0.12);
-      var rho = sr * (1.2 + (reduce ? 0 : Math.sin(t * 0.7 + a.phase) * 0.04));
-      var x = cx + Math.cos(th) * rho, y = cy + Math.sin(th) * rho;
-      var r = ar * (1 + (reduce ? 0 : Math.sin(t * 1.4 + a.phase) * 0.03));
-      var glow = a.working ? 0.5 + (reduce ? 0 : Math.sin(t * 3 + a.phase) * 0.5) : 0;
-      var halo = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 1.6);
+  /* Packing: n equal circles of the largest size that fit inside a circle of radius 1, evenly spaced (one ring, or a
+     middle one plus a ring, or two rings). Exact for 1 to 9 and close to the best known above that. Slot 0 is the
+     agent in the middle of the page's sphere; each hive agent takes the next slot, so every new one shrinks the
+     rest by the same amount and they always stay inside. */
+  var packed = {};
+  function packCircles(n) {
+    if (packed[n]) return packed[n];
+    var best = { r: 0, pts: [[0, 0]] }, k, ring;
+    function ringPts(count, d, off) { var o = [], i; for (i = 0; i < count; i++) o.push([d * Math.cos(off + i * 2 * Math.PI / count), d * Math.sin(off + i * 2 * Math.PI / count)]); return o; }
+    if (n <= 1) { packed[n] = best = { r: 1, pts: [[0, 0]] }; return best; }
+    for (k = 0; k < 2; k++) { /* k = 0: all on one ring; k = 1: one in the middle and the rest on a ring */
+      if (k === 1 && n < 7) continue;
+      var count = n - k, sn = Math.sin(Math.PI / count), r1 = sn / (1 + sn);
+      if (k === 1) r1 = Math.min(r1, 1 / 3);
+      if (r1 > best.r) best = { r: r1, pts: (k ? [[0, 0]] : []).concat(ringPts(count, 1 - r1, -Math.PI / 2)) };
+    }
+    for (var n1 = 3; n1 < n; n1++) { /* two rings, the inner one turned half a step so its circles sit in the outer gaps */
+      var n2 = n - n1, s1 = Math.sin(Math.PI / n1), r2 = s1 / (1 + s1);
+      if (n2 === 1) r2 = Math.min(r2, 1 / 3); else r2 = Math.min(r2, 1 / (3 + 1 / Math.sin(Math.PI / n2)));
+      if (r2 > best.r) best = { r: r2, pts: ringPts(n1, 1 - r2, -Math.PI / 2).concat(n2 === 1 ? [[0, 0]] : ringPts(n2, 1 - 3 * r2, -Math.PI / 2 + Math.PI / n1)) };
+    }
+    packed[n] = best;
+    return best;
+  }
+  /* Where each shoggoth's sphere sits this frame, slot 0 being the agent in the middle. Equal size, equal spacing,
+     turning slowly together; a hair smaller than the best fit so they never touch. */
+  function agentSlots(cx, cy, sr, t) {
+    var n = agents.length + 1, pk = packCircles(n), turn = reduce ? 0 : t * 0.12, ca = Math.cos(turn), sa = Math.sin(turn);
+    var gap = n === 1 ? 1 : 0.94, out = [];
+    for (var k = 0; k < n; k++) {
+      var p = pk.pts[k] || [0, 0];
+      out.push({ x: cx + (p[0] * ca - p[1] * sa) * sr, y: cy + (p[0] * sa + p[1] * ca) * sr, r: pk.r * sr * gap });
+    }
+    return out;
+  }
+  /* A small sphere and shoggoth for every hive agent, all inside the big sphere, as large as they can be. The thinking
+     ones glow brightest; the rest of a working hive glow softly. Clipped to the sphere so nothing spills out. */
+  function drawAgents(cx, cy, sr, t, slots) {
+    var m = agents.length;
+    if (!m) return;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, sr, 0, 6.2832); ctx.clip();
+    for (var k = -1; k < m; k++) {
+      var a = k < 0 ? null : agents[k], sl = slots[k + 1], x = sl.x, y = sl.y;
+      var ph = a ? a.phase : 0.7;
+      var r = sl.r * (1 + (reduce ? 0 : Math.sin(t * 1.4 + ph) * 0.015));
+      var glow = a ? (a.thinking ? 0.6 + (reduce ? 0 : Math.sin(t * 4 + ph) * 0.4) : a.working ? 0.3 + (reduce ? 0 : Math.sin(t * 2 + ph) * 0.15) : 0) : 0;
+      var halo = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 1.25);
       halo.addColorStop(0, 'rgba(255,138,112,' + (0.16 + glow * 0.16).toFixed(3) + ')'); halo.addColorStop(1, 'rgba(255,138,112,0)');
-      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 1.6, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 1.25, 0, 6.2832); ctx.fill();
       var core = ctx.createRadialGradient(x - r * 0.28, y - r * 0.32, r * 0.1, x, y, r);
       core.addColorStop(0, 'rgb(96,50,52)'); core.addColorStop(0.6, 'rgb(44,22,26)'); core.addColorStop(1, 'rgb(26,13,16)');
       ctx.fillStyle = core; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
-      var bl = { x: x + Math.sin(t * 0.6 + a.phase) * r * 0.08, y: y + Math.cos(t * 0.5 + a.phase) * r * 0.08, r: r * 0.5 };
-      drawHiveShoggoth(x, y, r, bl.x, bl.y, bl.r, t, a.phase, 2, glow);
+      if (a) {
+        var bl = { x: x + Math.sin(t * 0.6 + ph) * r * 0.08, y: y + Math.cos(t * 0.5 + ph) * r * 0.08, r: r * 0.5 };
+        drawHiveShoggoth(x, y, r, bl.x, bl.y, bl.r, t, ph, Math.max(2, Math.min(6, Math.round(r / sr * 12))), glow);
+        tips.push({ x: x, y: y - r, label: 'Hive agent · ' + a.name + (a.thinking ? ' (thinking)' : a.working ? ' (working)' : ''), kind: 'agent' });
+      }
       ctx.strokeStyle = 'rgba(255,196,180,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
-      tips.push({ x: x, y: y - r, label: 'Hive agent · ' + a.name + (a.working ? ' (working)' : ''), kind: 'agent' });
     }
+    ctx.restore();
   }
 
   var angle = 0.6, last = performance.now(), visible = true;
@@ -508,16 +547,17 @@ export const AMBIENT_JS = String.raw`(function () {
     var broken = leaving && brokenAt >= 0;
     var since = broken ? agent.t - brokenAt : 0;
     var coreAlpha = broken ? 1 - ease(clamp01(since / 2.6)) : 1;
-    var u = sr * 0.5;
+    var slots = agentSlots(cx, cy, sr, sceneT), home = slots[0];
+    var u = home.r * (slots.length > 1 ? 0.4 : 0.5); /* the agent in the middle takes the first slot: the whole sphere when it is alone */
     var figure = function () {
       if (leaving) {
         var crawl = ease(clamp01(agent.t / 0.9));
         var fade = broken ? 1 - clamp01(since / 1.6) : 1;
-        drawShoggoth(cx + off, cy - u * 0.19 * (1 - crawl) + u * 0.25 * crawl, u, crawl, fade * coreAlpha + (1 - coreAlpha) * fade, tt);
+        drawShoggoth(home.x + off, home.y - u * 0.19 * (1 - crawl) + u * 0.25 * crawl, u, crawl, fade * coreAlpha + (1 - coreAlpha) * fade, tt);
         if (broken && since > 3) { agent.mode = 'gone'; showNote(true); }
       } else {
         var pop = agent.mode === 'arriving' ? ease(clamp01((agent.t - 0.8) / 1.0)) : 1;
-        drawShoggoth(cx, cy - u * 0.19 + (reduce ? 0 : Math.sin(tt * 1.6) * u * 0.025), u * (0.7 + 0.3 * pop), 0, pop, tt);
+        drawShoggoth(home.x, home.y - u * 0.19 + (reduce ? 0 : Math.sin(tt * 1.6) * u * 0.025), u * (0.7 + 0.3 * pop), 0, pop, tt);
       }
     };
     var figureDone = false;
@@ -551,7 +591,7 @@ export const AMBIENT_JS = String.raw`(function () {
        The agent itself is figure() below, so the alignment protocol's removal still plays on the centre one. */
     var bl = blobAt(cx, cy, sr, sceneT);
     drawTentacles(cx, cy, sr, bl, sceneT);
-    drawAgents(cx, cy, sr, sceneT);
+    drawAgents(cx, cy, sr, sceneT, slots);
 
     /* The agent sits inside the sphere, under the near half of the ring; once it has crawled out it is drawn on top. */
     if (!leaving || off < sr * 0.9) { figure(); figureDone = true; }
