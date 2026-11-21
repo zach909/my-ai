@@ -383,6 +383,52 @@
             "checked": "2026-11-21",
             "against": "v1"
           }
+        },
+        {
+          "version": "v4",
+          "status": "rejected",
+          "created": "2026-11-21",
+          "params": {
+            "minScore": 25,
+            "k": 5
+          },
+          "metrics": {
+            "verify.acc": 0.5433,
+            "verify.majority_baseline": 0.4133,
+            "verify.support_precision": 0.4527,
+            "verify.n": 300,
+            "verify.train_acc": 0.513
+          },
+          "note": "NEI threshold chosen on train claims; retriever v2",
+          "artifact": "training_data/knowledge/checkpoints/verifier.claims/v4.json",
+          "artifactSha256": "6f5b95748f9d2865ad3205742ea94136da6fe355e6122968c01af40f3f1a088a",
+          "artifactBytes": 21,
+          "inputs": [
+            {
+              "source": "scifact",
+              "license": "CC BY-NC 2.0 per the dataset authors (UNVERIFIED here: the repo README states no licence, and the Hugging Face BEIR copy is labelled CC BY-SA 4.0). The stricter reading is applied.",
+              "nc": true,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "ea122d2f4aa9b673",
+            "node": "v22.23.5",
+            "commit": "50bef467",
+            "parent": "v1"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "verify.acc 0.5433 -> 0.5433 (delta 0) is below the required +0.005"
+            ],
+            "checked": "2026-11-21",
+            "against": "v1"
+          }
         }
       ]
     },
@@ -526,6 +572,52 @@
             "checked": "2026-11-21",
             "against": "v1"
           }
+        },
+        {
+          "version": "v4",
+          "status": "rejected",
+          "created": "2026-11-21",
+          "params": {
+            "mode": "knn",
+            "k": 5,
+            "cvAcc": 0.7916666666666666
+          },
+          "metrics": {
+            "audio.accuracy": 0.7917,
+            "audio.chance": 0.1667,
+            "audio.n_test": 48,
+            "audio.n_train": 192
+          },
+          "note": "6 ESC-50 classes, train folds 1-4, test fold 5; model chosen by fold-CV (knn5=0.79, knn7=0.79, knn3=0.77, centroid=0.67)",
+          "artifact": "training_data/knowledge/checkpoints/audio.recognizer/v4.json",
+          "artifactSha256": "6ee761e88884f6919604e5931da4ac907aa480073076cff72950be43f2a348eb",
+          "artifactBytes": 276841,
+          "inputs": [
+            {
+              "source": "esc50",
+              "license": "CC BY-NC 3.0",
+              "nc": true,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "ea122d2f4aa9b673",
+            "node": "v22.23.5",
+            "commit": "50bef467",
+            "parent": "v1"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "audio.accuracy 0.7917 -> 0.7917 (delta 0) is below the required +0.01"
+            ],
+            "checked": "2026-11-21",
+            "against": "v1"
+          }
         }
       ]
     },
@@ -566,6 +658,92 @@
             "pass": true,
             "reasons": [
               "first version: music.first_try_pass_rate=0.99 meets floor 0.9"
+            ],
+            "checked": "2026-11-21",
+            "against": null
+          }
+        },
+        {
+          "version": "v2",
+          "status": "rejected",
+          "created": "2026-11-21",
+          "params": {
+            "generator": "compose.mjs",
+            "seeds": 300
+          },
+          "metrics": {
+            "music.first_try_pass_rate": 0.99,
+            "music.final_rule_pass_rate": 1,
+            "music.distinct_melody_rate": 1,
+            "music.mean_attempts": 1.01,
+            "music.n": 300
+          },
+          "note": "theory rules + seeded randomizer; synthetic corpus kept in processed/synthetic",
+          "artifact": "training_data/knowledge/checkpoints/music.composer/v2.json",
+          "artifactSha256": "8689a3751996e952cb2c5b8fc77751386b17bb98e81761a10b5866bee44fa288",
+          "artifactBytes": 39,
+          "inputs": [],
+          "restrictions": {
+            "nonCommercial": false,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "ea122d2f4aa9b673",
+            "node": "v22.23.5",
+            "commit": "50bef467",
+            "parent": "v1"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "music.first_try_pass_rate 0.99 -> 0.99 (delta 0) is below the required +0.005"
+            ],
+            "checked": "2026-11-21",
+            "against": "v1"
+          }
+        }
+      ]
+    },
+    "music.key_recognizer": {
+      "current": "v1",
+      "versions": [
+        {
+          "version": "v1",
+          "status": "current",
+          "created": "2026-11-21",
+          "params": {
+            "nTrain": 300,
+            "nTest": 150,
+            "trainSeeds": "1..300",
+            "testSeeds": "1001..1150"
+          },
+          "metrics": {
+            "music.key_accuracy": 0.88,
+            "music.tonic_accuracy": 0.88,
+            "music.mode_accuracy": 0.8933,
+            "music.key_chance": 0.0208,
+            "music.theory_only_baseline": 0.22,
+            "music.n_test": 150
+          },
+          "note": "trained on synthetic audio from compose.mjs only; tested on unseen seeds; synthetic-to-synthetic",
+          "artifact": "training_data/knowledge/checkpoints/music.key_recognizer/v1.json",
+          "artifactSha256": "ebbde39c67d19680045bd0ff7a6b95dfee459f13fdefdeb3b685512141a50b05",
+          "artifactBytes": 1104,
+          "inputs": [],
+          "restrictions": {
+            "nonCommercial": false,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "ea122d2f4aa9b673",
+            "node": "v22.23.5",
+            "commit": "50bef467",
+            "parent": null
+          },
+          "gate": {
+            "pass": true,
+            "reasons": [
+              "first version: music.key_accuracy=0.88 meets floor 0.5"
             ],
             "checked": "2026-11-21",
             "against": null

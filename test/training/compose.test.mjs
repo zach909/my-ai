@@ -72,3 +72,12 @@ test('music.composer is a separate registered component; its synthetic data is n
   const root = 'training_data/knowledge/processed/collections';
   if (fs.existsSync(root)) for (const f of fs.readdirSync(root)) for (const l of fs.readFileSync(path.join(root, f), 'utf8').split('\n').filter(Boolean)) assert.ok(!JSON.parse(l).synthetic);
 });
+
+test('training on composer output teaches key and mode recognition (unseen seeds, far above chance and above theory-only)', async () => {
+  const M = await import('../../training/knowledge/musicmodel.mjs');
+  const tr = Array.from({ length: 80 }, (_, i) => M.example(i + 1, 8000, 4)), te = Array.from({ length: 40 }, (_, i) => M.example(5000 + i, 8000, 4));
+  const model = M.trainKeyModel(tr); const r = M.evaluateKeyModel(model, te), base = M.evaluateKeyModel(M.theoryModel(), te);
+  assert.ok(r.accuracy > 0.5, JSON.stringify(r)); assert.ok(r.accuracy > base.accuracy + 0.2);        // chance for 48 key/mode pairs is 2%
+  const ch = M.chroma(Float32Array.from({ length: 8000 * 2 }, (_, i) => Math.sin(2 * Math.PI * 440 * i / 8000)), 8000);   // a pure A: all energy on pitch class 9
+  assert.equal(ch.indexOf(Math.max(...ch)), 9);
+});
