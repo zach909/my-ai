@@ -305,6 +305,12 @@ data class MeshStatsSnapshot(
     val activeRegions: List<String> = emptyList(),
     val valeTotal: Float = 0f,
     val valeConserved: Boolean = true,
+    /** The zero-sum budget: one point per neuron, so it grows as islands do. */
+    val valeBudget: Float = 32f,
+    val islandCount: Int = 1,
+    val learnedIslands: Int = 0,
+    val sleeps: Int = 0,
+    val pendingExperiences: Int = 0,
     val averageSurprise: Float = 0f,
     val memoryEntries: Int = 0,
     val cyclesRun: Int = 0,
