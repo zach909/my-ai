@@ -1,0 +1,183 @@
+import { ExtensionBuilder } from "../extension-builder/builder.js";
+import { ExtensionManager } from "../extension_system/manager.js";
+import { NetSkillRouter } from "./core/net-skill-router.js";
+import { NeuronMesh } from "./core/onebrain.js";
+import { HyperDimensionalEngine } from "./core/onebrain.js";
+import { ValueRangeAllocator } from "./core/value-range.js";
+import { UnifiedBrain, type BrainSnapshot } from "./core/unified-brain.js";
+import { NeuroclawTrainer } from "./trainer.js";
+export interface LLMConfig {
+    embeddingDim: number;
+    hiddenDim: number;
+    numExperts: number;
+    meshNodes: number;
+    hyperNeurons: number;
+    hyperDimensions: number;
+    ballStates: number;
+    thinkSteps: number;
+    valuePoints: number;
+    contextLength: number;
+    /** Unused -- quantum interference is always on now; see setQuantumEnabled()'s doc comment. */
+    quantumEnabled?: boolean;
+    /** Directory where self-authored extensions are persisted. */
+    selfExtensionsDir?: string;
+    /** Repo-bundled self-extensions loaded at build(); null disables. Defaults to `models && skills/`. */
+    bundledExtensionsDir?: string | null;
+}
+export interface GenerateOptions {
+    maxTokens: number;
+    temperature: number;
+    /** Relevant prior conversation turns to ground the response in (Section 7). */
+    memoryContext: string[];
+    /**
+     * Prompting skills that apply to this prompt. Each is streamed through the
+     * Zip Loop with the prompt, as prompting-skills/<name>/SKILL.txt.
+     */
+    promptingSkills: Array<{ name: string; title?: string; description?: string }>;
+    /**
+     * Neurons: how confident to act, 0-100 (core/neurons.ts). Sent through the
+     * Zip Loop as neurons/confidence.txt; nothing is sent when unset.
+     */
+    neurons: number;
+    /**
+     * Effort: how hard to try and how long to keep going, 0-100 (core/effort.ts). Sent through the
+     * Zip Loop as effort/effort.txt (Port 8); nothing is sent when unset.
+     */
+    effort: number;
+    /**
+     * Questions: how often to ask when unsure, 0-100 (core/questions.ts). Sent through the
+     * Zip Loop as questions/questions.txt (Port 9); nothing is sent when unset.
+     */
+    questions: number;
+    /**
+     * Give up on OneBrain's answer after this many milliseconds. A run cut off
+     * reads as silent (ONE_BRAIN_SILENT_REPLY) rather than hanging the caller.
+     */
+    deadlineMs: number;
+}
+/** What generate() says when OneBrain wrote nothing. */
+export declare const ONE_BRAIN_SILENT_REPLY = "one brain has nothing trained to say here yet.";
+export declare class NeuroclawLLM {
+    private config;
+    private builder;
+    private trainer;
+    private quantizer;
+    private brain;
+    private rlmTrainer;
+    private thornsEngine;
+    private projectId;
+    private built;
+    private trained;
+    private context;
+    private selfExtensions;
+    private selfExtensionsDir;
+    private extensionManager;
+    private generationCount;
+    private autonomousStopRequested;
+    /**
+     * `hyperEngine`, when passed, is the ONE real HyperDimensionalEngine
+     * this instance computes through instead of building a private second
+     * one -- see unified-brain.ts's UnifiedBrainConfig.hyperEngine.
+     */
+    constructor(config?: Partial<LLMConfig>, hyperEngine?: HyperDimensionalEngine | null);
+    get valueAllocator(): ValueRangeAllocator;
+    get skillRouter(): NetSkillRouter;
+    get mesh(): NeuronMesh;
+    get hyperEngine(): HyperDimensionalEngine;
+    setQuantumEnabled(enabled: boolean): void;
+    isQuantumEnabled(): boolean;
+    build(code?: string): Promise<void>;
+    buildFromCode(code: string): Promise<void>;
+    trainOnText(text: string): Promise<void>;
+    /** Teach the prose predictor new text WITHOUT erasing prior lessons (trainOnText rebuilds from scratch and erases). */
+    learnText(text: string): Promise<void>;
+    /** Characters of accumulated teaching material behind the prose predictor. */
+    getLearnedCorpusSize(): number;
+    generate(prompt: string, options?: Partial<GenerateOptions>): Promise<string>;
+    runAutonomous(
+        nextPrompt: () => Promise<string | null | undefined>,
+        onOutput: (output: string) => void | Promise<void>,
+        shouldStop?: () => boolean,
+        idleDelayMs?: number,
+    ): Promise<void>;
+    requestAutonomousStop(): void;
+    saveAndStop(): Promise<BrainSnapshot>;
+    private createSelfExtension;
+    thinkAbout(prompt: string): Promise<import("./core/thorns.js").ThornsOutput>;
+    loadModel(model: {
+        id?: string;
+        name?: string;
+        config?: Record<string, unknown>;
+        weights?: Record<string, number[]>;
+    }): Promise<void>;
+    unloadModel(): void;
+    getActiveModel(): {
+        id: string;
+        neurons: number;
+        experts: number;
+    } | null;
+    reloadSelfExtensions(dir?: string): number;
+    registerLoadedSelfExtensions(): Promise<void>;
+    /** Fold learned edges into OneBrain, persist it, and register a new registry version. */
+    foldIntoOneBrain(edges: { from: number; to: number; weight: number }[], sourceIds?: string[]): Promise<unknown>;
+    registerOneBrainVersion(serialized: string, sourceIds?: string[]): Promise<void>;
+    /** Merge leftover standalone self_ext_N models in selfExtensionsDir into OneBrain; returns how many. */
+    migrateSelfExtensionsIntoOneBrain(): Promise<number>;
+    /** Graft OneBrain's neurons onto the live mesh (hyperEngine) and write its weights as mesh connections. */
+    syncOneBrainToMesh(): { added: number; updated: number; skipped?: string };
+    oneBrainMeshIds: Map<string, number>;
+    /** Paths of the files the last generate() streamed through the Zip Loop. */
+    lastZipLoopFiles: string[];
+    /** The Zip Loop's output archive from the last generate(), or null. */
+    lastZipLoopOutput: import("./core/zip-halt.js").ZipTree | null;
+    recallFromSelfExtensions(prompt: string, topK?: number): {
+        outputs: { token: number; char: string; score: number }[];
+        extensions: { id: string; activation: number }[];
+    };
+    quantize(): Promise<string | null>;
+    save(): string | null;
+    searchNeurons(query: string): import("../extension-builder/builder.js").NeuronData[];
+    netSearch(query: string): {
+        results: string[];
+        confidence: number;
+    }[];
+    netSearchGenerate(query: string, topK?: number): {
+        neuron: any;
+        matches: { id: string; name: string; score: number }[];
+    } | null;
+    typeOutput(neuronId: string, inputValue: number): string;
+    getStats(): {
+        built: boolean;
+        trained: boolean;
+        trainingLoss: number;
+        samplesProcessed: number;
+        neuronCount: number;
+        connectionCount: number;
+        layerCount: number;
+        expertCount: number;
+        skillUsage: import("./core/net-skill-router.js").NetSkillUsage[];
+        valueDistribution: {
+            totalPoints: number;
+            neuronCount: number;
+        };
+        hyperPatternsSeen: number;
+        rlmBufferSize: number;
+        rlmExplorationRate: number;
+        selfExtensionCount: number;
+        generationCount: number;
+        contextLength: number;
+    };
+    getHyperHistory(): {
+        hash: string;
+        count: number;
+        lastSeen: number;
+        step: number;
+    }[];
+    traceNeuron(neuronId: number, dim: number, topK?: number): any;
+    demoteFailingNeurons(failureId: string): void;
+    getBuilder(): ExtensionBuilder;
+    getExtensionManager(): ExtensionManager;
+    getTrainer(): NeuroclawTrainer;
+    getSkillRouter(): NetSkillRouter;
+    isBuilt(): boolean;
+}

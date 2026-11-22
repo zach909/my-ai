@@ -1,0 +1,231 @@
+/**
+ * HTTP routes of the platform layer: app info, shared settings, update status,
+ * and the installable-app files.
+ *
+ *   GET  /api/app-info        version, build, this server's platform and the viewer's, with capabilities
+ *   GET  /api/app-settings    the shared settings, the field list, and whether the last save worked
+ *   POST /api/app-settings    {group: {field: value}}  change settings (admin or owner)
+ *   GET  /api/app-update      is this build current, behind, or could the check not complete
+ *   GET  /api/ai-os           is AI OS mode (start with the computer) on, and can this viewer change it
+ *   POST /api/ai-os           {enabled: boolean}  turn it on or off (admin, from the computer itself)
+ *   GET  /api/ai-os/apps      the KOS apps, which version of the system this computer is set to, and which apps it lets open
+ *   POST /api/ai-os/apps      {action: open|install|remove|edition, ...}  open an app by address, or manage them (admin, this computer)
+ *   GET  /manifest.webmanifest, /sw.js, /app-icon-192.png, /app-icon-512.png   the installable app
+ *
+ * Everything but the install files sits behind the server's normal gate.
+ * Writing settings additionally needs the owner or an admin; a regular user may
+ * read them (the look applies to their pages too) but not change them.
+ */
+import { layerList, runLayer } from './ai-os-layers.js';
+import type http from 'node:http';
+import { ADAPTERS, CAPABILITY_IDS, detectPlatform, describeCapabilities, PLATFORM_IDS, type PlatformId } from './adapters.js';
+import { getBuildInfo } from './version.js';
+import { SETTINGS_FIELDS, SettingsError, sharedSettings } from './settings-store.js';
+import { checkAppUpdate, type UpdateStatus } from './update.js';
+import { renderIconPng } from './icon.js';
+import { serviceWorkerSource, webManifest } from './pwa.js';
+import { FEATURES, featureSupport } from './feature-contract.js';
+import { aiOsStatus, currentEnv, disableAiOs, enableAiOs } from './ai-os.js';
+import { KosAppError, checkOpen, openApp, sharedKosApps } from './kos-apps.js';
+
+export interface PlatformRouteContext {
+  req: http.IncomingMessage;
+  res: http.ServerResponse;
+  pathname: string;
+  method: string;
+  parseBody(req: http.IncomingMessage, maxBytes?: number): Promise<unknown>;
+  sendJson(res: http.ServerResponse, data: unknown, status?: number): void;
+  /** True for the machine's owner or an admin account. */
+  isAdmin(): boolean;
+  /** True when this request came from the computer the server runs on (not over the network). */
+  fromThisMachine(): boolean;
+}
+
+const ROUTES = new Set(['/api/app-info', '/api/app-settings', '/api/app-update', '/api/ai-os', '/api/ai-os/layer', '/api/ai-os/apps', '/manifest.webmanifest', '/sw.js', '/app-icon-192.png', '/app-icon-512.png']);
+export const isPlatformRoute = (pathname: string): boolean => ROUTES.has(pathname);
+
+let updateCache: { key: string; at: number; status: UpdateStatus } | null = null;
+const UPDATE_CACHE_MS = 30_000;
+
+function appInfo(req: http.IncomingMessage) {
+  const build = getBuildInfo();
+  const serverId = detectPlatform({});
+  const clientId = detectPlatform({ userAgent: String(req.headers['user-agent'] ?? ''), nodePlatform: process.platform });
+  const describe = (id: PlatformId) => {
+    const a = ADAPTERS[id];
+    return { id, label: a.label, uiHost: a.uiHost, engineHost: a.engineHost, runtime: a.runtime, updateMechanism: a.updateMechanism, capabilities: describeCapabilities(id) };
+  };
+  return {
+    version: build.version,
+    build,
+    arch: process.arch,
+    server: describe(serverId),
+    client: describe(clientId),
+    capabilityIds: CAPABILITY_IDS,
+    platforms: PLATFORM_IDS,
+    features: FEATURES.map((f) => ({ id: f.id, title: f.title, needsNetwork: !!f.needsNetwork, support: featureSupport(f, clientId) })),
+  };
+}
+
+/** Returns true when the request was handled. */
+export async function handlePlatformRoutes(ctx: PlatformRouteContext): Promise<boolean> {
+  const { pathname, method, req, res } = ctx;
+  if (!isPlatformRoute(pathname)) return false;
+  const head = method === 'HEAD';
+  if (method !== 'GET' && !head && !(pathname === '/api/app-settings' && method === 'POST') && !(pathname === '/api/ai-os' && method === 'POST') && !(pathname === '/api/ai-os/layer') && !(pathname === '/api/ai-os/apps' && method === 'POST')) {
+    ctx.sendJson(res, { error: 'Method not allowed.' }, 405);
+    return true;
+  }
+
+  try {
+    switch (pathname) {
+      case '/manifest.webmanifest': {
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache' });
+        res.end(head ? undefined : webManifest());
+        return true;
+      }
+      case '/sw.js': {
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+        res.end(head ? undefined : serviceWorkerSource());
+        return true;
+      }
+      case '/app-icon-192.png':
+      case '/app-icon-512.png': {
+        const png = renderIconPng(pathname.includes('192') ? 192 : 512);
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=86400' });
+        res.end(head ? undefined : png);
+        return true;
+      }
+      case '/api/app-info': {
+        ctx.sendJson(res, appInfo(req));
+        return true;
+      }
+      case '/api/app-settings': {
+        const store = sharedSettings();
+        if (method === 'POST') {
+          if (!ctx.isAdmin()) {
+            ctx.sendJson(res, { error: 'Only the admin can change settings.' }, 403);
+            return true;
+          }
+          const body = await ctx.parseBody(req, 8192);
+          const settings = store.update(body);
+          updateCache = null;
+          ctx.sendJson(res, { settings, persistence: store.lastSave });
+          return true;
+        }
+        ctx.sendJson(res, { settings: store.load(), fields: SETTINGS_FIELDS, persistence: { ...store.lastSave, file: store.file } });
+        return true;
+      }
+      case '/api/ai-os/layer': {
+        // The door KOS (`kos aios`) knocks on. GET lists the four layers; POST runs one request on one layer
+        // through the normal tool gate. Admin, from this computer only: KOS has already asked for the password.
+        if (method === 'GET') {
+          ctx.sendJson(res, { layers: layerList() });
+          return true;
+        }
+        if (method !== 'POST') {
+          ctx.sendJson(res, { error: 'Method not allowed.' }, 405);
+          return true;
+        }
+        if (!ctx.isAdmin() || !ctx.fromThisMachine()) {
+          ctx.sendJson(res, { error: 'AI OS layers can only be used by the admin, from this computer.' }, 403);
+          return true;
+        }
+        const body = await ctx.parseBody(req, 8192) as { layer?: unknown; request?: unknown } | null;
+        if (body?.layer === 'kernel' && sharedKosApps().edition() !== 'system') {
+          ctx.sendJson(res, { status: 'refused', text: 'Kernel commands are closed in the extension version of KOS. Switch this computer to the system version first.' });
+          return true;
+        }
+        const { getNeuroclawSystem } = await import('../../src/index.js');
+        const out = await runLayer(body?.layer, body?.request, async (tool, request) => (await getNeuroclawSystem()).pluginRegistry.runTool(tool, request));
+        ctx.sendJson(res, out, out.status === 'bad-request' ? 400 : 200);
+        return true;
+      }
+      case '/api/ai-os/apps': {
+        // Opening apps by address. Every app request is run through runLayer() (kos-apps.ts), so the same tool gate
+        // as chat applies. Admin, from this computer only, like the layer door it sits on.
+        const store = sharedKosApps();
+        if (!ctx.isAdmin() || !ctx.fromThisMachine()) {
+          ctx.sendJson(res, { error: 'KOS apps can only be used by the admin, from this computer.' }, 403);
+          return true;
+        }
+        if (method !== 'POST') {
+          const edition = store.edition();
+          ctx.sendJson(res, { edition, apps: store.list().map((a) => ({ id: a.id, name: a.name, scope: a.scope, builtin: !!a.builtin, openable: checkOpen(a, edition).ok })) });
+          return true;
+        }
+        const body = await ctx.parseBody(req, 8192) as { action?: unknown; address?: unknown; app?: unknown; id?: unknown; edition?: unknown } | null;
+        try {
+          switch (body?.action) {
+            case 'open': {
+              const { getNeuroclawSystem } = await import('../../src/index.js');
+              const out = await openApp(body.address, { apps: store.list(), edition: store.edition(), run: async (tool, request) => (await getNeuroclawSystem()).pluginRegistry.runTool(tool, request) });
+              ctx.sendJson(res, out, out.status === 'bad-request' ? 400 : 200);
+              return true;
+            }
+            case 'install': ctx.sendJson(res, { app: store.install(body.app) }); return true;
+            case 'remove': ctx.sendJson(res, { removed: store.remove(body.id) }); return true;
+            case 'edition': ctx.sendJson(res, { edition: store.setEdition(body.edition) }); return true;
+            default: ctx.sendJson(res, { error: 'action must be open, install, remove or edition.' }, 400); return true;
+          }
+        } catch (err) {
+          if (err instanceof KosAppError) { ctx.sendJson(res, { error: err.message }, err.status); return true; }
+          throw err;
+        }
+      }
+      case '/api/ai-os': {
+        // Turning this on changes the computer outside the app's own folders (it adds a login item), so
+        // only the admin sitting at the machine may do it; anyone past the gate may read the state.
+        const canChange = ctx.isAdmin() && ctx.fromThisMachine();
+        if (method === 'POST') {
+          if (!ctx.isAdmin()) {
+            ctx.sendJson(res, { error: 'Only the admin can change AI OS mode.' }, 403);
+            return true;
+          }
+          if (!ctx.fromThisMachine()) {
+            ctx.sendJson(res, { error: 'AI OS mode changes how this computer starts, so it can only be turned on or off from the computer itself (or with "node scripts/ai-os.mjs" in a terminal there).' }, 403);
+            return true;
+          }
+          const body = await ctx.parseBody(req, 1024);
+          const want = (body as { enabled?: unknown } | null)?.enabled;
+          if (typeof want !== 'boolean') {
+            ctx.sendJson(res, { error: 'Send {"enabled": true} or {"enabled": false}.' }, 400);
+            return true;
+          }
+          const env = currentEnv();
+          const result = want ? enableAiOs(env) : disableAiOs(env);
+          const status = { ...aiOsStatus(env), canChange };
+          // A failure carries its plain-words cause in `error`, which is what the Settings page shows.
+          ctx.sendJson(res, result.ok ? { result, status } : { error: result.message, result, status }, result.ok ? 200 : 500);
+          return true;
+        }
+        ctx.sendJson(res, { ...aiOsStatus(), canChange });
+        return true;
+      }
+      case '/api/app-update': {
+        const s = sharedSettings().load();
+        const build = getBuildInfo();
+        const platform = detectPlatform({});
+        const arch = process.arch;
+        const key = `${s.updates.manifestUrl}|${s.updates.channel}|${build.version}`;
+        if (updateCache && updateCache.key === key && Date.now() - updateCache.at < UPDATE_CACHE_MS) {
+          ctx.sendJson(res, updateCache.status);
+          return true;
+        }
+        const status = await checkAppUpdate({ current: build.version, channel: s.updates.channel, platform, arch, manifestUrl: s.updates.manifestUrl });
+        updateCache = { key, at: Date.now(), status };
+        ctx.sendJson(res, status);
+        return true;
+      }
+    }
+  } catch (err) {
+    if (err instanceof SettingsError) {
+      ctx.sendJson(res, { error: err.message, field: err.field ?? null }, err.status);
+    } else {
+      const status = typeof (err as { status?: unknown })?.status === 'number' ? (err as { status: number }).status : 500;
+      ctx.sendJson(res, { error: err instanceof Error ? err.message : String(err) }, status);
+    }
+    return true;
+  }
+  return false;
+}
