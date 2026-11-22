@@ -1,6 +1,5 @@
 
-The receptatory is Critical Work needed Ai Studio Gemini Has churned the entire thing into an Android app Critically defeating All things this is committed by a force push it needs to be reset and put back into its rightful place under Mobile Android
-
+This respiratory is critically down do not clone There is issues Ai Studio by Google has Powered by Gemini hydrogen has turned the receptatory into an Android app it needs to be restored and Android app needs to put in its rightful place under mobile Android Please fix this if you can
 
 
 
