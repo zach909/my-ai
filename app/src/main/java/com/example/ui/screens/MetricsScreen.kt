@@ -122,17 +122,25 @@ fun MetricsScreen(
                                     MetricTile("OneBrain Edges", "${stats.oneBrainEdges}", Modifier.weight(1f))
                                     MetricTile("Cycles", "${stats.cyclesRun}", Modifier.weight(1f))
                                 }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    MetricTile("Islands", "${stats.learnedIslands} learned", Modifier.weight(1f))
+                                    MetricTile("Sleeps", "${stats.sleeps}", Modifier.weight(1f))
+                                    MetricTile("Awaiting sleep", "${stats.pendingExperiences}", Modifier.weight(1f))
+                                }
                                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text("Vale Conservation", style = MaterialTheme.typography.bodyMedium, color = NeuroColors.Ink)
                                         Text(
-                                            text = "${"%.2f".format(stats.valeTotal)} / 32.00",
+                                            text = "${"%.2f".format(stats.valeTotal)} / ${"%.2f".format(stats.valeBudget)}",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = if (stats.valeConserved) NeuroColors.ShoggothGreen else NeuroColors.ErrorPink
                                         )
                                     }
                                     LinearProgressIndicator(
-                                        progress = { (stats.valeTotal / 32f).coerceIn(0f, 1f) },
+                                        progress = { (stats.valeTotal / stats.valeBudget.coerceAtLeast(1f)).coerceIn(0f, 1f) },
                                         modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
                                         color = NeuroColors.CoralAccent,
                                         trackColor = NeuroColors.GlassFill
