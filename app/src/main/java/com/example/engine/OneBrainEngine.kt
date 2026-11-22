@@ -15,6 +15,7 @@ import com.example.model.YesNoExample
 import com.example.model.YesNoQueryResult
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.max
@@ -25,7 +26,10 @@ import kotlin.math.tanh
  * The one OneBrain engine. It runs the one [OneBrainModel] (the only place any state lives) in pure Kotlin:
  * - Reads bundled `assets/onebrain/model.json` (`memory_input_b*` -> `memory_output_b*` edges)
  * - Runs raw UTF-8 byte-level Zip Loop projection (no tokenizer)
- * - Maintains a 32-neuron x 32-dim Hyperdimensional Mesh with zero-sum Vale conservation
+ * - Maintains a growable Hyperdimensional Mesh of islands (a frozen 32-neuron core, a self island, and one island
+ *   per learned skill or memory) with zero-sum Vale conservation. It learns in two phases: awake it only reads and
+ *   remembers what is new; asleep ([sleepNow], or automatically once enough new experience has built up) it grows
+ *   islands of new neurons trained on that experience, prunes, and dreams (see [IslandMesh]).
  * - Supports NetSkillRouter over grafted NeuroLang extensions and Yes/No doorways
  * - Tracks surprise-gated associative memories and self-improvement drills
  */
@@ -37,15 +41,20 @@ class OneBrainEngine(private val context: Context) {
         val activeRegions: List<String>,
         val cycleMs: Long,
         val surpriseScore: Float,
-        val hiveVotes: List<HiveVote> = emptyList()
+        val hiveVotes: List<HiveVote> = emptyList(),
+        /** Learned islands that recognised this message, best first. */
+        val activeIslands: List<String> = emptyList(),
+        /** Set when this turn ended in a sleep (the brain had enough new experience to want one, or was asked to). */
+        val sleepReport: SleepReport? = null
     )
 
     companion object {
-        const val PHONE_NEURONS = OneBrainModel.NEURONS
+        /** The frozen pretrained core. The live mesh is bigger once islands have grown: see [OneBrainEngine.neuronCount]. */
+        const val CORE_NEURONS = OneBrainModel.CORE_NEURONS
         const val PHONE_DIMENSIONS = OneBrainModel.DIMENSIONS
-        private const val INITIAL_VALE_TOTAL = OneBrainModel.VALE_TOTAL
-        private const val LEARNING_RATE = 0.05f
+        const val MESH_DIMENSIONS = OneBrainModel.MESH_DIMENSIONS
         private const val INFLUENCE_DECAY = 0.95f
+        private const val ISLANDS_FILE = "onebrain_islands.json"
 
         /** Chat only mentions a yes/no doorway whose examples resemble the message at least this much. */
         private const val YES_NO_HINT_MIN_SIMILARITY = 0.25f
@@ -71,10 +80,32 @@ class OneBrainEngine(private val context: Context) {
         if (level < 0) return PHONE_NEURONS
         return lowPower.activeNeurons(level / 100f, bm.isCharging, System.currentTimeMillis())
     }
+    /** Neurons in the live mesh: the frozen core, the self island and every learned island. */
+    val neuronCount: Int get() = synchronized(lock) { brain.mesh.neuronCount }
 
     init {
         loadBundledOneBrain()
         registerDefaultRegions()
+        loadIslandsFromDisk()
+    }
+
+    // ------------------------------------------------------------------ growth persistence
+
+    private val islandsFile get() = File(context.filesDir, ISLANDS_FILE)
+
+    /** Learning that vanished on restart would be no self at all: islands and the sleep history are saved as they change. */
+    private fun persistIslands() {
+        runCatching {
+            val o = JSONObject().put("islands", brain.islandsToJson()).put("history", brain.sleepHistoryToJson())
+            islandsFile.writeText(o.toString())
+        }
+    }
+
+    private fun loadIslandsFromDisk() {
+        val raw = runCatching { islandsFile.takeIf { it.exists() }?.readText() }.getOrNull() ?: return
+        val o = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        o.optJSONArray("islands")?.let { brain.loadIslands(it) }
+        o.optJSONObject("history")?.let { brain.loadSleepHistory(it) }
     }
 
     private fun loadBundledOneBrain() {
@@ -146,11 +177,21 @@ class OneBrainEngine(private val context: Context) {
             meaning = meaning,
             definitions = defs
         )
-        // Reinforce mesh vale slightly toward the newly grafted extension's anchor
+        // A new skill gets an island of its own: neurons born for this skill and trained only on its content.
+        // Nothing already in the mesh is touched, so it cannot overwrite anything. Re-grafting the same, unchanged
+        // extension (every app start) is a no-op; an edited one retrains its own island in place.
         synchronized(lock) {
-            val anchor = HDVector.encodeBytes(ext.code.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-            val targetIdx = abs(ext.name.hashCode()) % PHONE_NEURONS
-            brain.neuronStates[targetIdx] = HDVector.bundle(brain.neuronStates[targetIdx], anchor, 0.6f, 0.4f)
+            val id = "skill:ext:${ext.id}"
+            val before = brain.mesh.islands[id]?.contentHash
+            val teachers = ArrayList<String>()
+            teachers.add("${ext.name}. $meaning")
+            teachers.addAll(defs)
+            ext.code.trim().take(1200).takeIf { it.isNotEmpty() }?.let { teachers.add(it) }
+            val island = brain.mesh.learnNow(
+                id = id, kind = IslandKind.SKILL, label = ext.name, teachers = teachers,
+                reason = "grafted extension", cycle = brain.cyclesRun, nowMs = System.currentTimeMillis()
+            )
+            if (island != null && island.contentHash != before) persistIslands()
         }
     }
 
@@ -191,6 +232,8 @@ class OneBrainEngine(private val context: Context) {
         val started = System.nanoTime()
         val rawBytes = message.toByteArray(Charsets.UTF_8)
         val inputVec = HDVector.encodeBytes(rawBytes, PHONE_DIMENSIONS)
+        val mesh = brain.mesh
+        val lower = message.trim().lowercase()
 
         // Propagate across mesh with Vale-weighted plasticity (high-vale neurons resist rapid drift)
         var maxSim = -1f
@@ -207,15 +250,23 @@ class OneBrainEngine(private val context: Context) {
                 brain.neuronStates[i] = HDVector.bundle(brain.neuronStates[i], inputVec, 1f - mixWeight, mixWeight)
             }
         }
+        // WAKE: the islands that recognise this message are routed to, and anything new to me is remembered for
+        // sleep. No neuron changes while awake, so a chat can never overwrite what the mesh already knows.
+        val routed = mesh.wake(message, brain.cyclesRun, System.currentTimeMillis())
+        val islandVec = mesh.encode(message)
 
-        // Surprise-gated associative memory consolidation + zero-sum Vale transfer
-        val surprise = (1f - ((maxSim + 1f) * 0.5f)).coerceIn(0.02f, 0.98f)
+        // Surprise = how unfamiliar this is to everything learned so far (1.0 until anything has been learned).
+        val surprise = mesh.novelty(islandVec).coerceIn(0.02f, 0.98f)
         brain.lastSurpriseAvg = brain.lastSurpriseAvg * INFLUENCE_DECAY + surprise * (1f - INFLUENCE_DECAY)
         if (surprise > 0.28f || brain.memoryTraces.size < 4) {
             if (brain.memoryTraces.size >= 64) brain.memoryTraces.removeAt(0)
             brain.memoryTraces.add(MemoryTrace(inputVec, message.trim(), surprise, System.currentTimeMillis()))
         }
-        redistributeValeZeroSum(winnerIdx = bestIdx, delta = 0.08f)
+
+        // Zero-sum vale transfer: use makes the winning neuron more stable. Only vale moves, never a weight.
+        val winner = routed.firstOrNull()?.first?.neurons?.maxByOrNull { HDVector.cosineSimilarity(islandVec, it.state) }
+            ?: mesh.core.neurons.maxByOrNull { HDVector.cosineSimilarity(islandVec, it.state) }
+        if (winner != null) mesh.redistributeVale(winner, delta = 0.08f)
 
         val matchedRegions = selectRegions(message)
         val recalled = recallBytes(message)
@@ -232,6 +283,13 @@ class OneBrainEngine(private val context: Context) {
         val toolResult = deviceTools.tryHandleToolPrompt(message)
         val hiveVotes = if (hiveMode) evaluateHiveConsensus(message, matchedRegions, surprise) else emptyList()
 
+        // SLEEP: asked for outright, or the brain has built up enough new experience that it wants to. Done after the
+        // routing above so this message is still answered from what was known when it arrived.
+        val askedToSleep = lower == "sleep" || lower.contains("go to sleep") || lower.contains("consolidate")
+        val sleepReport = if (askedToSleep || mesh.shouldSleep()) {
+            mesh.sleep(brain.cyclesRun, System.currentTimeMillis()).also { persistIslands() }
+        } else null
+
         val reply = synthesizeReply(
             message = message,
             matchedRegions = matchedRegions,
@@ -240,7 +298,10 @@ class OneBrainEngine(private val context: Context) {
             closestMemory = closestMemory?.first?.text,
             yesNoHint = yesNoHint,
             toolResult = toolResult,
-            hiveVotes = hiveVotes
+            hiveVotes = hiveVotes,
+            routed = routed,
+            sleepReport = sleepReport,
+            askedToSleep = askedToSleep
         )
         val elapsedMs = max(1L, (System.nanoTime() - started) / 1_000_000L)
 
@@ -250,9 +311,19 @@ class OneBrainEngine(private val context: Context) {
             activeRegions = matchedRegions.map { it.name },
             cycleMs = elapsedMs,
             surpriseScore = surprise,
-            hiveVotes = hiveVotes
+            hiveVotes = hiveVotes,
+            activeIslands = routed.map { it.first.label },
+            sleepReport = sleepReport
         )
     }
+
+    /** Sleep on demand: consolidate what is waiting into islands, prune, dream, and refresh the self-model. */
+    fun sleepNow(): SleepReport = synchronized(lock) {
+        brain.mesh.sleep(brain.cyclesRun, System.currentTimeMillis()).also { persistIslands() }
+    }
+
+    /** The brain reading its own state back (neurons, islands, newest, most used, last sleep, what is waiting). */
+    fun describeSelf(): String = synchronized(lock) { brain.mesh.describeSelf(brain.lastSurpriseAvg) }
 
     private fun evaluateHiveConsensus(
         message: String,
@@ -260,6 +331,7 @@ class OneBrainEngine(private val context: Context) {
         surprise: Float
     ): List<HiveVote> {
         val msgVec = HDVector.encodeBytes(message.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
+        val meshVec = brain.mesh.encode(message)
         val personas = listOf(
             "Planner" to "decompose into structured actions",
             "Coder" to "verify invariants and syntax paths",
@@ -269,7 +341,7 @@ class OneBrainEngine(private val context: Context) {
         )
         return personas.mapIndexed { idx, (name, role) ->
             val pVec = HDVector.encodeBytes("$name $role".toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
-            val neuronSim = HDVector.cosineSimilarity(msgVec, brain.neuronStates[(idx * 5) % PHONE_NEURONS])
+            val neuronSim = HDVector.cosineSimilarity(meshVec, brain.mesh.neurons[(idx * 5) % brain.mesh.neuronCount].state)
             val sim = (0.55f + 0.35f * HDVector.cosineSimilarity(msgVec, pVec) + 0.1f * neuronSim).coerceIn(0.45f, 0.98f)
             val regionHint = matchedRegions.getOrNull(idx % max(1, matchedRegions.size))?.name ?: "OneBrain"
             val stance = when (name) {
@@ -278,23 +350,6 @@ class OneBrainEngine(private val context: Context) {
                 else -> "Route via $regionHint"
             }
             HiveVote(persona = name, stance = stance, confidence = sim)
-        }
-    }
-
-    private fun redistributeValeZeroSum(winnerIdx: Int, delta: Float) {
-        val share = delta / max(1, PHONE_NEURONS - 1)
-        for (i in 0 until PHONE_NEURONS) {
-            if (i == winnerIdx) {
-                brain.valeLedger[i] = (brain.valeLedger[i] + delta).coerceAtMost(4.0f)
-            } else {
-                brain.valeLedger[i] = (brain.valeLedger[i] - share).coerceAtLeast(0.1f)
-            }
-        }
-        // Re-normalize to preserve exact zero-sum total
-        val sum = brain.valeLedger.sum()
-        if (sum > 0f) {
-            val scale = INITIAL_VALE_TOTAL / sum
-            for (i in 0 until PHONE_NEURONS) brain.valeLedger[i] *= scale
         }
     }
 
@@ -343,9 +398,16 @@ class OneBrainEngine(private val context: Context) {
         closestMemory: String?,
         yesNoHint: YesNoQueryResult?,
         toolResult: DeviceToolResult?,
-        hiveVotes: List<HiveVote>
+        hiveVotes: List<HiveVote>,
+        routed: List<Pair<Island, Float>> = emptyList(),
+        sleepReport: SleepReport? = null,
+        askedToSleep: Boolean = false
     ): String {
         val lower = message.trim().lowercase()
+        val isSelfQuestion = listOf(
+            "who are you", "about yourself", "sense of self", "what have you learned", "what did you learn",
+            "what do you know", "what are you made of", "describe yourself", "your neurons", "your islands"
+        ).any { lower.contains(it) }
         val extDefs = matchedRegions.filter { it.id.startsWith("ext:") || it.id.startsWith("store:") || it.id.startsWith("mistake:") }
             .flatMap { it.definitions }
             .take(2)
@@ -362,6 +424,19 @@ class OneBrainEngine(private val context: Context) {
             }
         }
 
+        if (askedToSleep && sleepReport != null) {
+            return buildString {
+                append(sleepReport.summary())
+                append("\n\n[[ask: Who are you now? | Describe yourself]]")
+            }
+        }
+        if (isSelfQuestion) {
+            return buildString {
+                append(brain.mesh.describeSelf(brain.lastSurpriseAvg))
+                append("\n\n[[ask: Go to sleep | sleep]] [[ask: Mesh stats | What is the current mesh and vale state?]]")
+            }
+        }
+
         return buildString {
             when {
                 lower.contains("hello") || lower == "hi" || lower.startsWith("hey") -> {
@@ -372,10 +447,11 @@ class OneBrainEngine(private val context: Context) {
                     append(" [[put: Pin Audit | tool: permission_audit | desktop]]")
                 }
                 lower.contains("vale") || lower.contains("mesh") || lower.contains("stat") -> {
-                    val totalVale = brain.valeLedger.sum()
-                    append("Mesh state: $PHONE_NEURONS hyper-neurons x $PHONE_DIMENSIONS dims, ")
+                    val totalVale = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat()
+                    append("Mesh state: ${brain.mesh.neuronCount} hyper-neurons x $MESH_DIMENSIONS dims in ${brain.mesh.islands.size} islands ")
+                    append("(${brain.mesh.learned().size} learned), ")
                     append("${brain.byteEdges.size} OneBrain byte connections, ")
-                    append("Vale budget conserved at ${"%.2f".format(totalVale)}/${"%.2f".format(INITIAL_VALE_TOTAL)}. ")
+                    append("Vale budget conserved at ${"%.2f".format(totalVale)}/${"%.2f".format(brain.mesh.valeTotal)}. ")
                     append("Cycle surprise is ${"%.2f".format(surprise)} across ${brain.memoryTraces.size} consolidated traces.")
                     append("\n\n[[ask: Teach Yes/No | How do I teach OneBrain a new yes/no rule?]]")
                     append(" [[ask: Build NeuroLang skill | Show a NeuroLang skill example]]")
@@ -409,6 +485,9 @@ class OneBrainEngine(private val context: Context) {
                         val verdict = if (yesNoHint.answer) "Yes" else "No"
                         append("\nYes/No Doorway [${yesNoHint.question}]: $verdict (${(yesNoHint.confidence * 100).toInt()}% confidence from ${yesNoHint.matchedExamples} examples).")
                     }
+                    routed.firstOrNull()?.let { (island, sim) ->
+                        append("\nIsland recall [${island.label}] (${"%.2f".format(sim)}): ${island.content.lineSequence().first().take(160)}")
+                    }
                     if (!closestMemory.isNullOrBlank()) {
                         append("\nAssociated trace: \"$closestMemory\"")
                     }
@@ -423,6 +502,7 @@ class OneBrainEngine(private val context: Context) {
                     append(" [[ask: Check Vale budget | What is the current mesh and vale state?]]")
                 }
             }
+            if (sleepReport != null) append("\n\n[slept] ${sleepReport.summary()}")
         }
     }
 
@@ -474,9 +554,9 @@ class OneBrainEngine(private val context: Context) {
                 ok to "bind(a,b) orthogonality sim=${"%.3f".format(sim)}"
             }
             "Vale" -> {
-                val sum = brain.valeLedger.sum()
-                val ok = abs(sum - INITIAL_VALE_TOTAL) < 0.05f
-                ok to "Vale sum=${"%.3f".format(sum)} (expected $INITIAL_VALE_TOTAL)"
+                val sum = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat()
+                val ok = abs(sum - brain.mesh.valeTotal) < 0.05f
+                ok to "Vale sum=${"%.3f".format(sum)} (expected ${brain.mesh.valeTotal})"
             }
             "NeuroLang" -> {
                 val parsed = NeuroLangParser.parse("name=\"probe\"\n\"probe\"@vale=\"2.5\"\n\"probe\"@definition=\"ok\"")
@@ -500,15 +580,13 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun runSelfHealing(extensionCount: Int): List<HealingCheck> = synchronized(lock) {
-        val valeSum = brain.valeLedger.sum()
-        val valeOk = abs(valeSum - INITIAL_VALE_TOTAL) < 0.1f
-        if (!valeOk) {
-            val scale = INITIAL_VALE_TOTAL / max(0.01f, valeSum)
-            for (i in 0 until PHONE_NEURONS) brain.valeLedger[i] *= scale
-        }
-        val normOk = brain.neuronStates.all { abs(it.norm() - 1f) < 0.05f }
+        val valeSum = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat()
+        val valeTotal = brain.mesh.valeTotal
+        val valeOk = abs(valeSum - valeTotal) < 0.1f
+        if (!valeOk) brain.mesh.rebalance()
+        val normOk = brain.mesh.neurons.all { abs(it.state.norm() - 1f) < 0.05f }
         if (!normOk) {
-            for (i in 0 until PHONE_NEURONS) brain.neuronStates[i] = brain.neuronStates[i].normalized()
+            for (n in brain.mesh.neurons) n.state = n.state.normalized()
         }
         listOf(
             HealingCheck(
@@ -519,12 +597,17 @@ class OneBrainEngine(private val context: Context) {
             HealingCheck(
                 component = "Vale Zero-Sum Ledger",
                 healthy = true,
-                detail = if (valeOk) "Conserved at ${"%.2f".format(valeSum)}" else "Rebalanced to $INITIAL_VALE_TOTAL"
+                detail = if (valeOk) "Conserved at ${"%.2f".format(valeSum)}" else "Rebalanced to $valeTotal"
             ),
             HealingCheck(
                 component = "Hyperdimensional Manifold",
                 healthy = true,
-                detail = if (normOk) "All $PHONE_NEURONS vectors unit-normalized" else "Renormalized drift vectors"
+                detail = if (normOk) "All ${brain.mesh.neuronCount} vectors unit-normalized" else "Renormalized drift vectors"
+            ),
+            HealingCheck(
+                component = "Island Mesh",
+                healthy = true,
+                detail = "${brain.mesh.learned().size} learned islands, ${brain.mesh.neuronCount} neurons, ${brain.mesh.sleeps} sleeps, ${brain.mesh.shortTerm.size} experiences awaiting sleep"
             ),
             HealingCheck(
                 component = "Extension & Skill Regions",
@@ -540,15 +623,20 @@ class OneBrainEngine(private val context: Context) {
         pendingPhotos: Int,
         lastSyncMs: Long
     ): MeshStatsSnapshot = synchronized(lock) {
-        val sum = brain.valeLedger.sum()
+        val sum = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat()
         MeshStatsSnapshot(
-            neuronCount = PHONE_NEURONS,
-            dimensions = PHONE_DIMENSIONS,
+            neuronCount = brain.mesh.neuronCount,
+            dimensions = MESH_DIMENSIONS,
             oneBrainEdges = brain.byteEdges.size,
             oneBrainVersion = oneBrainVersion,
             activeRegions = brain.regions.values.map { it.name },
             valeTotal = sum,
-            valeConserved = abs(sum - INITIAL_VALE_TOTAL) < 0.1f,
+            valeConserved = abs(sum - brain.mesh.valeTotal) < 0.1f,
+            valeBudget = brain.mesh.valeTotal,
+            islandCount = brain.mesh.islands.size,
+            learnedIslands = brain.mesh.learned().size,
+            sleeps = brain.mesh.sleeps,
+            pendingExperiences = brain.mesh.shortTerm.size,
             averageSurprise = brain.lastSurpriseAvg,
             memoryEntries = brain.memoryTraces.size,
             cyclesRun = brain.cyclesRun,
@@ -560,7 +648,7 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun getValeDistribution(): List<Float> = synchronized(lock) {
-        brain.valeLedger.toList()
+        brain.mesh.neurons.map { it.vale }
     }
 
     fun recordMistake(mistake: MistakeRecord) = synchronized(lock) {
@@ -573,8 +661,16 @@ class OneBrainEngine(private val context: Context) {
             meaning = mistake.prompt,
             definitions = listOf("Prefer: ${mistake.correction}")
         )
-        val idx = abs(mistake.prompt.hashCode()) % PHONE_NEURONS
-        brain.neuronStates[idx] = HDVector.bundle(brain.neuronStates[idx], corrVec, 0.45f, 0.55f)
+        // A correction is deliberate teaching: it gets an island of its own instead of being blended into a neuron
+        // that already knows something else. Unchanged corrections re-applied at startup are a no-op.
+        val id = "mistake:${mistake.id.take(8)}"
+        val before = brain.mesh.islands[id]?.contentHash
+        val island = brain.mesh.learnNow(
+            id = id, kind = IslandKind.MEMORY, label = "Correction: ${mistake.prompt.trim().take(32)}",
+            teachers = listOf("${mistake.prompt} -> ${mistake.correction}", mistake.correction),
+            reason = "corrected mistake", cycle = brain.cyclesRun, nowMs = mistake.timestampMs
+        )
+        if (island != null && island.contentHash != before) persistIslands()
     }
 
     fun runEnduranceTraining(rounds: Int, mistakes: List<MistakeRecord>): List<EnduranceRoundResult> = synchronized(lock) {
@@ -597,7 +693,8 @@ class OneBrainEngine(private val context: Context) {
                 if (out.activeRegions.isNotEmpty() || out.recalledBytes.isNotEmpty()) passes++
             }
             val avgSurp = totalSurprise / max(1, prompts.size)
-            val spread = (brain.valeLedger.maxOrNull() ?: 1f) - (brain.valeLedger.minOrNull() ?: 1f)
+            val vales = brain.mesh.neurons.map { it.vale }
+            val spread = (vales.maxOrNull() ?: 1f) - (vales.minOrNull() ?: 1f)
             val accuracy = ((passes.toFloat() / max(1, prompts.size)) * (1f - avgSurp * 0.15f)).coerceIn(0.6f, 0.99f)
             val elapsedMs = max(1L, (System.nanoTime() - started) / 1_000_000L)
             results.add(
@@ -625,17 +722,19 @@ class OneBrainEngine(private val context: Context) {
             id = UUID.randomUUID().toString(),
             label = label.ifBlank { "Checkpoint #${brain.cyclesRun}" },
             edgesCount = brain.byteEdges.size,
-            valeTotal = brain.valeLedger.sum(),
+            valeTotal = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat(),
             memoriesCount = brain.memoryTraces.size,
-            valeSnapshot = brain.valeLedger.toList()
+            valeSnapshot = brain.mesh.neurons.map { it.vale }
         )
     }
 
     fun restoreCheckpoint(cp: BrainCheckpoint): Boolean = synchronized(lock) {
-        if (cp.valeSnapshot.size != PHONE_NEURONS) return false
-        for (i in 0 until PHONE_NEURONS) {
-            brain.valeLedger[i] = cp.valeSnapshot[i]
-        }
+        // The mesh only grows, so a checkpoint taken earlier is a prefix of today's neurons (core, self, then islands in
+        // birth order). Restore that prefix; neurons born since keep their vale. A checkpoint of a bigger mesh cannot apply.
+        val all = brain.mesh.neurons
+        if (cp.valeSnapshot.isEmpty() || cp.valeSnapshot.size > all.size) return false
+        for (i in cp.valeSnapshot.indices) all[i].vale = cp.valeSnapshot[i].coerceAtLeast(0.1f)
+        brain.mesh.rebalance()
         true
     }
 
