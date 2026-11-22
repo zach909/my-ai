@@ -1,3 +1,23 @@
+
+This respiratory is critically down do not clone There is issues Ai Studio by Google has Powered by Gemini hydrogen has turned the receptatory into an Android app it needs to be restored and Android app needs to put in its rightful place under mobile Android Please fix this if you can
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # NeuroClaw Android (Kotlin + Jetpack Compose)
 
 Native Android implementation of **NeuroClaw** — a local-first AI agent powered by the **OneBrain** neural mesh engine (`assets/onebrain/model.json`), raw UTF-8 byte-level Zip Loop encoding (zero tokenizers), hyperdimensional computing, NeuroLang skill building, Yes/No Doorway training, Danger Protocols, and an imported Android **DeviceTools** capability module.

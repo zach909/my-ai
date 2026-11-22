@@ -28,7 +28,8 @@ data class MemoryTrace(
  * The one OneBrain model.
  *
  * Everything OneBrain has learned or been taught lives here and nowhere else: the pretrained byte
- * graph, the hyperdimensional mesh and its zero-sum vale ledger, the skill regions, the episodic
+ * graph, the growable island mesh ([IslandMesh]: a frozen core, a self island, and one island of neurons
+ * per learned skill or memory, with its zero-sum vale ledger), the skill regions, the episodic
  * memories and the yes/no doorway examples. [OneBrainEngine] is the one engine that runs it, and
  * this class is the one place that knows how to load and exchange it (bundled `model.json`, a
  * synced `model.json`, and a mesh delta all go through [loadByteGraph] / [mergeDelta]).
@@ -38,20 +39,22 @@ data class MemoryTrace(
 class OneBrainModel {
 
     companion object {
-        const val NEURONS = 32
+        /** The frozen pretrained base. The mesh grows past this as islands are born; the base itself never changes. */
+        const val CORE_NEURONS = 32
         const val DIMENSIONS = 32
-        const val VALE_TOTAL = 32.0f
-        const val DELTA_FORMAT = "neuroclaw-mesh-delta-v1"
+
+        /** The island mesh is wider than the legacy 32-D vectors: byte n-grams need the room to tell subjects apart. */
+        const val MESH_DIMENSIONS = 64
+        const val DELTA_FORMAT = "neuroclaw-mesh-delta-v2"
         private val INPUT_EDGE_REGEX = Regex("""^memory_(input|output)_b(\d+)$""")
     }
 
-    /** Hyperdimensional mesh: one state vector per hyper-neuron. */
-    val neuronStates = Array(NEURONS) { idx ->
-        HDVector.random(DIMENSIONS, seed = 1000L + idx * 37L)
-    }
-
-    /** Zero-sum plasticity budget over the mesh; always sums to [VALE_TOTAL]. */
-    val valeLedger = FloatArray(NEURONS) { VALE_TOTAL / NEURONS }
+    /**
+     * Hyperdimensional mesh. Grows by islands: new skills and memories get neurons of their own, trained only on
+     * their own content, so learning never overwrites what is already there. The zero-sum vale budget is one point
+     * per neuron ([IslandMesh.valeTotal]).
+     */
+    val mesh = IslandMesh(dimensions = MESH_DIMENSIONS, coreNeurons = CORE_NEURONS)
 
     /** Pretrained byte-transition graph. */
     val byteEdges = ArrayList<ByteEdge>()
@@ -129,7 +132,9 @@ class OneBrainModel {
         obj.put("format", DELTA_FORMAT)
         obj.put("oneBrainVersion", version)
         obj.put("cyclesRun", cyclesRun)
-        obj.put("valeLedger", JSONArray().apply { valeLedger.forEach { put(it.toDouble()) } })
+        obj.put("valeLedger", JSONArray().apply { mesh.neurons.forEach { put(it.vale.toDouble()) } })
+        obj.put("islands", islandsToJson())
+        obj.put("sleeps", mesh.sleeps)
         val regionsArr = JSONArray()
         regions.values.forEach { reg ->
             regionsArr.put(
@@ -155,11 +160,13 @@ class OneBrainModel {
             val edgeCount = loadByteGraph(raw)
             return true to "Imported full OneBrain model ($edgeCount byte edges)."
         }
+        // Islands first (additive: a local island is never replaced), then the ledger only if it fits the grown mesh.
+        val importedIslands = obj.optJSONArray("islands")?.let { loadIslands(it) } ?: 0
         val valeArr = obj.optJSONArray("valeLedger")
-        if (valeArr != null && valeArr.length() == NEURONS) {
-            for (i in 0 until NEURONS) {
-                valeLedger[i] = valeArr.optDouble(i, 1.0).toFloat()
-            }
+        val all = mesh.neurons
+        if (valeArr != null && valeArr.length() == all.size) {
+            for (i in all.indices) all[i].vale = valeArr.optDouble(i, 1.0).toFloat().coerceAtLeast(0.1f)
+            mesh.rebalance()
         }
         val regArr = obj.optJSONArray("regions")
         var importedRegions = 0
@@ -178,6 +185,112 @@ class OneBrainModel {
                 importedRegions++
             }
         }
-        return true to "Applied mesh delta ($importedRegions regions merged)."
+        return true to "Applied mesh delta ($importedRegions regions, $importedIslands new islands merged)."
+    }
+
+    // ------------------------------------------------------------ island persistence
+
+    /** The learned islands (skills and memories) with their trained neurons, so growth survives a restart. */
+    fun islandsToJson(): JSONArray {
+        val arr = JSONArray()
+        for (island in mesh.learned()) {
+            arr.put(
+                JSONObject()
+                    .put("id", island.id)
+                    .put("kind", island.kind.name)
+                    .put("label", island.label)
+                    .put("content", island.content)
+                    .put("bornCycle", island.bornCycle)
+                    .put("bornAtMs", island.bornAtMs)
+                    .put("reason", island.reason)
+                    .put("reinforcements", island.reinforcements)
+                    .put("uses", island.uses)
+                    .put("lastUsedCycle", island.lastUsedCycle)
+                    .put("dreamRecall", island.dreamRecall.toDouble())
+                    .put("neurons", JSONArray().apply {
+                        island.neurons.forEach { n ->
+                            put(
+                                JSONObject()
+                                    .put("v", n.vale.toDouble())
+                                    .put("s", JSONArray().apply { n.state.data.forEach { put(it.toDouble()) } })
+                            )
+                        }
+                    })
+            )
+        }
+        return arr
+    }
+
+    /** Re-adds saved islands. Returns how many were new; ones already here, malformed, or over the cap are skipped. */
+    fun loadIslands(arr: JSONArray): Int {
+        val bounds = HDVector.computeBounds(MESH_DIMENSIONS)
+        var added = 0
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val kind = runCatching { IslandKind.valueOf(o.optString("kind")) }.getOrNull() ?: continue
+            val id = o.optString("id").takeIf { it.isNotBlank() } ?: continue
+            val nArr = o.optJSONArray("neurons") ?: continue
+            val neurons = ArrayList<Neuron>()
+            for (j in 0 until nArr.length()) {
+                val no = nArr.optJSONObject(j) ?: continue
+                val sArr = no.optJSONArray("s") ?: continue
+                if (sArr.length() != bounds[4]) continue
+                val data = FloatArray(bounds[4]) { k -> sArr.optDouble(k, 0.0).toFloat() }
+                neurons.add(Neuron(HDVector(data, bounds).normalized(), no.optDouble("v", 1.0).toFloat().coerceAtLeast(0.1f)))
+            }
+            if (neurons.isEmpty()) continue
+            val island = Island(
+                id = id, kind = kind, label = o.optString("label", id), content = o.optString("content"),
+                bornCycle = o.optInt("bornCycle"), bornAtMs = o.optLong("bornAtMs"),
+                reason = o.optString("reason"), neurons = neurons
+            )
+            island.reinforcements = o.optInt("reinforcements")
+            island.uses = o.optInt("uses")
+            island.lastUsedCycle = o.optInt("lastUsedCycle", island.bornCycle)
+            island.dreamRecall = o.optDouble("dreamRecall", -1.0).toFloat()
+            if (mesh.restoreIsland(island)) added++
+        }
+        if (added > 0) {
+            mesh.rebalance()
+            repeat(3) { mesh.refreshSelf() }
+        }
+        return added
+    }
+
+    /** The last sleep, so the self-model remembers its own history after a restart. */
+    fun sleepHistoryToJson(): JSONObject {
+        val last = mesh.lifeLog.lastOrNull()
+        val o = JSONObject().put("sleeps", mesh.sleeps)
+        if (last != null) {
+            o.put("last", JSONObject()
+                .put("cycle", last.cycle).put("episodes", last.episodes)
+                .put("newIslands", JSONArray(last.newIslands)).put("reinforcedIslands", JSONArray(last.reinforcedIslands))
+                .put("neuronsAdded", last.neuronsAdded).put("neuronsPruned", last.neuronsPruned)
+                .put("islandsForgotten", JSONArray(last.islandsForgotten)).put("neuronCount", last.neuronCount)
+                .apply {
+                    last.dream?.let { d ->
+                        put("dream", JSONObject().put("cues", d.cues).put("before", d.recallBefore.toDouble())
+                            .put("after", d.recallAfter.toDouble()).put("rehearsed", d.rehearsed))
+                    }
+                })
+        }
+        return o
+    }
+
+    fun loadSleepHistory(o: JSONObject) {
+        fun strings(a: JSONArray?) = (0 until (a?.length() ?: 0)).map { a!!.optString(it) }
+        val last = o.optJSONObject("last")?.let { l ->
+            SleepReport(
+                cycle = l.optInt("cycle"), episodes = l.optInt("episodes"),
+                newIslands = strings(l.optJSONArray("newIslands")), reinforcedIslands = strings(l.optJSONArray("reinforcedIslands")),
+                neuronsAdded = l.optInt("neuronsAdded"), neuronsPruned = l.optInt("neuronsPruned"),
+                islandsForgotten = strings(l.optJSONArray("islandsForgotten")),
+                dream = l.optJSONObject("dream")?.let { d ->
+                    DreamReport(d.optInt("cues"), d.optDouble("before").toFloat(), d.optDouble("after").toFloat(), d.optInt("rehearsed"))
+                },
+                neuronCount = l.optInt("neuronCount")
+            )
+        }
+        mesh.restoreHistory(o.optInt("sleeps"), last)
     }
 }
