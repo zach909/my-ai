@@ -1,3 +1,24 @@
+
+The receptatory is Critical Work needed Ai Studio Gemini Has churned the entire thing into an Android app Critically defeating All things this is committed by a force push it needs to be reset and put back into its rightful place under Mobile Android
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # NeuroClaw Android (Kotlin + Jetpack Compose)
 
 Native Android implementation of **NeuroClaw** — a local-first AI agent powered by the **OneBrain** neural mesh engine (`assets/onebrain/model.json`), raw UTF-8 byte-level Zip Loop encoding (zero tokenizers), hyperdimensional computing, NeuroLang skill building, Yes/No Doorway training, Danger Protocols, and an imported Android **DeviceTools** capability module.
