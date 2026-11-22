@@ -18,3 +18,7 @@ mobile/server/bundle/
 training_data/knowledge/raw/
 training_data/knowledge/processed/
 training_data/knowledge/checkpoints/
+
+# Python bytecode
+__pycache__/
+*.pyc
