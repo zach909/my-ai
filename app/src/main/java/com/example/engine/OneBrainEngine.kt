@@ -68,6 +68,18 @@ class OneBrainEngine(private val context: Context) {
 
     val oneBrainVersion: Long get() = brain.version
 
+    /** Low power mode: fewer neurons run when the battery is low and unplugged (threshold adapts to use). */
+    private val lowPower = LowPowerGovernor(PHONE_NEURONS)
+
+    val isLowPower: Boolean get() = lowPower.active
+
+    private fun lowPowerNeuronCount(): Int {
+        val bm = context.getSystemService(Context.BATTERY_SERVICE) as? android.os.BatteryManager
+            ?: return PHONE_NEURONS
+        val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        if (level < 0) return PHONE_NEURONS
+        return lowPower.activeNeurons(level / 100f, bm.isCharging, System.currentTimeMillis())
+    }
     /** Neurons in the live mesh: the frozen core, the self island and every learned island. */
     val neuronCount: Int get() = synchronized(lock) { brain.mesh.neuronCount }
 
@@ -223,6 +235,21 @@ class OneBrainEngine(private val context: Context) {
         val mesh = brain.mesh
         val lower = message.trim().lowercase()
 
+        // Propagate across mesh with Vale-weighted plasticity (high-vale neurons resist rapid drift)
+        var maxSim = -1f
+        var bestIdx = 0
+        for (i in 0 until lowPowerNeuronCount()) {
+            val sim = HDVector.cosineSimilarity(inputVec, brain.neuronStates[i])
+            if (sim > maxSim) {
+                maxSim = sim
+                bestIdx = i
+            }
+            val plasticity = (LEARNING_RATE / (0.5f + brain.valeLedger[i])).coerceIn(0.005f, 0.08f)
+            val mixWeight = max(0f, sim + 0.25f) * plasticity
+            if (mixWeight > 0f) {
+                brain.neuronStates[i] = HDVector.bundle(brain.neuronStates[i], inputVec, 1f - mixWeight, mixWeight)
+            }
+        }
         // WAKE: the islands that recognise this message are routed to, and anything new to me is remembered for
         // sleep. No neuron changes while awake, so a chat can never overwrite what the mesh already knows.
         val routed = mesh.wake(message, brain.cyclesRun, System.currentTimeMillis())
