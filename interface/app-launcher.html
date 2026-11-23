@@ -804,8 +804,14 @@ function setupEventListeners() {
     }
   });
 
-  // Periodic status update
-  setInterval(updateStatus, 5000);
+  // Periodic status update, only while this tab is visible; it catches up the moment the tab returns.
+  var statusTimer = null;
+  function startStatusPolling() { if (statusTimer === null) statusTimer = setInterval(updateStatus, 5000); }
+  function stopStatusPolling() { if (statusTimer !== null) { clearInterval(statusTimer); statusTimer = null; } }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopStatusPolling(); else { updateStatus(); startStatusPolling(); }
+  });
+  if (!document.hidden) startStatusPolling();
 }
 
 // Start the application

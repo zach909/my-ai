@@ -546,7 +546,16 @@ name="reply"
   document.getElementById('plug-refresh').addEventListener('click', loadPlugins);
 
   function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-  checkStatus(); setInterval(checkStatus, 8000);
+  // Poll only while this tab is visible, and catch up the moment it returns: a hidden tab polling every
+  // few seconds keeps a phone's radio and CPU awake for a page nobody is looking at.
+  checkStatus();
+  (function () {
+    var id = null;
+    function on() { if (id === null) id = setInterval(checkStatus, 8000); }
+    function off() { if (id !== null) { clearInterval(id); id = null; } }
+    document.addEventListener('visibilitychange', function () { if (document.hidden) off(); else { checkStatus(); on(); } });
+    if (!document.hidden) on();
+  })();
 </script>
 <script src="static/ambient.js"></script>
 </body>

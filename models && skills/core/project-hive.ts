@@ -474,6 +474,8 @@ function pickReviewers(h: HiveRecord, author: string): HiveAgentRecord[] {
 
 /** Keyed by the hives file as well as the project: two people's projects can both be called "weather". */
 const running = new Set<string>();
+/** Agents with a question in flight right now, keyed like `running`, so the background can light up exactly who is busy. */
+const thinking = new Map<string, number>();
 const runKey = (projectId: string, file: string): string => `${file}|${projectId}`;
 export const isHiveRunning = (projectId: string, file = hivesFile()): boolean => running.has(runKey(projectId, file));
 
@@ -481,11 +483,11 @@ export const isHiveRunning = (projectId: string, file = hivesFile()): boolean =>
  * Every agent on a team across all projects, for the background scene: one sphere per agent. Only who they are and
  * whether their hive is working right now; nothing a hive wrote or learned leaves through here.
  */
-export function hiveAgentsOverview(file = hivesFile()): Array<{ id: string; name: string; projectId: string; working: boolean }> {
-  const out: Array<{ id: string; name: string; projectId: string; working: boolean }> = [];
+export function hiveAgentsOverview(file = hivesFile()): Array<{ id: string; name: string; projectId: string; working: boolean; thinking: boolean }> {
+  const out: Array<{ id: string; name: string; projectId: string; working: boolean; thinking: boolean }> = [];
   for (const h of loadHives(file)) {
     const working = running.has(runKey(h.projectId, file));
-    for (const a of active(h)) out.push({ id: a.id, name: a.name, projectId: h.projectId, working });
+    for (const a of active(h)) out.push({ id: a.id, name: a.name, projectId: h.projectId, working, thinking: thinking.has(`${file}|${a.id}`) });
   }
   return out;
 }
@@ -497,10 +499,16 @@ export function hiveView(projectId: string, file = hivesFile()): HiveRecord | nu
 }
 
 async function safeThink(deps: HiveDeps, agent: HiveAgentRecord, prompt: string): Promise<string> {
+  const key = `${fileOf(deps)}|${agent.id}`;
+  thinking.set(key, (thinking.get(key) ?? 0) + 1);
   try {
     return String((await deps.think(agent, prompt)) ?? "");
   } catch {
     return "";
+  } finally {
+    const left = (thinking.get(key) ?? 1) - 1;
+    if (left > 0) thinking.set(key, left);
+    else thinking.delete(key);
   }
 }
 
@@ -554,9 +562,10 @@ async function doReviews(h: HiveRecord, deps: HiveDeps, now: number): Promise<nu
     if (reviewers.length === 0) continue;
     const votes: Array<"accept" | "reject" | null> = [];
     const notes: string[] = [];
-    for (const r of reviewers) {
-      const reply = await safeThink(deps, r, reviewPrompt(project, task));
-      const v = parseVerdict(reply);
+    // Every reviewer reads the hand-in at the same time; the votes are counted in the same order as before.
+    const replies = await Promise.all(reviewers.map(r => safeThink(deps, r, reviewPrompt(project, task))));
+    for (const [n, r] of reviewers.entries()) {
+      const v = parseVerdict(replies[n]);
       votes.push(v);
       r.reviewed++;
       notes.push(`${r.name}: ${v ?? "unclear"}`);
@@ -608,8 +617,8 @@ export interface VoteResult {
  */
 export async function holdVote(h: HiveRecord, deps: HiveDeps, question: string, exclude: string | null, now: number): Promise<VoteResult> {
   const voters = active(h).filter(a => a.id !== exclude);
-  const votes: Array<"yes" | "no" | null> = [];
-  for (const v of voters) votes.push(parseYesNo(await safeThink(deps, v, `${question}\nStart your reply with YES or NO.`)));
+  // Everyone is asked at once: a vote is not made better by waiting for the one before.
+  const votes = (await Promise.all(voters.map(v => safeThink(deps, v, `${question}\nStart your reply with YES or NO.`)))).map(parseYesNo);
   const yes = votes.filter(x => x === "yes").length;
   const no = votes.filter(x => x === "no").length;
   const carried = removalCarries(votes);
@@ -771,8 +780,9 @@ export async function runHive(projectId: string, deps: HiveDeps): Promise<HiveRe
       if (project.status === "complete") break;
       hive.round++;
       const now = nowOf(deps);
-      let progress = 0;
-      for (const agent of active(hive)) progress += await doWork(hive, agent, deps, now);
+      // All the agents work at the same time. They share the task list, but a claim is made in one synchronous step,
+      // so two agents can never take the same task; one that loses the race moves on to the next.
+      let progress = (await Promise.all(active(hive).map(agent => doWork(hive, agent, deps, now)))).reduce((a, b) => a + b, 0);
       saveHive(hive, file, now);
       progress += await doReviews(hive, deps, now);
       progress += await evolve(hive, deps, now);

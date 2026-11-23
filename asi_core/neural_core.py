@@ -14,11 +14,14 @@ Architecture:
 """
 
 import math
+import os
 import time
 import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Callable
 from enum import Enum
+
+from .quantum_net import QuantumConfig, QuantumLayer, limits as quantum_limits
 
 
 class ActivationFunction(Enum):
@@ -157,6 +160,11 @@ class Neuron:
         Returns:
             New activation value
         """
+        self.integrate(input_current, dt)
+        return self.apply_activation(self._classical_activation(), dt)
+    
+    def integrate(self, input_current: float, dt: float = 0.001) -> float:
+        """Leaky-integrate the membrane potential (refractory aware). Returns it."""
         # Check refractory period
         if self.in_refractory:
             time_since_spike = time.time() - self.last_spike_time
@@ -169,20 +177,27 @@ class Neuron:
         # Update membrane potential (leaky integrate-and-fire model)
         tau = 0.01  # Membrane time constant
         self.membrane_potential += dt / tau * (-self.membrane_potential + input_current + self.bias)
-        
-        # Apply activation function
+        return self.membrane_potential
+    
+    def _classical_activation(self) -> float:
+        """Scalar activation function of the membrane potential."""
         if self.activation_fn == ActivationFunction.SIGMOID:
-            self.activation = 1.0 / (1.0 + math.exp(-self.membrane_potential))
+            return 1.0 / (1.0 + math.exp(-self.membrane_potential))
         elif self.activation_fn == ActivationFunction.TANH:
-            self.activation = math.tanh(self.membrane_potential)
+            return math.tanh(self.membrane_potential)
         elif self.activation_fn == ActivationFunction.RELU:
-            self.activation = max(0.0, self.membrane_potential)
+            return max(0.0, self.membrane_potential)
         elif self.activation_fn == ActivationFunction.LEAKY_RELU:
-            self.activation = self.membrane_potential if self.membrane_potential > 0 else 0.01 * self.membrane_potential
+            return self.membrane_potential if self.membrane_potential > 0 else 0.01 * self.membrane_potential
         elif self.activation_fn == ActivationFunction.SOFTPLUS:
-            self.activation = math.log(1 + math.exp(self.membrane_potential))
+            return math.log(1 + math.exp(self.membrane_potential))
         elif self.activation_fn == ActivationFunction.GAUSSIAN:
-            self.activation = math.exp(-self.membrane_potential ** 2)
+            return math.exp(-self.membrane_potential ** 2)
+        return self.activation
+    
+    def apply_activation(self, activation: float, dt: float = 0.001) -> float:
+        """Store an activation (classical or quantum) and adapt the threshold."""
+        self.activation = activation
         
         # Adaptive threshold
         if self.adaptive_threshold:
@@ -265,6 +280,9 @@ class NeuralLayer:
         
         self.neurons: Dict[str, Neuron] = {}
         
+        # Optional quantum replacement for the scalar activation (off by default)
+        self.quantum: Optional[QuantumLayer] = None
+        
         # Create neurons
         for i in range(neuron_count):
             neuron_id = f"{layer_id}_n{i}"
@@ -330,6 +348,16 @@ class NeuralLayer:
                 if neuron_id in activations:
                     activations[neuron_id] += input_value
         
+        if self.quantum is not None:
+            # Quantum path: classical membrane integration, then one parameterised
+            # quantum circuit per block replaces the activation function.
+            neurons = list(self.neurons.values())
+            potentials = [n.integrate(n.get_input_current(activations), dt) for n in neurons]
+            for neuron, value in zip(neurons, self.quantum.forward(potentials)):
+                neuron.apply_activation(value, dt)
+                neuron.check_spike(current_time)
+            return self.get_activations()
+        
         # Update each neuron
         for neuron in self.neurons.values():
             input_current = neuron.get_input_current(activations)
@@ -337,6 +365,20 @@ class NeuralLayer:
             neuron.check_spike(current_time)
         
         return self.get_activations()
+    
+    def set_quantum(self, enabled: bool, **settings) -> bool:
+        """
+        Switch this layer between the classical activation and the quantum
+        backend (see quantum_net.py). Returns whether quantum is now on.
+        
+        Turning it off drops the circuits; turning it on again builds fresh ones.
+        """
+        if not enabled:
+            self.quantum = None
+            return False
+        config = QuantumConfig(enabled=True).updated(**settings)
+        self.quantum = QuantumLayer(len(self.neurons), config)
+        return True
 
 
 class NeuralCore:
@@ -408,6 +450,14 @@ class NeuralCore:
                 neuron_type=neuron_type
             )
             self.layers[layer_id] = layer
+            
+            # Quantum replacement: off unless the config (or NEUROCLAW_QUANTUM=1) says so
+            quantum_cfg = self.config.get('quantum')
+            if quantum_cfg is None and os.environ.get('NEUROCLAW_QUANTUM') == '1':
+                quantum_cfg = {'enabled': True}
+            if quantum_cfg and quantum_cfg.get('enabled'):
+                settings = {k: v for k, v in quantum_cfg.items() if k != 'enabled'}
+                layer.set_quantum(True, **settings)
         
         # Connect layers sequentially
         layer_ids = [lc['id'] for lc in self.config['layers']]
@@ -492,6 +542,40 @@ class NeuralCore:
                 # Dopamine gates plasticity
                 for synapse in self.inter_layer_synapses.values():
                     synapse.learning_rate = 0.01 * value
+    
+    def set_quantum(self, enabled: bool, layers: Optional[List[str]] = None, **settings) -> Dict:
+        """
+        Turn the quantum neural network backend on or off.
+        
+        Args:
+            enabled: True swaps scalar activations for parameterised quantum
+                circuits; False restores the classical activations.
+            layers: Layer ids to switch (default: all layers).
+            **settings: QuantumConfig fields (max_qubits, depth, encoding,
+                shots, noise, trajectories, init_scale, angle_scale, seed).
+        
+        Returns the status from quantum_status(). Invalid settings raise
+        ValueError before anything is changed.
+        """
+        targets = list(self.layers) if layers is None else layers
+        unknown = [lid for lid in targets if lid not in self.layers]
+        if unknown:
+            raise ValueError(f"unknown layers: {unknown}")
+        if enabled:
+            QuantumConfig(enabled=True).updated(**settings)  # validate first, change nothing on error
+        for layer_id in targets:
+            self.layers[layer_id].set_quantum(enabled, **settings)
+        self.config['quantum'] = {'enabled': bool(enabled), **settings} if enabled else {'enabled': False}
+        return self.quantum_status()
+    
+    def quantum_status(self) -> Dict:
+        """Which layers run on the quantum backend, plus the physical limits."""
+        layers = {lid: layer.quantum.status() for lid, layer in self.layers.items() if layer.quantum is not None}
+        return {
+            'enabled': bool(layers),
+            'layers': layers,
+            'limits': quantum_limits(),
+        }
     
     def update(self, inputs: Dict[str, Dict[str, float]] = None, dt: float = 0.001) -> Dict:
         """
