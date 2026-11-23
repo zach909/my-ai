@@ -1,0 +1,10 @@
+{"query": "allocate a new process and initialise its state", "relevant": "allocproc"}
+{"query": "acquire a spinlock and disable interrupts", "relevant": "acquire"}
+{"query": "release a spinlock", "relevant": "release"}
+{"query": "create a pipe for communication between processes", "relevant": "pipealloc"}
+{"query": "handle a system call from user space", "relevant": "syscall"}
+{"query": "map virtual addresses to physical memory in a page table", "relevant": "mappages"}
+{"query": "read from a file", "relevant": "fileread"}
+{"query": "close a file and drop its reference", "relevant": "fileclose"}
+{"query": "handle an interrupt or exception in the kernel trap handler", "relevant": "kerneltrap"}
+{"query": "fetch a system call argument from the process", "relevant": "argraw"}
