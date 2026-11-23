@@ -36,6 +36,7 @@ The neuron mesh is the substrate that replaces a transformer's fixed layer struc
 - `docs/NEURAL_MESH_DESIGN.md` - Full implementation spec: math model, scaling past dense O(N²) storage, memory layout, connection storage modes, sparse/MoE routing, parallel execution, stability, synchronization, APIs, and required test coverage
 - [[Home]] - Main wiki page
 - [[Elastic-Value-Budget]] - The zero-sum plasticity system gating every neuron's learning rate
+- [[Wake-Sleep-Islands]] - How the on-device OneBrain mesh grows new neurons to learn without overwriting
 - [[Quantum-Net]] - Wave signatures and interference, computed from the mesh's settled state
 - [[Hyperdimensional]] - The multi-ball per-neuron state layered on top of the mesh
 - [[Quantization]] - How a trained mesh is compressed for installation

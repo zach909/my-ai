@@ -25,6 +25,8 @@ export interface MistakeInput {
   /** The specific skill/agent responsible, when cause is "incorrect-skill" (§5: "which skills are missing/incomplete" needs to name one, not just tally a count). */
   failedSkill?: string;
   prevention?: string;
+  /** What the right answer was, when known. Lets the self-debug loop test a fix against it (self-debug.ts); without it a mistake has nothing to be tested against. */
+  expected?: string;
 }
 
 export interface Mistake extends MistakeInput {
@@ -55,6 +57,7 @@ export class MistakeTracker {
       if (input.assumption) existing.assumption = input.assumption;
       if (input.failedStep) existing.failedStep = input.failedStep;
       if (input.failedSkill) existing.failedSkill = input.failedSkill;
+      if (input.expected) existing.expected = input.expected;
       return existing;
     }
     const mistake: Mistake = {
@@ -66,6 +69,7 @@ export class MistakeTracker {
       failedStep: input.failedStep,
       failedSkill: input.failedSkill,
       prevention: input.prevention,
+      expected: input.expected,
       occurrences: 1,
       firstSeen: now,
       lastSeen: now,

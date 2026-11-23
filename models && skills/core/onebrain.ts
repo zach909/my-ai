@@ -3078,6 +3078,14 @@ export interface NetworkStateSnapshot {
    * without it cannot be mistaken for a truncated one.
    */
   connBias: string;
+  /**
+   * Each neuron's own firing threshold, base64 Float32. Present only when at
+   * least one neuron's threshold differs from the default; absent means every
+   * neuron has the default. So a snapshot written before thresholds existed
+   * still loads (those networks ran every neuron at the default), and a network
+   * that never changed a threshold writes the snapshot it always did.
+   */
+  firingThreshold?: string;
 }
 
 export interface StateTransition {
@@ -3481,6 +3489,133 @@ function anyGroupActive(groups: Set<string>, active: Set<string>): boolean {
   return false;
 }
 
+// ============================================================================
+// Firing thresholds
+// ============================================================================
+//
+// Without a threshold every neuron answers every input, all at once: a
+// crowded room where everyone is talking and nothing stands out. A firing
+// threshold makes a neuron speak only when what it HEARD is strong enough.
+//
+// Every neuron has its own threshold, and one dial scales all of them:
+//
+//   a neuron fires when its input reaches the bar its own threshold sets, and the
+//   bar is scaled by the one dial:
+//
+//   'off'       scale 0    no neuron is gated; the engine runs exactly as it did
+//                          before thresholds existed (bit-identical, no extra work)
+//   'balanced'  scale 0.5  about half the neurons stay silent. No quality loss
+//                          measured; about 10% less time on the benchmark run.
+//   'saver'     scale 0.7  about 70% stay silent. The benchmark run took 43% less
+//                          time, and the model hallucinated about 5 points more
+//                          often on unanswerable questions (20% -> 25%).
+//   a number in [0, 1]     any point in between. Past 0.8 the cost climbs (31% at
+//                          0.9) and at 1 only the loudest neuron speaks, which
+//                          measured-destroys recall (replay 96% -> 1%).
+//
+// What the bar is measured in is the FiringReference:
+//
+//   'rank'      (default) Neurons are put in order of how much each heard this
+//               tick, and the bar is the input at position scale * threshold in
+//               that order. With every threshold at 1, scale 0.5 silences the
+//               quieter half and scale 1 leaves only the loudest. It means the
+//               same thing on any network, loud or quiet, because it asks "who
+//               heard more than the rest", not "who heard more than a number".
+//               The loudest neuron always fires, so the mesh cannot go silent.
+//   'absolute'  The bar is scale * threshold as a plain input level. Literal, but
+//               it only means something against one network's input scale (on a
+//               fresh engine inputs are about 0.01, so a threshold of 1 would
+//               silence everything), so thresholds must be set to suit.
+//
+// Two things measured on the live configuration decided the default. Measured
+// against the mean or against the range of inputs, the silent fraction was a
+// cliff on one network (nothing silent until scale 0.75, then half) and
+// collapsed to one neuron at both 0.5 and 1 on a larger one, because a single
+// outlier stretches the range. Rank has neither problem: the dial is the
+// fraction silenced, on both.
+//
+// Whether a neuron fires is decided ONCE per tick, on the first settle
+// iteration, and held. Re-deciding every iteration made near-tied neurons flip in
+// and out so the mesh stopped settling (5.5 iterations became 12-20). With it
+// held, the rest of the settle only computes the neurons that fired and holds the
+// rest, and the neurons that stayed silent do not learn from the tick (they sat
+// it out, as a neuron held by an inactive group already does).
+//
+// "What it heard" is the neuron's input before it is squashed: the RMS of its
+// pre-activation over its content dimensions (the same per-neuron measure of
+// how hard a neuron is driven that applyWeightLearning already uses). Below the
+// threshold the neuron does not fire: its content dimensions are zero this
+// tick (a neuron with vale still keeps its vale-weighted share of the state it
+// had, because vale is resistance to change and silence is not exempt from it).
+// Neurons that are driven from outside or held by an inactive group are never
+// gated: input is not optional, and a held neuron is already not computing.
+
+/** How much of each neuron's own threshold applies. */
+export type FiringMode = 'off' | 'balanced' | 'saver';
+
+/** A named mode, or a scale between 0 (off) and 1 (power saving). */
+export type FiringSetting = FiringMode | number;
+
+/** What a neuron's threshold is measured against. See "Firing thresholds" above. */
+export type FiringReference = 'absolute' | 'rank';
+export const FIRING_REFERENCES: readonly FiringReference[] = Object.freeze(['absolute', 'rank'] as FiringReference[]);
+
+export const FIRING_MODE_SCALE: Readonly<Record<FiringMode, number>> = Object.freeze({
+  off: 0,
+  balanced: 0.5,
+  saver: 0.7,
+});
+
+/**
+ * The threshold a neuron starts with. With the default 'rank' reference it is a
+ * multiplier on the dial, so at 1 the scale alone is the fraction of neurons
+ * that stay silent (scale 0.5 silences the quieter half), and a neuron given 0
+ * is never silenced. As an absolute input level this number would mean nothing:
+ * inputs on a fresh network are about 0.01.
+ */
+export const DEFAULT_FIRING_THRESHOLD = 1;
+
+/**
+ * Turn a mode name or number into a scale in [0, 1]. Anything that is neither
+ * (undefined, NaN, an unknown word) gives `fallback`, so a bad setting never
+ * silently turns thresholds on.
+ */
+export function resolveFiringScale(setting: unknown, fallback: number = 0): number {
+  if (typeof setting === 'string') {
+    const key = setting.trim().toLowerCase();
+    // Own properties only: `'constructor' in obj` is true for every object, and
+    // an environment variable is free text.
+    if (Object.prototype.hasOwnProperty.call(FIRING_MODE_SCALE, key)) return FIRING_MODE_SCALE[key as FiringMode];
+    const parsed = Number(key);
+    if (key !== '' && Number.isFinite(parsed)) return parsed < 0 ? 0 : (parsed > 1 ? 1 : parsed);
+    return fallback;
+  }
+  if (typeof setting === 'number' && Number.isFinite(setting)) {
+    return setting < 0 ? 0 : (setting > 1 ? 1 : setting);
+  }
+  return fallback;
+}
+
+/** The mode name a scale corresponds to, or 'custom' for an in-between value. */
+export function firingModeName(scale: number): FiringMode | 'custom' {
+  if (scale === FIRING_MODE_SCALE.off) return 'off';
+  if (scale === FIRING_MODE_SCALE.balanced) return 'balanced';
+  if (scale === FIRING_MODE_SCALE.saver) return 'saver';
+  return 'custom';
+}
+
+export interface FiringStats {
+  mode: FiringMode | 'custom';
+  scale: number;
+  reference: FiringReference;
+  /** Neurons that were eligible to be gated on the last settle iteration (not driven, not held). */
+  eligible: number;
+  /** Of those, how many stayed silent. */
+  silent: number;
+  /** silent / eligible, 0 when nothing was eligible or thresholds are off. */
+  silentFraction: number;
+}
+
 export class HyperDimensionalEngine {
   private config: HyperConfig;
   private neurons: HyperNeuron[];
@@ -3564,6 +3699,41 @@ export class HyperDimensionalEngine {
 
   /** Bias is per-neuron (added once after the full summed product) */
   private bias: Float32Array;
+
+  /**
+   * Firing thresholds (see "Firing thresholds" above). `firingScale` is the one
+   * dial, 0 = off; `firingThreshold[i]` is neuron i's own threshold. The scale
+   * is a runtime mode (it follows power state or a setting) so it is NOT part of
+   * a saved network; the per-neuron thresholds are, because they belong to the
+   * neuron.
+   */
+  private firingScale: number = 0;
+  private firingThreshold: Float32Array;
+  /** What a neuron added later starts with. */
+  private firingDefault: number = DEFAULT_FIRING_THRESHOLD;
+  /** What a threshold is measured against (see FiringReference). */
+  private firingReference: FiringReference = 'rank';
+  /** Each neuron's sum of squared pre-activations over its content dimensions, then its RMS. Only written on a gated tick's first iteration. */
+  private firingDrive: Float64Array;
+  /**
+   * This tick's decision, made on the first settle iteration and held for the
+   * rest of it: which neurons fired (`firingActive`, the only ones computed
+   * after that), which stayed silent (`firingSilentList`, held, and not
+   * learning), and a per-neuron flag for the learning step. `firingMaskValid`
+   * is true only between a gated settle's first iteration and the next settle,
+   * so learning never reads a decision from an earlier tick.
+   */
+  private firingMask: Uint8Array;
+  private firingActive: Int32Array;
+  private firingActiveCount: number = 0;
+  private firingSilentList: Int32Array;
+  private firingSilentCount: number = 0;
+  private firingMaskValid: boolean = false;
+  /** Scratch for ranking this tick's inputs. */
+  private firingSorted: Float64Array;
+  /** Counted over the most recent settle iteration, for getFiringStats(). */
+  private firingEligible: number = 0;
+  private firingSilent: number = 0;
 
   /** Consolidated state buffer: [dimension][neuron] for sequential access in hot loop */
   private allStates: Float32Array;
@@ -3805,6 +3975,19 @@ export class HyperDimensionalEngine {
     this.connBiasRowSum = new Float32Array(this.config.connectionBias ? N * D : 0);
     this.bias = new Float32Array(N * D);
 
+    // Thresholds start inert: scale 0 unless the caller asks for a mode, so an
+    // engine built the old way computes exactly what it always did.
+    const firingDefault = Number(config.firingThreshold);
+    this.firingDefault = Number.isFinite(firingDefault) && firingDefault >= 0 ? firingDefault : DEFAULT_FIRING_THRESHOLD;
+    this.firingScale = resolveFiringScale(config.firingMode ?? config.firingScale, 0);
+    this.firingThreshold = new Float32Array(N).fill(this.firingDefault);
+    this.firingReference = FIRING_REFERENCES.includes(config.firingReference) ? config.firingReference : 'rank';
+    this.firingDrive = new Float64Array(N);
+    this.firingMask = new Uint8Array(N);
+    this.firingActive = new Int32Array(N);
+    this.firingSilentList = new Int32Array(N);
+    this.firingSorted = new Float64Array(N);
+
     // Every neuron's say in every connection. Small random values rather than
     // zeros: identical variables would make every neuron's contribution to the
     // network term interchangeable, and learning could never separate them.
@@ -3991,7 +4174,7 @@ export class HyperDimensionalEngine {
     const N = this.neurons.length;
     const D = this.totalDims;
 
-    const { stateDeltas, liveCorrections, iterations } = this.settle(resolvedInput, drivenIds, vale, options?.activeGroups);
+    const { stateDeltas, liveCorrections, iterations } = this.settle(resolvedInput, drivenIds, vale, options?.activeGroups, true);
 
     // Weight learning is on by default -- a tick that receives input is
     // supposed to change the network. A tick that is only READING is not: see
@@ -4190,6 +4373,15 @@ export class HyperDimensionalEngine {
   captureNetworkState(): NetworkStateSnapshot {
     const energies = new Float64Array(this.neurons.length);
     for (let i = 0; i < this.neurons.length; i++) energies[i] = this.neurons[i].energy;
+    // Only when some neuron's threshold was changed. A network that never
+    // touched thresholds writes the same snapshot it always did, so every
+    // existing fingerprint (meshFingerprint hashes every key) and saved file
+    // stays valid, and the field costs nothing until it is used.
+    const defaultThreshold = Math.fround(this.firingDefault);
+    let customThresholds = false;
+    for (let i = 0; i < this.firingThreshold.length; i++) {
+      if (this.firingThreshold[i] !== defaultThreshold) { customThresholds = true; break; }
+    }
     return {
       shape: { neurons: this.neurons.length, dimensions: this.getDimensions() },
       states: encodeFloats(this.allStates),
@@ -4219,6 +4411,7 @@ export class HyperDimensionalEngine {
       modWaveWeight: encodeFloats(this.modWaveWeight),
       addWaveWeight: encodeFloats(this.addWaveWeight),
       connBias: this.config.connectionBias ? encodeFloats(this.connBias) : "",
+      ...(customThresholds ? { firingThreshold: encodeFloats(this.firingThreshold) } : {}),
     };
   }
 
@@ -4275,12 +4468,21 @@ export class HyperDimensionalEngine {
     const waveBiasIm = decodeFloats(snapshot.neuronWaveBiasIm, this.neuronWaveBiasIm.length);
     const modWave = decodeFloats(snapshot.modWaveWeight, this.modWaveWeight.length);
     const addWave = decodeFloats(snapshot.addWaveWeight, this.addWaveWeight.length);
+    // Absent in snapshots written before thresholds existed: those networks ran
+    // every neuron at the default, so that is what they get back.
+    const firing = snapshot.firingThreshold === undefined
+      ? new Float32Array(this.firingThreshold.length).fill(this.firingDefault)
+      : decodeFloats(snapshot.firingThreshold, this.firingThreshold.length);
     if (
       !states || !energies || !bias || !diag || !shift || !mod || !add || !freq || !phase ||
       !waveGain || !waveTurn || !waveBias || !waveBiasTurned || !waveShift ||
       !neuronWaveRe || !neuronWaveIm || !poolSavedRe || !poolSavedIm || !senderGain ||
-      !waveBiasRe || !waveBiasIm || !modWave || !addWave
+      !waveBiasRe || !waveBiasIm || !modWave || !addWave || !firing
     ) return false;
+    // A threshold below zero or not a number would make the comparison lie
+    // (a negative squares to a positive), so a snapshot carrying one is refused
+    // outright like any other mismatch, not clamped into something it never was.
+    for (let i = 0; i < firing.length; i++) if (!(firing[i] >= 0) || !Number.isFinite(firing[i])) return false;
 
     // A snapshot from an engine with per-connection biases does not fit one
     // without them, and vice versa: same neuron count, genuinely different
@@ -4324,6 +4526,7 @@ export class HyperDimensionalEngine {
     this.neuronWaveBiasIm.set(waveBiasIm);
     this.modWaveWeight.set(modWave);
     this.addWaveWeight.set(addWave);
+    this.firingThreshold.set(firing);
     if (connBias) {
       this.connBias.set(connBias);
       // The row sums are derived, so they are rebuilt rather than saved --
@@ -4511,6 +4714,16 @@ export class HyperDimensionalEngine {
 
     // Everything sized by the neuron count, rebuilt. A scratch array left at
     // the old size is a buffer overrun waiting for the next settle.
+    // The new neurons start at the default threshold; the old ones keep theirs.
+    const grownThresholds = new Float32Array(newN).fill(this.firingDefault);
+    grownThresholds.set(this.firingThreshold);
+    this.firingThreshold = grownThresholds;
+    this.firingDrive = new Float64Array(newN);
+    this.firingMask = new Uint8Array(newN);
+    this.firingActive = new Int32Array(newN);
+    this.firingSilentList = new Int32Array(newN);
+    this.firingSorted = new Float64Array(newN);
+    this.firingMaskValid = false;
     this.nextStatesBuffer = new Float32Array(newN * D);
     this.stateDeltasBuffer = new Float32Array(newN);
     this.isDrivenScratch = new Uint8Array(newN);
@@ -5288,6 +5501,190 @@ export class HyperDimensionalEngine {
     if (Number.isFinite(steps) && steps >= 1) this.config.propagationSteps = Math.floor(steps);
   }
 
+  /**
+   * Turn firing thresholds on, off, or anywhere between (see "Firing
+   * thresholds" above): 'off', 'balanced', 'saver', or a scale in [0, 1].
+   * Takes effect on the next tick. An unrecognised setting changes nothing and
+   * returns false, so a typo cannot quietly switch the network's behaviour.
+   */
+  setFiringMode(setting: FiringSetting): boolean {
+    const scale = resolveFiringScale(setting, NaN);
+    if (Number.isNaN(scale)) return false;
+    this.firingScale = scale;
+    return true;
+  }
+
+  /** The current mode name ('custom' for an in-between scale) and scale. */
+  getFiringMode(): { mode: FiringMode | 'custom'; scale: number } {
+    return { mode: firingModeName(this.firingScale), scale: this.firingScale };
+  }
+
+  /** What thresholds are measured against: 'absolute', 'mean' or 'range'. False (nothing changed) for anything else. */
+  setFiringReference(reference: FiringReference): boolean {
+    if (!FIRING_REFERENCES.includes(reference)) return false;
+    this.firingReference = reference;
+    return true;
+  }
+
+  /**
+   * Set one neuron's own threshold: the input it must hear, at full scale, to
+   * fire. Zero means it always fires. Returns false for an unknown neuron or a
+   * value that is not a finite number >= 0.
+   */
+  setNeuronThreshold(neuronId: number, threshold: number): boolean {
+    if (!Number.isInteger(neuronId) || neuronId < 0 || neuronId >= this.neurons.length) return false;
+    if (typeof threshold !== 'number' || !Number.isFinite(threshold) || threshold < 0) return false;
+    this.firingThreshold[neuronId] = threshold;
+    return true;
+  }
+
+  /** One neuron's own threshold, or null for an unknown neuron. */
+  getNeuronThreshold(neuronId: number): number | null {
+    if (!Number.isInteger(neuronId) || neuronId < 0 || neuronId >= this.neurons.length) return null;
+    return this.firingThreshold[neuronId];
+  }
+
+  /**
+   * How many neurons stayed silent on the last settle iteration. Counts only
+   * neurons that could have been gated (not driven from outside, not held by an
+   * inactive group), so a mostly-driven tick does not look quieter than it is.
+   */
+  getFiringStats(): FiringStats {
+    const eligible = this.firingEligible;
+    const silent = this.firingSilent;
+    return {
+      mode: firingModeName(this.firingScale),
+      scale: this.firingScale,
+      reference: this.firingReference,
+      eligible,
+      silent,
+      silentFraction: eligible > 0 ? silent / eligible : 0,
+    };
+  }
+
+  /**
+   * The firing decision for every neuron that could be gated this tick
+   * (`indices[0..count)`: not driven from outside, not held by an inactive
+   * group), made once, on the first settle iteration, when all of them have
+   * heard the new input.
+   *
+   * A neuron's input is the RMS of its pre-activation over the content
+   * dimensions (recorded in `firingDrive` as a sum of squares). What it has to
+   * reach depends on the reference:
+   *
+   *   'rank'      the input at position (scale * its threshold) when everyone's
+   *               are put in order, so at scale 0.5 and threshold 1 the quieter
+   *               half is silent, whatever the network's loudness and however
+   *               alike the inputs are. At scale 1 only the loudest is left.
+   *               A neuron with threshold 0 is never silenced.
+   *   'absolute'  scale * its threshold, as a plain RMS input level.
+   *
+   * With 'rank' the loudest neuron always fires, whatever the thresholds, so
+   * the mesh cannot go entirely silent. Ties fire.
+   *
+   * The result is held for the rest of the settle: `firingActive` is who gets
+   * computed from now on, `firingSilentList` is who is held (holdSilent), and
+   * `firingMask` tells the learning step who sat this tick out. A silent
+   * neuron's content dimensions become `keep` times the state it had (keep is
+   * its vale, or 0), and the change in total content energy is returned so the
+   * caller's running total stays right. The input-flag dimension (0) is not
+   * content and is left as computed.
+   *
+   * A NaN input never silences (it compares false), and a bad value anywhere
+   * fails toward "fires", the old behaviour.
+   */
+  private applyFiring(
+    next: Float32Array,
+    D: number,
+    indices: Int32Array,
+    count: number,
+    scale: number,
+    vs: Float32Array | null,
+    hasV: Uint8Array,
+  ): number {
+    const drive = this.firingDrive;
+    const dims = Math.max(1, D - 1);
+    // Sum of squares -> RMS, in place, once.
+    for (let k = 0; k < count; k++) {
+      const i = indices[k];
+      drive[i] = Math.sqrt(drive[i] / dims);
+    }
+    const rank = this.firingReference === 'rank';
+    let sorted: Float64Array | null = null;
+    if (rank && count > 0) {
+      sorted = this.firingSorted.subarray(0, count);
+      for (let k = 0; k < count; k++) sorted[k] = drive[indices[k]];
+      sorted.sort(); // typed arrays sort numerically, ascending
+    }
+
+    const mask = this.firingMask;
+    mask.fill(0);
+    const active = this.firingActive;
+    const silentList = this.firingSilentList;
+    let activeCount = 0;
+    let silentCount = 0;
+    let energyChange = 0;
+    for (let k = 0; k < count; k++) {
+      const i = indices[k];
+      const level = scale * this.firingThreshold[i];
+      let bar: number;
+      if (sorted !== null) {
+        const q = level > 1 ? 1 : level;
+        const at = Math.floor(q * count);
+        bar = sorted[at < count ? at : count - 1];
+      } else {
+        bar = level;
+      }
+      if (!(drive[i] < bar)) { active[activeCount++] = i; continue; }
+
+      mask[i] = 1;
+      silentList[silentCount++] = i;
+      const keep = vs !== null && hasV[i] ? vs[i] : 0;
+      const offset = i * D;
+      const state = this.neurons[i].state;
+      for (let d = 1; d < D; d++) {
+        const before = next[offset + d];
+        const after = Math.fround(keep !== 0 ? keep * state[d] : 0);
+        next[offset + d] = after;
+        energyChange += after * after - before * before;
+      }
+    }
+    this.firingActiveCount = activeCount;
+    this.firingSilentCount = silentCount;
+    this.firingEligible = count;
+    this.firingSilent = silentCount;
+    this.firingMaskValid = true;
+    return energyChange;
+  }
+
+  /**
+   * Every iteration after the first only computes the neurons that fired, so
+   * the silent ones have to be written into the next-state buffer by hand (it
+   * is swapped in, so "not written" would mean "stale"). Their content is vale's
+   * share of what they held, which for a neuron without vale is zero and stays
+   * zero; their input-flag dimension is held as the first iteration left it.
+   * Returns the content energy they contribute, since the loops that add it up
+   * never visited them.
+   */
+  private holdSilent(next: Float32Array, D: number, vs: Float32Array | null, hasV: Uint8Array): number {
+    const silentList = this.firingSilentList;
+    const count = this.firingSilentCount;
+    let energy = 0;
+    for (let k = 0; k < count; k++) {
+      const i = silentList[k];
+      const keep = vs !== null && hasV[i] ? vs[i] : 0;
+      const offset = i * D;
+      const state = this.neurons[i].state;
+      next[offset] = state[0];
+      for (let d = 1; d < D; d++) {
+        const held = Math.fround(keep !== 0 ? keep * state[d] : 0);
+        next[offset + d] = held;
+        energy += held * held;
+      }
+    }
+    return energy;
+  }
+
   /** Content dimensions per neuron (excludes the reserved input-flag dimension). */
   getDimensions(): number {
     return this.config.dimensions;
@@ -5376,6 +5773,12 @@ export class HyperDimensionalEngine {
      * clamped value actually held.
      */
     inputClamped: boolean;
+    /**
+     * True when firing thresholds were on and this neuron stayed below its
+     * threshold on the last tick. Its settled state was then zero (plus vale's
+     * share), whatever `value` says: `value` is what its inputs alone would give.
+     */
+    silent: boolean;
     terms: Array<{ source: string; weight: number; sourceValue: number; contribution: number }>;
     equation: string;
   } | null {
@@ -5415,7 +5818,8 @@ export class HyperDimensionalEngine {
     const fmt = (v: number) => (v >= 0 ? '+' : '-') + Math.abs(v).toFixed(4);
     const body = top.map(t => `${fmt(t.weight)}·${t.source}`).join(' ');
     const omitted = terms.length > top.length ? ` … (+${terms.length - top.length} smaller terms)` : '';
-    const clampNote = inputClamped ? ' [input-clamped: counterfactual]' : '';
+    const silent = this.firingMaskValid && this.firingMask[neuronId] === 1;
+    const clampNote = (inputClamped ? ' [input-clamped: counterfactual]' : '') + (silent ? ' [silent: below its firing threshold, so its state is 0]' : '');
     const equation = `n${neuronId}.d${dim} = tanh( ${fmt(bias)} ${body}${omitted} ) = ${Math.tanh(preActivation).toFixed(4)}${clampNote}`;
 
     return {
@@ -5425,6 +5829,7 @@ export class HyperDimensionalEngine {
       preActivation,
       value: Math.tanh(preActivation),
       inputClamped,
+      silent,
       terms: top,
       equation,
     };
@@ -5734,7 +6139,14 @@ export class HyperDimensionalEngine {
     resolvedInput: number[],
     drivenIds: Set<number>,
     vale?: Map<number, number>,
-    activeGroups?: Set<string>
+    activeGroups?: Set<string>,
+    /**
+     * Whether firing thresholds apply to this settle. Only process() asks for
+     * them. Everything else that settles (the NeuroLang definition trainers)
+     * measures a neuron's response to an input and fits weights to it, which a
+     * gate that silences neurons would quietly change, so they stay exact.
+     */
+    applyThresholds: boolean = false
   ): { stateDeltas: Map<number, number>; liveCorrections: number; iterations: number } {
     const D = this.totalDims;
     const N = this.neurons.length;
@@ -5902,7 +6314,34 @@ export class HyperDimensionalEngine {
     if (waveGain === 0) waveTermRow.fill(0);
     const TWO_PI = Math.PI * 2;
 
+    // Firing thresholds: with the scale at 0 `gating` is false and nothing below
+    // reads or writes any of this, so the loop is the one it always was.
+    const firingScale = this.firingScale;
+    const gating = applyThresholds && firingScale > 0;
+    const firingDrive = this.firingDrive;
+    // Whose turn it is is decided ONCE per tick, on the first iteration, when
+    // the new input first reaches everyone. The rest of the settle holds that
+    // decision: deciding again every iteration made near-tied neurons flip in
+    // and out and the mesh never settled (measured on the live configuration:
+    // 5.5 iterations became 12-20). With the decision fixed the dynamics are
+    // smooth on whoever is speaking, and silent neurons can be skipped outright.
+    this.firingEligible = 0;
+    this.firingSilent = 0;
+    this.firingMaskValid = false;
+    // Running sum of the squared pre-activation over one neuron's content
+    // dimensions. Declared out here and zeroed after each neuron rather than
+    // per neuron, so the shared loop heads below stay untouched.
+    let zSq = 0;
+
     for (; iterations < this.config.propagationSteps; iterations++) {
+      // Iteration 0 computes everyone (their input is what decides who fires);
+      // after that only the neurons that fired are computed, and the silent
+      // ones are held (see holdSilent). With thresholds off both are the plain
+      // non-driven list, so this is the loop it always was.
+      const recordDrive = gating && iterations === 0;
+      const decided = gating && iterations > 0;
+      const loopIndices = decided ? this.firingActive : nonDrivenIndices;
+      const loopCount = decided ? this.firingActiveCount : nonDrivenCount;
       // Wave pool (see HyperConfig.waveGain's doc comment): O(N) per iteration,
       // computed from each neuron's *pre-update* state (the same state the
       // dotDiag/dotShift terms below read from this iteration) so every
@@ -6340,6 +6779,12 @@ export class HyperDimensionalEngine {
       const scaleRow = this.hyperScaleScratch; // [i][d]: this receiver's scale
       if (hyperGain !== 0 || hyperAdd !== 0 || hyperScale !== 0) {
         const invN = 1 / N;
+        // Only receivers that are computed this iteration read their row below.
+        // Once thresholds have decided who speaks, that is the speakers: building
+        // the rows of the silent ones (every sender, every dimension) is as much
+        // work as the weighted sums this decision exists to skip. Otherwise every
+        // receiver, as ever.
+        const hyperCount = decided ? loopCount : N;
         for (let d = 0; d < D; d++) {
           const row = stateViews[d];
           // What every connection carries at this dimension, weighted by who
@@ -6367,7 +6812,8 @@ export class HyperDimensionalEngine {
             const r1 = stateViews[d0 + 1];
             const r2 = stateViews[d0 + 2];
             const r3 = stateViews[d0 + 3];
-            for (let i = 0; i < N; i++) {
+            for (let h = 0; h < hyperCount; h++) {
+              const i = decided ? loopIndices[h] : h;
               const varRow = i * N;
               let m0 = 0, m1 = 0, m2 = 0, m3 = 0;
               let o0 = 0, o1 = 0, o2 = 0, o3 = 0;
@@ -6402,7 +6848,8 @@ export class HyperDimensionalEngine {
           // The leftover dimensions, one at a time.
           for (let d = d0; d < dEnd; d++) {
             const row = stateViews[d];
-            for (let i = 0; i < N; i++) {
+            for (let h = 0; h < hyperCount; h++) {
+              const i = decided ? loopIndices[h] : h;
               const varRow = i * N;
               let modulation = 0;
               let offset = 0;
@@ -6463,8 +6910,8 @@ export class HyperDimensionalEngine {
         // measured at 336 neurons x 64 dimensions, 30 ms per iteration against
         // 21.8 ms for the same sums walked in order. Every dot product is
         // formed in the same order either way, so the result is the same.
-          for (let idx = 0; idx < nonDrivenCount; idx++) {
-            const i = nonDrivenIndices[idx];
+          for (let idx = 0; idx < loopCount; idx++) {
+            const i = loopIndices[idx];
         for (let d = 0; d < D; d++) {
           const sjRow = stateViews[d];
           const srcD = (d - 1 + D) % D;
@@ -6550,17 +6997,23 @@ export class HyperDimensionalEngine {
               : (dotDiag + dotShift * strength) * invConnN;
             // This receiver's own reading of the network.
             const netAt = i * D + d;
-            const computedState = Math.tanh(
-              bias[biasOffset + d] +
+            const z = bias[biasOffset + d] +
                 connectionResult * scaleRow[netAt] +
                 gainRow[netAt] * heardMean +
                 addRow[netAt] +
-                waveTermRow[i],
-            );
+                waveTermRow[i];
+            const computedState = Math.tanh(z);
+            if (recordDrive && d > 0) zSq += z * z;
             nextStates[i * D + d] = computedState;
             if (d > 0) {
               currentTotalContentEnergy += computedState * computedState;
             }
+          }
+          // Remember how hard this neuron was driven; whether it fires is
+          // decided once for everyone after the loop (see applyFiring).
+          if (recordDrive) {
+            firingDrive[i] = zSq;
+            zSq = 0;
           }
         }
       } else {
@@ -6571,8 +7024,8 @@ export class HyperDimensionalEngine {
         // measured at 336 neurons x 64 dimensions, 30 ms per iteration against
         // 21.8 ms for the same sums walked in order. Every dot product is
         // formed in the same order either way, so the result is the same.
-          for (let idx = 0; idx < nonDrivenCount; idx++) {
-            const i = nonDrivenIndices[idx];
+          for (let idx = 0; idx < loopCount; idx++) {
+            const i = loopIndices[idx];
         for (let d = 0; d < D; d++) {
           const sjRow = stateViews[d];
           const srcD = (d - 1 + D) % D;
@@ -6658,20 +7111,34 @@ export class HyperDimensionalEngine {
               : (dotDiag + dotShift * strength) * invConnN;
             // This receiver's own reading of the network.
             const netAt = i * D + d;
-            const computedState = Math.tanh(
-              bias[biasOffset + d] +
+            const z = bias[biasOffset + d] +
                 connectionResult * scaleRow[netAt] +
                 gainRow[netAt] * heardMean +
                 addRow[netAt] +
-                waveTermRow[i],
-            );
+                waveTermRow[i];
+            const computedState = Math.tanh(z);
+            if (recordDrive && d > 0) zSq += z * z;
             const finalVal = hasV[i] ? vs[i] * this.neurons[i].state[d] + (1 - vs[i]) * computedState : computedState;
             nextStates[i * D + d] = finalVal;
             if (d > 0) {
               currentTotalContentEnergy += finalVal * finalVal;
             }
           }
+          if (recordDrive) {
+            firingDrive[i] = zSq;
+            zSq = 0;
+          }
         }
+      }
+
+      // Firing thresholds: now that every non-driven neuron has heard this
+      // iteration's input, decide which of them speak. A silent neuron's
+      // computed part becomes zero; vale still resists change, so a neuron with
+      // vale keeps vale's share of the state it had.
+      if (recordDrive) {
+        currentTotalContentEnergy += this.applyFiring(nextStates, D, nonDrivenIndices, nonDrivenCount, firingScale, hasVale ? vs : null, hasV);
+      } else if (decided) {
+        currentTotalContentEnergy += this.holdSilent(nextStates, D, hasVale ? vs : null, hasV);
       }
 
       // Advance every neuron's own wave phase once per iteration -- this is
@@ -6695,6 +7162,9 @@ export class HyperDimensionalEngine {
       if (this.sustainedDivergence >= this.config.sustainedDivergenceTicks) {
         for (let i = 0; i < N; i++) {
           if (isDriven[i]) continue;
+          // Damping mixes the new state with the old; for a neuron that stayed
+          // silent that would put back activity the threshold just removed.
+          if (gating && this.firingMask[i] === 1) continue;
           const offset = i * D;
           const state = this.neurons[i].state;
           for (let d = 0; d < D; d++) {
@@ -6814,6 +7284,16 @@ export class HyperDimensionalEngine {
       if (this.heldThisTick[i]) rates[i] = 0;
     }
 
+    // A neuron that stayed below its firing threshold this tick sat it out in
+    // exactly the same sense, so it does not learn from it either. Only a
+    // decision made by THIS tick's settle counts (firingMaskValid), never one
+    // left over from an earlier tick.
+    const skipIdle = this.firingScale > 0 && this.firingMaskValid;
+    if (skipIdle) {
+      const mask = this.firingMask;
+      for (let i = 0; i < N; i++) if (mask[i] === 1) rates[i] = 0;
+    }
+
     let forceSum = 0;
     for (let i = 0; i < N; i++) {
       const si = this.neurons[i].state;
@@ -6845,6 +7325,11 @@ export class HyperDimensionalEngine {
     // Keep i as outer loop and d as middle loop to ensure perfect sequential cache-friendly access to connDiag/connShift
     for (let i = 0; i < N; i++) {
       const rate = rates[i];
+      // With thresholds on, a neuron with a zero rate (held, or silent this
+      // tick) has nothing to update: every term below is a multiple of the rate,
+      // so the whole sweep over its N * D connections would add zero. Skipped
+      // only then, so with thresholds off this loop is exactly what it was.
+      if (skipIdle && rate === 0) continue;
       const si = this.neurons[i].state;
       let deltaSum = 0;
 

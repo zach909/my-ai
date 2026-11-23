@@ -42,6 +42,10 @@ Both the Python `ExtensionBuilder.install()` and the TypeScript `ExtensionBuilde
 
 `python main.py demo` (`test_integration.py`, §3) checks this concretely, not just conceptually: it saves a real trained contract un-quantized, installs it at 8 bits, confirms the installed file is measurably smaller on disk than the saved one, and — the important part — reloads the *installed, quantized* extension into a completely fresh model object and confirms it still reproduces the exact trained reply. Quantization here is lossy in principle (bit-width reduction) but the QAT training loop keeps it from being lossy in practice for the behaviours that were actually trained.
 
+## Hardware-chosen quantization (`quantize/`)
+
+`scripts/install.sh` downloads the model from the GitHub repo and `python3 -m quantize install` picks a technique from the machine's memory: `fp16` -> classic 8/4/2-bit (every weight snapped to a multiple of a shared step) -> binary (one bit per weight) -> LittleBit 0.55 / 0.3 / 0.1 bits per weight (low-rank factors, binarised, fp16 scales, residual path, SVD + orthogonal rotation). The gentlest tier that fits is chosen. This is post-training only; the sub-1-bit tiers lose a lot without the QAT step the papers use. Details, measurements and limits: [`quantize/README.md`](../quantize/README.md).
+
 ## Background Quantization system
 
 The full implementation-level design — architecture, algorithms (dynamic

@@ -26,6 +26,7 @@ import { handleMemoryTopicsRoutes, isMemoryTopicsRoute } from './memory-topics-r
 import { handlePromptMemoryRoutes, isPromptMemoryRoute } from './prompt-memory-routes.js';
 import { handleSafetyRoutes, isSafetyRoute } from './safety-routes.js';
 import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
+import { handleSelfDebugRoutes, isSelfDebugRoute, selfDebugService } from './self-debug-routes.js';
 import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
 import { handleCommonsRoutes, type CommonsContext } from './commons-routes.js';
 import { getAccounts, USER_COOKIE } from '../models && skills/core/accounts.js';
@@ -68,6 +69,17 @@ const base = (c: ServerRouteContext) => ({
   req: c.req, res: c.res, pathname: c.pathname, method: c.method,
   parseBody: c.parseBody, sendJson: c.sendJson,
 });
+
+/** The last few errors the app caught, as lines. The self-debug report lists them; no weight can fix an exception. */
+function recentErrorLines(): string[] {
+  try {
+    // Loaded lazily and synchronously-safe: the log is a plain in-memory list.
+    const mod = errorLogModule;
+    return mod ? mod.getRecentErrors(5).map(e => `${new Date(e.timestamp).toISOString()} ${e.source}: ${e.message}`) : [];
+  } catch { return []; }
+}
+let errorLogModule: typeof import('../src/lib/error-log.js') | null = null;
+void import('../src/lib/error-log.js').then(m => { errorLogModule = m; }, () => undefined);
 
 const liveSystem = async () => (await import('../src/index.js')).getNeuroclawSystem();
 const liveAccess = async () => (await import('../models && skills/core/access-settings.js')).sharedAccessManager();
@@ -216,6 +228,25 @@ const weights: Plugin = {
   start: () => undefined,
 };
 
+const selfDebug: Plugin = {
+  id: 'self-debug-routes',
+  description: 'Self-debug: the AI finds what goes wrong in a net, edits its weights a little, checks, and keeps going. Part of self-improvement.',
+  requires: ['weights-routes'],
+  order: 75,
+  routes: [{
+    match: (p) => isSelfDebugRoute(p),
+    handle: (c) => handleSelfDebugRoutes({
+      ...base(c),
+      mistakes: async () => (await liveSystem()).mistakes.all(),
+      errors: recentErrorLines,
+    }),
+  }],
+  // The background pass: every ten minutes (NEUROCLAW_SELF_DEBUG_INTERVAL_MS), look at the nets that exist.
+  // Off with NEUROCLAW_SELF_DEBUG=0 or the switch on the Self-improvement page. Costs nothing with no nets.
+  start: () => { selfDebugService().startLoop(recentErrorLines); },
+  stop: () => { selfDebugService().stopLoop(); },
+};
+
 const agent: Plugin = {
   id: 'agent-routes',
   description: 'The agent: sandbox, danger level and alignment protocol.',
@@ -313,6 +344,6 @@ export function fileEnabledStore(override?: string): PluginEnabledStore {
 /** The server's plugin host, with every route plugin registered and not yet started. */
 export function createServerHost(store: PluginEnabledStore = fileEnabledStore(), log?: (m: string) => void): PluginHost<ServerRouteContext> {
   const host = new PluginHost<ServerRouteContext>(store, log);
-  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, agent, commons]) host.register(p);
+  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons]) host.register(p);
   return host;
 }
