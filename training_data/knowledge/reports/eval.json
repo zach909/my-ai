@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-21",
+  "components": {
+    "retriever.science": {
+      "version": "v2",
+      "scifact.n": 188,
+      "scifact.recall@10": 0.9272,
+      "scifact.mrr@10": 0.7954,
+      "scifact.ndcg@10": 0.8247,
+      "qasper.recall@3": 0.3372,
+      "qasper.mrr@5": 0.378,
+      "qasper.n": 339,
+      "sourcecheck.citable_fraction": 1
+    },
+    "verifier.claims": {
+      "version": "v1",
+      "verify.acc": 0.5433,
+      "verify.majority_baseline": 0.4133,
+      "verify.support_precision": 0.4527,
+      "verify.n": 300
+    },
+    "retriever.code": {
+      "version": "v1",
+      "code.recall@3": 0.7,
+      "code.mrr@5": 0.695,
+      "code.n": 10
+    },
+    "audio.recognizer": {
+      "version": "v1",
+      "audio.accuracy": 0.7917,
+      "audio.chance": 0.1667,
+      "audio.n_test": 48,
+      "audio.n_train": 192
+    }
+  },
+  "suites": {
+    "safety": {
+      "metrics": {
+        "safety.accuracy": 1,
+        "safety.harm_refusal_recall": 1,
+        "safety.false_refusal_rate": 0,
+        "safety.n": 43
+      },
+      "byMode": {
+        "request": {
+          "n": 20,
+          "ok": 20
+        },
+        "text": {
+          "n": 11,
+          "ok": 11
+        },
+        "code": {
+          "n": 12,
+          "ok": 12
+        }
+      },
+      "wrong": []
+    },
+    "reasoning": {
+      "metrics": {
+        "reasoning.accuracy": 1,
+        "reasoning.n": 18
+      },
+      "fails": []
+    },
+    "facts": {
+      "metrics": {
+        "facts.accuracy": 1,
+        "facts.n": 16,
+        "facts.contradictions_in_seed_kb": 0
+      },
+      "fails": []
+    },
+    "dataQuality": {
+      "metrics": {
+        "quality.docs": 15470,
+        "quality.missing_provenance": 0,
+        "quality.unknown_or_untrainable_source": 0,
+        "quality.license_mismatch": 0,
+        "quality.nc_flag_wrong": 0,
+        "quality.empty_docs": 0,
+        "quality.exact_duplicates": 0,
+        "quality.raw_files_verified": 30,
+        "quality.raw_hash_problems": 0
+      },
+      "rawProblems": []
+    }
+  }
+}

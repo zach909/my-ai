@@ -29,6 +29,45 @@ Each of the `n` generated candidates gets an amplitude (its rescaled confidence)
 
 **A previously-hidden bug** in this project's history: `NeuronMesh._last_settled` was declared but never actually assigned during `forward()`, so `state_phase()` always returned phase `0.0` for every candidate — silently degrading interference selection down to plain amplitude weighting with no real phase consensus happening at all. Fixed at the source in `mesh.py`; `select_by_interference` has worked as designed since.
 
+## Full QNN backend (switchable, Python `asi_core/quantum_net.py`)
+
+An optional replacement for the classical neuron activation, **off by default**. Pure standard library: the "quantum hardware" is an exact state-vector simulator in this repo (complex numbers in a list, `2**n` amplitudes).
+
+| Classical | Quantum backend |
+|---|---|
+| neuron | qubit |
+| scalar weight | rotation-gate angle (RY, RZ) |
+| matrix multiply | unitary evolution + entangling ring |
+| activation function | measurement (Born rule, exact or sampled `shots`) |
+| backprop | parameter-shift rule (two extra circuit runs per angle) |
+
+```python
+core = NeuralCore()
+core.set_quantum(True, max_qubits=6, depth=2, encoding="reupload", shots=0, noise=0.0)
+core.quantum_status()           # which layers, circuit runs, and the physical limits
+core.set_quantum(False)         # back to the classical activations
+core.set_quantum(True, layers=["hidden1"])   # one layer only
+```
+
+Other switches: `NeuralLayer.set_quantum(...)`, a `"quantum": {"enabled": true, ...}` key in the core config, or `NEUROCLAW_QUANTUM=1`. Bad settings raise `ValueError` before anything changes. Membrane integration, refractory period, threshold adaptation and spiking stay classical; only the scalar activation is replaced.
+
+**Pipeline.** Inputs are encoded as rotation angles (`angle`, or `reupload` which re-encodes every layer) or as state amplitudes (`amplitude`, via `QuantumBlock.distribution`). Trainable RY/RZ rotations plus a ring of two-qubit gates (CZ by default, `entangler="cnot"` optional) evolve the state; amplitudes interfere; qubits are read out as `P(qubit = 1)` in [0, 1]. Wider layers are split into independent blocks of `max_qubits`, because simulating n qubits costs `O(2**n)` per gate.
+
+**The four physical limits, and what the code does**
+
+| Limit | Handling |
+|---|---|
+| Linearity | No ReLU. Non-linearity comes from angle encoding (`sin`/`cos`), data re-uploading and measurement. |
+| No-cloning | Activations are never cached. `QuantumBlock.gradients` uses parameter-shift; `train` fits by MSE. |
+| Barren plateaus | Near-identity init (`init_scale`), shallow depth, local readout. `barren_plateau_probe()` measures gradient variance against width (global cost shrinks fastest). |
+| Decoherence | `noise` = depolarising probability per qubit per gate layer, averaged over `trajectories` runs. |
+
+**Entangler choice.** A CNOT ring XORs each qubit with its neighbour; at rest every qubit reads 0.5, so a single neuron's input is masked. CZ leaves Z-basis probabilities alone, so at identity init each neuron reads `(1 + sin x) / 2`, a sigmoid-like baseline, and entanglement acts through later rotations.
+
+**Cost** (default 352-neuron core, per `update`): classical 30 ms; quantum 4 qubits/depth 1 33 ms; 6 qubits/depth 2 62 ms; with 256 shots 80 ms; with `noise=0.01` (8 trajectories) 197 ms. Keep it off when idle or on battery unless you want it.
+
+Tests: `python3 -m pytest asi_core/test_quantum_net.py`.
+
 ## Using it
 
 ```bash

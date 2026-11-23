@@ -406,6 +406,32 @@ export class BuiltNet {
   }
 
   /**
+   * Delta-rule training on typed (text -> expected text) cases, through the same
+   * engine call the Extension Builder's train() uses. For cases that are not
+   * declared responses (a mistake the net made, say). A case whose output neuron
+   * is frozen is skipped, never forced. Writes ordinary engine weights and bias,
+   * so the weight editor and freezing mean the same thing afterwards. It changes
+   * more than one weight at a time, so a caller that wants to be able to undo it
+   * captures the engine's network state first (see self-debug.ts).
+   */
+  trainCases(
+    cases: Array<{ drive?: string; read?: string; text: string; expect: string }>,
+    opts: { epochs?: number; learningRate?: number; tolerance?: number } = {},
+  ): { trained: number; skipped: number; converged: boolean; epochs: number } {
+    const samples: Array<{ driveNeuronId: number; input: number[]; readoutNeuronId: number; target: number[] }> = [];
+    let skipped = 0;
+    for (const c of cases) {
+      const read = c.read ?? this.outputName;
+      const drive = c.drive ?? this.routeInput(c.text);
+      if (this.frozen.has(read) || this.idOf(drive) === this.idOf(read)) { skipped++; continue; }
+      samples.push({ driveNeuronId: this.idOf(drive), input: highlightVector(c.text, this.dims), readoutNeuronId: this.idOf(read), target: Array.from(embedText(c.expect, this.dims)) });
+    }
+    if (samples.length === 0) return { trained: 0, skipped, converged: false, epochs: 0 };
+    const r = this.engine.trainDefinitions(samples, { epochs: opts.epochs ?? 100, learningRate: opts.learningRate, tolerance: opts.tolerance ?? 0.01 });
+    return { trained: samples.length, skipped, converged: r.converged, epochs: r.epochs };
+  }
+
+  /**
    * Fit each output neuron's incoming weights in closed form (see
    * trainResponses). Per dimension d: z = atanh(target[d]) is what the output
    * must hear, the features are every other neuron's d-th state after the
