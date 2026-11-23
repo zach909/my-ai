@@ -221,10 +221,13 @@ definishon="final_output"`);
   });
 
   it('accepts negative weights and scientific notation', async () => {
-    const p = await parse('name="a"\nname="b"\n"a"@connections=".b*-0.5"\n"a"@vale="1e-2"\n"a"@value="1e-3"');
+    // @value and @vale are one setting (either spelling sets both, the later one wins), so each
+    // spelling gets its own neuron to be checked on its own.
+    const p = await parse('name="a"\nname="b"\n"a"@connections=".b*-0.5"\n"a"@vale="1e-2"\n"b"@value="1e-3"');
     expect(p.errors).toEqual([]);
     expect(p.neurons.get('a')!.connections.get('b')).toBe(-0.5);
     expect(p.neurons.get('a')!.vale).toBeCloseTo(0.01, 9);
+    expect(p.neurons.get('b')!.vale).toBeCloseTo(0.001, 9);
     const r = await netMaker('neurons="3"\n"n1"@connections=".n2*-0.5"', { dimensions: 8 });
     expect(r.net!.engine.getConnectionWeight(1, 0, 1)).toBeCloseTo(-0.5, 5);
   });

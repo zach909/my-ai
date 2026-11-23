@@ -49,6 +49,11 @@ import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPag
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
 import { createServerHost, type ServerRouteContext } from './server-plugins.js';
+import { contentEtag, sendBody } from './http-compress.js';
+
+/** ETags of the two fixed ambient assets, computed on first request. */
+let ambientCssEtag: string | undefined;
+let ambientJsEtag: string | undefined;
 import type { PluginHost } from '../plugin_manager/host.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
@@ -2395,14 +2400,13 @@ export class WebServer {
 
   private sendJson(res: http.ServerResponse, data: unknown, statusCode = 200): void {
     this.setSecurityHeaders(res);
-    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(data));
+    // gzip and a content-hash ETag (a 304 with no body when nothing changed): see http-compress.ts.
+    sendBody(res, statusCode, 'application/json', JSON.stringify(data), { etag: true });
   }
 
   private sendHtml(res: http.ServerResponse, html: string): void {
     this.setSecurityHeaders(res);
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(injectAmbient(html));
+    sendBody(res, 200, 'text/html; charset=utf-8', injectAmbient(html), { etag: true });
   }
 
   /**
@@ -3339,11 +3343,12 @@ export class WebServer {
     if (isAmbientRoute(pathname, method)) {
       this.setSecurityHeaders(res);
       const css = pathname === '/ambient.css';
-      res.writeHead(200, {
-        'Content-Type': css ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
-        'Cache-Control': 'no-cache',
+      // Fixed content: one ETag per asset for the life of the process, and its gzipped copy kept (bounded).
+      sendBody(res, 200, css ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8', css ? AMBIENT_CSS : AMBIENT_JS, {
+        headers: { 'Cache-Control': 'no-cache' },
+        etag: css ? (ambientCssEtag ??= contentEtag(AMBIENT_CSS)) : (ambientJsEtag ??= contentEtag(AMBIENT_JS)),
+        cacheCompressed: true,
       });
-      res.end(method === 'HEAD' ? undefined : css ? AMBIENT_CSS : AMBIENT_JS);
       return;
     }
 
@@ -4611,6 +4616,22 @@ export class WebServer {
         // combinations of expertise" indistinguishable from a story about a
         // network that does not. Strongest pair first, with the neurons the
         // two hold in common.
+        // ?counts=1 is what the page behind every screen asks for, every 20 seconds per open page.
+        // It draws one tentacle per skill, sized by how many neurons the skill holds, plus one for
+        // each region that has appeared in a pair; it never read the id lists or the pair scores,
+        // which are the bulk of this answer and cost O(skills^2 x neurons) to compute. So it gets
+        // counts and names. Without the parameter the answer is exactly what it always was.
+        if (parsedUrl.searchParams.get('counts') === '1') {
+          const names = engine.skillNames();
+          this.sendJson(res, {
+            neuronCount: engine.getNeuronCount(),
+            dimensions: engine.getDimensions(),
+            skills: graftedSkills(engine).map(entry => ({ skill: entry.skill, count: engine.neuronsInGroup(entry.skill).length })),
+            // A region only showed up through affinity when it had a partner, so a lone one stays out.
+            names: names.length >= 2 ? names : [],
+          });
+          return;
+        }
         this.sendJson(res, {
           neuronCount: engine.getNeuronCount(),
           dimensions: engine.getDimensions(),

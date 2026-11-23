@@ -5070,10 +5070,15 @@ export class HyperDimensionalEngine {
    * one just by having more connections. `overlap` is how many neurons the
    * two hold in common.
    */
-  skillAffinity(): Array<{ a: string; b: string; strength: number; overlap: number }> {
+  /** Every skill region the mesh holds, sorted. The cheap half of skillAffinity(): no pair is scored. */
+  skillNames(): string[] {
     const names = new Set<string>();
     for (const groups of this.neuronGroups.values()) for (const g of groups) names.add(g);
-    const skills = Array.from(names).sort();
+    return Array.from(names).sort();
+  }
+
+  skillAffinity(): Array<{ a: string; b: string; strength: number; overlap: number }> {
+    const skills = this.skillNames();
     const members = new Map<string, number[]>();
     for (const name of skills) members.set(name, this.neuronsInGroup(name));
 
