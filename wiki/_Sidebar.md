@@ -12,6 +12,7 @@
 - [[Quantization|Quantization]]
 - [[Elastic Value Budget|Elastic-Value-Budget]]
 - [[Wake-Sleep Islands|Wake-Sleep-Islands]] - Learning by growing new neurons
+- [[Grow, Prune, Quantize|Grow-Prune-Quantize]] - The lifecycle design note
 - [[Extensions|Extensions]]
 - [[RLM|RLM]]
 - [[Empathy Engine|Empathy-Engine]]
