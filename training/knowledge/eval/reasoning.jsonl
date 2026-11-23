@@ -1,0 +1,18 @@
+{"name": "modus ponens", "kb": "FACT f1: bird(tweety)\nRULE r1: IF bird(X) THEN has_feathers(X) @1", "ask": "has_feathers(tweety)", "status": "PROVEN", "conf": 1}
+{"name": "transitivity depth 3", "kb": "FACT a: is_a(a,b)\nFACT b: is_a(b,c)\nFACT c: is_a(c,d)\nRULE t: IF is_a(X,Y) & is_a(Y,Z) THEN is_a(X,Z)", "ask": "is_a(a,d)", "status": "PROVEN", "conf": 1}
+{"name": "confidence multiplies", "kb": "FACT f: p(x) @0.9\nRULE r: IF p(X) THEN q(X) @0.8", "ask": "q(x)", "status": "PROVEN", "conf": 0.8}
+{"name": "confidence is the weakest premise", "kb": "FACT f1: p(x) @0.6\nFACT f2: s(x) @0.9\nRULE r: IF p(X) & s(X) THEN q(X) @1", "ask": "q(x)", "status": "PROVEN", "conf": 0.6}
+{"name": "missing premise is UNKNOWN not false", "kb": "FACT f: p(x)\nRULE r: IF p(X) & s(X) THEN q(X)", "ask": "q(x)", "status": "UNKNOWN"}
+{"name": "unmet condition blocks rule and is reported", "kb": "FACT f: water(s1)\nRULE r: IF water(S) & COND std_pressure(S) THEN freezes(S)", "ask": "freezes(s1)", "status": "UNKNOWN", "unmet": ["std_pressure(s1)"]}
+{"name": "condition met", "kb": "FACT f: water(s1)\nFACT g: std_pressure(s1)\nRULE r: IF water(S) & COND std_pressure(S) THEN freezes(S)", "ask": "freezes(s1)", "status": "PROVEN"}
+{"name": "explicit negative fact refutes", "kb": "NOT n: flat(earth) @0.99", "ask": "flat(earth)", "status": "REFUTED", "conf": 0.99}
+{"name": "absence of proof is not refutation", "kb": "FACT f: round(earth)", "ask": "flat(earth)", "status": "UNKNOWN"}
+{"name": "negation contradiction", "kb": "FACT f: safe(x)\nNOT g: safe(x)", "ask": "safe(x)", "status": "CONTRADICTORY"}
+{"name": "functional contradiction", "kb": "FUNC boiling_point/2\nFACT a: boiling_point(w, 100)\nFACT b: boiling_point(w, 90)", "ask": "boiling_point(w,100)", "status": "CONTRADICTORY"}
+{"name": "exclusive predicates contradict", "kb": "EXCL solid/1 liquid/1\nFACT a: solid(w)\nFACT b: liquid(w)", "ask": "solid(w)", "status": "CONTRADICTORY"}
+{"name": "assumption is not a premise", "kb": "ASSUME a: p(x)\nRULE r: IF p(X) THEN q(X)", "ask": "q(x)", "status": "UNKNOWN"}
+{"name": "hypothesis is not evidence", "kb": "HYP h: p(x)", "ask": "p(x)", "status": "UNKNOWN"}
+{"name": "negative premise needs explicit NOT", "kb": "FACT f: bird(t)\nRULE r: IF bird(X) & NOT penguin(X) THEN flies(X)", "ask": "flies(t)", "status": "UNKNOWN"}
+{"name": "negative premise satisfied", "kb": "FACT f: bird(t)\nNOT n: penguin(t)\nRULE r: IF bird(X) & NOT penguin(X) THEN flies(X)", "ask": "flies(t)", "status": "PROVEN"}
+{"name": "unrelated query", "kb": "FACT f: p(x)", "ask": "p(y)", "status": "UNKNOWN"}
+{"name": "rule head variable must be bound", "kb": "RULE r: IF p(X) THEN q(Y)", "ask": "q(a)", "status": "ERROR"}

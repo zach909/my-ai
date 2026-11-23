@@ -1,0 +1,412 @@
+[
+  {
+    "id": "maestro",
+    "licence": "CC BY-NC-SA 4.0",
+    "use": "train",
+    "nc": true,
+    "sa": true,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "fma",
+    "licence": "Code MIT; audio is per-track Creative Commons (several variants incl. NC and ND)",
+    "use": "reference",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Per-track licences differ; ND/NC tracks must be filtered out. github.com is not reachable from the build sandbox, raw.githubusercontent.com is."
+  },
+  {
+    "id": "musiccaps",
+    "licence": "CC BY-SA 4.0 (Hugging Face dataset card)",
+    "use": "train",
+    "nc": false,
+    "sa": true,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "audioset",
+    "licence": "Labels CC BY 4.0; ontology CC BY-SA 4.0",
+    "use": "train",
+    "nc": false,
+    "sa": true,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "esp-library",
+    "licence": "Per linked dataset (varies)",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Pointer list, not data. Not downloaded."
+  },
+  {
+    "id": "macaulay",
+    "licence": "Contributor copyright; Cornell Lab terms of use apply",
+    "use": "none",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "skipped: catalogue says not ingestible (No open bulk download. Terms page could not be fetched (HTTP 404 on the URL tried), so the exact terms are UNVERIFIED; treated as not ingestible.)"
+  },
+  {
+    "id": "xeno-canto",
+    "licence": "Per recording: one of several Creative Commons licences (many are NC and/or ND)",
+    "use": "reference",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Licence varies per file; must be filtered. Not downloaded here."
+  },
+  {
+    "id": "inaturalist",
+    "licence": "Per observation: CC0, CC BY, CC BY-NC, or all rights reserved",
+    "use": "reference",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - API reference page returned HTTP 403 to the build sandbox; licence per record must be filtered. Not downloaded."
+  },
+  {
+    "id": "fsd50k",
+    "licence": "Dataset under Zenodo \"other (attribution)\" terms; each clip keeps its own CC licence (CC0, CC BY, CC BY-NC, CC Sampling+)",
+    "use": "train",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "esc50",
+    "licence": "CC BY-NC 3.0 (ESC-10 subset CC BY); per-clip attribution in LICENSE",
+    "use": "train",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 2,
+    "status": "obtained"
+  },
+  {
+    "id": "clotho",
+    "licence": "Tampere University licence: copy/use of captions for experimental and non-commercial purposes, copyright notice must be kept",
+    "use": "eval",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 2,
+    "status": "obtained"
+  },
+  {
+    "id": "deeply-nonverbal",
+    "licence": "CC BY-NC-ND 4.0",
+    "use": "eval",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - No-Derivatives: whether a trained model is a derivative is unsettled, so it is NOT used for training here; not downloaded."
+  },
+  {
+    "id": "nonspeech7k",
+    "licence": "UNVERIFIED (README URL tried returned HTTP 404)",
+    "use": "none",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "skipped: catalogue says not ingestible (Licence and size could not be verified, so it is not ingested.)"
+  },
+  {
+    "id": "ravdess",
+    "licence": "CC BY-NC-SA 4.0",
+    "use": "train",
+    "nc": true,
+    "sa": true,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - Acted emotions, North American English, 24 speakers; NC+SA. Not downloaded (size)."
+  },
+  {
+    "id": "librispeech",
+    "licence": "CC BY 4.0",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - Read speech only; not downloaded (size; no speech-recognition model is trained here)."
+  },
+  {
+    "id": "common-voice",
+    "licence": "CC0 (data); download requires agreeing to not re-identify speakers",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Needs interactive acceptance; no unauthenticated bulk URL found. Not downloaded."
+  },
+  {
+    "id": "ucd",
+    "licence": "Unicode License v3",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "emoji",
+    "licence": "Unicode License v3",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "cldr",
+    "licence": "Unicode License v3 for data (specification text is separately copyrighted)",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 1,
+    "status": "obtained"
+  },
+  {
+    "id": "storyweaver",
+    "licence": "Per story, mostly Creative Commons (CC BY 4.0 on most) - UNVERIFIED for this build",
+    "use": "none",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "skipped: catalogue says not ingestible (The site page returned no machine-readable terms; not ingested.)"
+  },
+  {
+    "id": "openalex",
+    "licence": "CC0",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - The anonymous daily budget for this network was already used up (HTTP 429), so nothing was fetched. Abstracts are inverted indexes and metadata quality varies."
+  },
+  {
+    "id": "arxiv",
+    "licence": "Metadata CC0; each paper has its own licence (many arXiv-only, non-redistributable)",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 4,
+    "status": "obtained"
+  },
+  {
+    "id": "pmc-oa",
+    "licence": "Per article",
+    "use": "reference",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Peer-reviewed but includes retracted papers; per-article licence must be filtered. Not downloaded."
+  },
+  {
+    "id": "s2orc",
+    "licence": "ODC-By 1.0 for the corpus (UNVERIFIED this session: page returned HTTP 403)",
+    "use": "none",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "skipped: catalogue says not ingestible (Needs an API key and large disk; page not retrievable here. Not ingested.)"
+  },
+  {
+    "id": "nasa",
+    "licence": "Mostly US-government works; some datasets carry third-party terms",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - A catalogue, not a corpus. Not downloaded."
+  },
+  {
+    "id": "nist-semi",
+    "licence": "UNVERIFIED: URL returned HTTP 404 to the build sandbox. NIST authored material is generally US-government public domain, with exceptions",
+    "use": "none",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "skipped: catalogue says not ingestible (The page itself did not load; not ingested.)"
+  },
+  {
+    "id": "mit-ocw",
+    "licence": "CC BY-NC-SA 4.0 (unless a page says otherwise; some third-party items excluded)",
+    "use": "eval",
+    "nc": true,
+    "sa": true,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - NC+SA, PDF extraction needed; not downloaded."
+  },
+  {
+    "id": "the-stack",
+    "licence": "Per file: permissive open-source licences; dataset terms of use",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Gated and far beyond local hardware; includes low-quality and some insecure code, so a quality/safety filter is mandatory. Not downloaded."
+  },
+  {
+    "id": "codesearchnet",
+    "licence": "Repo code MIT; dataset licence \"other\": each function keeps its repository licence",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - Not downloaded (size). Annotation set (99 queries) is the retrieval benchmark."
+  },
+  {
+    "id": "github-code-search",
+    "licence": "see codesearchnet",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Duplicate catalogue row; counted as a source but adds nothing new."
+  },
+  {
+    "id": "kernel-docs",
+    "licence": "GPL-2.0 (kernel licensing rules page); documentation files carry SPDX tags",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - GPL-2.0: derivative text carries copyleft. Not downloaded."
+  },
+  {
+    "id": "xv6",
+    "licence": "MIT",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 10,
+    "status": "obtained"
+  },
+  {
+    "id": "debian-sources",
+    "licence": "Per package (DFSG-free licences)",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - The API path tried returned 404; licence per package. Not downloaded."
+  },
+  {
+    "id": "fdroid",
+    "licence": "Per app (FOSS licences)",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Index only gives metadata and links; each app's source repo must be cloned. Not downloaded."
+  },
+  {
+    "id": "hf-datasets",
+    "licence": "Per dataset (see each card)",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Used in this build only as a download host and to read licence cards."
+  },
+  {
+    "id": "beir",
+    "licence": "Framework open source; each dataset keeps its own licence; the maintainers state they do not vouch for licences",
+    "use": "eval",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - The BEIR README warns users to verify each licence. Only SciFact (the smallest) is used."
+  },
+  {
+    "id": "msmarco",
+    "licence": "Non-commercial research purposes only; no licence or IP rights granted",
+    "use": "eval",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: too large or gated for this build - Strictly non-commercial; large; not downloaded. Treated as eval-only reference."
+  },
+  {
+    "id": "scifact",
+    "licence": "CC BY-NC 2.0 per the dataset authors (UNVERIFIED here: the repo README states no licence, and the Hugging Face BEIR copy is labelled CC BY-SA 4.0). The stricter reading is applied.",
+    "use": "train",
+    "nc": true,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 4,
+    "status": "obtained"
+  },
+  {
+    "id": "qasper",
+    "licence": "CC BY 4.0",
+    "use": "train",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 2,
+    "status": "obtained"
+  },
+  {
+    "id": "zenodo",
+    "licence": "Per record (see record metadata)",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Used as a download host for FSD50K, Clotho and RAVDESS metadata."
+  },
+  {
+    "id": "opencitations",
+    "licence": "CC0",
+    "use": "reference",
+    "nc": false,
+    "sa": false,
+    "accessed": "2026-11-21",
+    "files": 0,
+    "status": "not-fetched: reference/pointer source - Citation links only (no texts). Not downloaded."
+  }
+]
