@@ -1,6 +1,7 @@
 // A math exam that is different every time, so the AI cannot pass it by remembering it.
 //
-//   node benchmarks/math_exam.mjs [--solver reference|memorise|<path>|mesh|zip] [--n 200] [--dist dist]
+//   node scripts/build-backend.mjs
+//   node benchmarks/math_exam.mjs [--solver mesh|zip|reference|memorise|<path>] [--n 200] [--dist dist]
 //        [--seed N] [--recipe report.json] [--state file] [--no-state] [--json out.json]
 //
 // What happens in a run (see lib/mutating-tests.mjs and lib/math-problems.mjs):
@@ -14,9 +15,6 @@
 //   anchor     problems at fixed level-1 settings: comparable between runs, the number to watch across model changes
 //   adaptive   problems at the current level and weights: shows where the AI is weak now, NOT comparable between runs
 //   seen gap   score on taught problems minus score on fresh ones: large = remembering, not computing
-//
-// mesh and zip need the compiled TypeScript backend in dist/, which this repo no longer builds; pass your own solver
-// module with --solver path/to/solver.mjs for a model Node can call.
 //
 // --seed N replays a seed against the saved levels; --recipe replays a whole earlier exam (seed + levels + weights) and
 // changes nothing. --no-state (or a reference / memorise solver) reads and writes no state.

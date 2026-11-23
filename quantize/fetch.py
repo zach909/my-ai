@@ -1,14 +1,14 @@
 """Download the model from the project's GitHub repository."""
 from __future__ import annotations
-import hashlib, os, shutil, tempfile, urllib.request
+import hashlib, os, shutil, tempfile, urllib.parse, urllib.request
 
 DEFAULT_REPO = os.environ.get("NEUROCLAW_MODEL_REPO", "zach909/my-ai")
 DEFAULT_REF = os.environ.get("NEUROCLAW_MODEL_REF", "main")
-DEFAULT_PATH = "app/src/main/assets/onebrain/model.json"
+DEFAULT_PATH = "models && skills/onebrain/model.json"
 
 
 def default_url() -> str:
-    return f"https://raw.githubusercontent.com/{DEFAULT_REPO}/{DEFAULT_REF}/{DEFAULT_PATH}"
+    return f"https://raw.githubusercontent.com/{DEFAULT_REPO}/{DEFAULT_REF}/{urllib.parse.quote(DEFAULT_PATH)}"
 
 
 def download(url: str, dest: str, sha256: str | None = None, timeout: int = 60) -> str:
