@@ -11,6 +11,7 @@
 ### Background (Learning & Memory)
 - [[Quantization|Quantization]]
 - [[Elastic Value Budget|Elastic-Value-Budget]]
+- [[Wake-Sleep Islands|Wake-Sleep-Islands]] - Learning by growing new neurons
 - [[Extensions|Extensions]]
 - [[RLM|RLM]]
 - [[Empathy Engine|Empathy-Engine]]

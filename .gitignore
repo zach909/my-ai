@@ -28,3 +28,12 @@ __pycache__/
 training_data/knowledge/raw/
 training_data/knowledge/processed/
 training_data/knowledge/checkpoints/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Gradle caches and build output (the standalone Android app is built, never committed).
+.gradle/
+mobile/android-standalone/**/build/
+mobile/android-standalone/local.properties

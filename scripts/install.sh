@@ -223,6 +223,37 @@ generate_system_profile() {
     echo ""
 }
 
+# Download the model from GitHub and quantize it for THIS machine. The
+# technique (fp16 / classic 8-4-2 bit / binary / LittleBit 0.55-0.3-0.1 bpw) is
+# chosen from the detected RAM / VRAM by `python3 -m quantize`. Best-effort:
+# the exact model is always kept, and a failure here never aborts the install.
+install_model() {
+    echo -e "    ${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "    ${PURPLE}Model${NC} ${GRAY}Downloading and quantizing for this machine...${NC}"
+    echo -e "    ${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    if [ "${NEUROCLAW_SKIP_QUANTIZE:-0}" = "1" ]; then
+        echo -e "    ${GRAY}→ NEUROCLAW_SKIP_QUANTIZE=1 — skipped${NC}"
+        echo ""
+        return 0
+    fi
+    local py="python3"
+    if ! "$py" -c "import numpy" &> /dev/null; then
+        echo -e "    ${GRAY}→ Installing numpy (needed by the quantizer)...${NC}"
+        "$py" -m pip install --quiet --disable-pip-version-check numpy || {
+            echo -e "    ${YELLOW}Could not install numpy; skipping quantization.${NC}"
+            echo ""
+            return 0
+        }
+    fi
+    if "$py" -m quantize install --tier "${NEUROCLAW_QUANT_TIER:-auto}" --out-dir ".neuroclaw/model"; then
+        echo -e "    ${GREEN}✓ Model installed in .neuroclaw/model${NC}"
+    else
+        echo -e "    ${YELLOW}Model download/quantization failed; the app still works with its bundled model.${NC}"
+    fi
+    echo ""
+}
+
 # Function to build the application
 build_app() {
     echo -e "    ${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -608,6 +639,7 @@ main() {
     fetch_source
     install_dependencies
     generate_system_profile
+    install_model
     build_app
     create_start_script
     
