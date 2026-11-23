@@ -1,0 +1,49 @@
+# Hand-curated seed knowledge in the KL reasoning language (see reason/lang.mjs). Small on purpose: every line has a source
+# label, and the values are standard textbook / SI-definition facts. src= names the reference; confidence below 1 only where
+# a value depends on conditions. Review before extending: a wrong seed fact is worse than a missing one.
+
+# ---- general logic rules (domain independent) ----
+RULE logic.is_a_trans: IF is_a(X,Y) & is_a(Y,Z) THEN is_a(X,Z) @1 src=logic
+RULE logic.part_trans: IF part_of(X,Y) & part_of(Y,Z) THEN part_of(X,Z) @1 src=logic
+RULE logic.inherit: IF is_a(X,Y) & has_property(Y,P) THEN has_property(X,P) @0.95 src=logic
+FUNC boiling_point_c/2 freezing_point_c/2 atomic_number/2 speed_of_light_m_s/2
+
+# ---- taxonomy (biology / chemistry) ----
+FACT t1: is_a(dog, mammal) src=taxonomy:ITIS
+FACT t2: is_a(mammal, vertebrate) src=taxonomy:ITIS
+FACT t3: is_a(vertebrate, animal) src=taxonomy:ITIS
+FACT t4: is_a(sparrow, bird) src=taxonomy:ITIS
+FACT t5: is_a(bird, vertebrate) src=taxonomy:ITIS
+FACT t6: has_property(animal, needs_energy_intake) @0.99 src=biology:textbook
+FACT t7: has_property(mammal, produces_milk) @0.99 src=biology:textbook
+FACT t8: has_property(bird, lays_eggs) @0.99 src=biology:textbook
+FACT t9: is_a(helium, noble_gas) src=IUPAC:periodic-table
+FACT t10: is_a(noble_gas, element) src=IUPAC:periodic-table
+
+# ---- physics / chemistry constants (SI 2019 definitions, NIST CODATA) ----
+FACT p1: speed_of_light_m_s(vacuum, 299792458) src=BIPM:SI-brochure-9 ev=definition
+FACT p2: avogadro_constant(per_mol, 6.02214076e23) src=BIPM:SI-brochure-9 ev=definition
+FACT p3: freezing_point_c(water, 0) @0.99 src=NIST:webbook ev=measurement
+FACT p4: boiling_point_c(water, 100) @0.99 src=NIST:webbook ev=measurement
+FACT p5: atomic_number(hydrogen, 1) src=IUPAC:periodic-table
+FACT p6: atomic_number(helium, 2) src=IUPAC:periodic-table
+FACT p7: atomic_number(carbon, 6) src=IUPAC:periodic-table
+FACT p8: atomic_number(oxygen, 8) src=IUPAC:periodic-table
+FACT p9: pressure(sample1, standard_atmosphere) src=worked-example
+FACT p10: temperature_below_freezing(sample1) src=worked-example
+FACT p11: is_water(sample1) src=worked-example
+RULE phys.freeze: IF COND pressure(S, standard_atmosphere) & is_water(S) & temperature_below_freezing(S) THEN solid(S) @0.99 src=thermodynamics
+EXCL solid/1 liquid/1 gas/1
+DEF d.freeze: Water freezes at approximately 0 degrees Celsius at standard atmospheric pressure; the value shifts with pressure and dissolved solutes.
+
+# ---- electronics ----
+FACT e1: ohms_law(v_equals_i_times_r, linear_resistor) src=electronics:textbook
+FACT e2: is_a(diode, semiconductor_device) src=electronics:textbook
+FACT e3: is_a(transistor, semiconductor_device) src=electronics:textbook
+FACT e4: is_a(semiconductor_device, electronic_component) src=electronics:textbook
+FACT e5: has_property(electronic_component, needs_rated_voltage) @0.95 src=electronics:textbook
+
+# ---- logic of evidence (how claims may be used) ----
+# An unsupported assumption must never become a premise: ASSUME/HYP lines are stored but not reasoned with.
+ASSUME a1: heavier_than_air(dark_matter_cloud)
+HYP h1: has_property(dark_matter, interacts_only_gravitationally)

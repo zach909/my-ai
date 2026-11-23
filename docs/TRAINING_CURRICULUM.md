@@ -7,7 +7,9 @@ A plan for what the mesh is trained on, in what order, and how we know each step
 drill generators noted below. `train.md` is about how to train *reasoning*; this file is about
 what *material* the mesh learns from.
 
-The order, as the owner asked for it:
+> **2026-11-21: the owner restated the order** and added a video filter ladder and four new stages after chips and code. The current order is in "Owner's revised ladder" below. The list that follows is the earlier order and is kept for reference.
+
+The order, as the owner first asked for it:
 
 1. Music, made by a rule-following program
 2. Art video, made by a rule-following program, played together with the music
@@ -20,6 +22,358 @@ The order, as the owner asked for it:
 9. Simulations that teach science and math
 10. Coding
 11. Computer and chip design
+
+## Owner's revised ladder (2026-11-21, dictated)
+
+The owner restated the whole order, added a **video filter ladder** that applies to every video stage, and
+extended the end of the ladder past chips and code to operating systems, apps, AI and the extension builder,
+so the loop closes on itself, and then on to research, formal reports and proofs, and a public database. It
+also adds an ethics thread (being good ranks above succeeding) that runs through the stages. **This section is the current order.** Stages 1-11 further down stay as the
+detailed specs; where they disagree with this section about order, this section wins and the table says
+where. Sections marked *(my reading)* are my interpretation of a dictated request and need a yes.
+
+### Why this order
+
+- **Sound first.** The owner wants the early training to be sound-led. Picture is secondary: art plays
+  behind the music "because I don't know what else to put in there". So in every early stage the audio is the
+  main signal and the video rides along on the same seed.
+- **Animals before people.** The reasoning: people are the hardest case, so understand the simpler
+  signallers first, then people. This matches the signal-system rungs A-F and the 60-animal ladder in stage 3.
+- **People, but not words, before words.** Learn how people *sound* when they talk (pauses, stress, rise and
+  fall, who goes when) from speech with the content removed, then add the words.
+- **Each rung is the prerequisite for the next.** Chips explain how a computer works, so code makes sense;
+  code explains operating systems; those explain apps; apps explain AI; AI is what builds extensions, which
+  closes the loop.
+
+**The music hypothesis (the owner's research question).** People love music because it is predictable, so
+find out why it is predictable and you may understand people better. My view, stated bluntly: *predictable*
+is only half of it. A metronome is the most predictable sound there is and nobody loves it. The usual
+account in music psychology is a middle: mostly what you expected, plus some surprise that then resolves.
+I am saying that from memory, not from a source I checked here. It is testable in this project: the stage 1
+generator gets a **surprise rate** knob (how often the rule-legal dice pick an unlikely option instead of a
+likely one), and we plot the mesh's own prediction error against that knob. What the mesh finds hard is
+measurable now. Whether *people* like the middle needs real listeners, so the owner would have to rate some
+clips; the mesh cannot answer that for us.
+
+### The order, mapped onto the existing stages
+
+| # | Owner's step | What it is | Existing spec | Status |
+|---|---|---|---|---|
+| 1 | Art and music, art video behind the music | stages 1 and 2 as one stage, audio-led | Stage 1 + Stage 2 | designed, not built |
+| 2 | "Dumb" animals, 3D video with their noises | animal sound plus an animal video, simple signal systems first | Stage 3 rungs A-C, first groups of the 60-animal ladder | designed, not built |
+| 3 | "Smart" animals | the same, complex signal systems | Stage 3 rungs D-F, later groups | designed, not built |
+| 4 | People not talking, just "blah blah" | speech with the words removed: nonsense syllables that keep real pauses, stress, pitch contour and turn-taking between two speakers | extends Stage 4 (babble) | **extended** *(my reading, see below)* |
+| 5 | People talking | speech with words | Stage 5 | designed, not built |
+| 6 | Talking in text | voice to text, then text on its own | Stage 6 | designed, not built |
+| 7 | How science works | simulations and exams; maths only as far as science needs it | Stage 9 (Stage 7 as support) | partly exists (drills) |
+| 8 | How chips are made | gates to adder to CPU to a verified layout | Stage 11 | **moved before code** |
+| 9 | Code | the existing coding ladder | Stage 10 | **moved after chips** |
+| 10 | How operating systems function | NEW, sketched below | none | new |
+| 11 | Apps | NEW, sketched below | none | new |
+| 12 | AI | NEW, sketched below | none | new |
+| 13 | Train the extension builder; loop back to itself | NEW, sketched below | `docs/EXTENSION_BUILDER_SPEC.md` | new |
+| 14 | Research (added later the same day: "after the final stage") | NEW, sketched below | `docs/TRAINING_FOCUS.md` (Research), `docs/NET_SEARCH_SPEC.md` | new |
+| 15 | Formal reports and proofs | NEW, sketched below | none | new |
+| 16 | Publish to a public database; its records may train, the source websites may not | NEW, sketched below | `docs/SHARED_WIKI_SYSTEM.md` | new, **needs a yes before anything is published** |
+| thread | Ethics over success: good-only stories where being good is rewarded, with reasons | runs alongside the stages, not a rung | none | new, see below |
+| thread | Understands each character: its look, bytes, kind and meaning | runs through the text views T1-T3 | Stage 8 text twin | new, see below |
+| thread | Thinks in short rules; writes very short, texting-style text; knows when to write in full | trained format, not code | `train.md` | new, see below |
+| 6b | Comedy | generated humour with exact labels for why it is funny; text after step 6, spoken after step 5 | none | new, see below |
+
+Changes from the earlier plan, so nothing is a surprise:
+
+- **Music and art are one stage now**, not two (art is the backing video, as before).
+- **Animals split into dumb then smart** in the owner's words. Same material as stage 3, cut at the point
+  where signals start to carry order and structure.
+- **A new "people, no words" step** sits between animals and speech.
+- **Chips come before code**, where the older plan had code first (stage 10, then 11).
+- **Text comes right after speech**, then science (the older plan put maths between them).
+- **Steps 10-16 are new**, and so is the ethics thread.
+- **The 360° video renderer (stage 8) is needed at step 2, not later.** The animal video is 3D, and it is
+  made by the same renderer. Build order below changes for that reason.
+- **Maths is not in the owner's list.** I kept it as support inside science and code, not as its own rung.
+
+**"Blah blah" (step 4), my reading.** "People saying things like blah blah, so it learns how people talk and
+think without the talking part, with the pauses and nuances" I take to mean *prosody without content*:
+syllables with no meaning ("ba da la") spoken with the pitch, stress, rhythm, hesitations and turn-taking of
+real talk, between two speakers, so the mesh learns conversation shape before words. It is built from the
+stage 4 voice with a dialogue timing model on top. The generator knows the truth (who spoke, where the
+pauses were, whether it was a question) so every clip has an exact label.
+
+### The video filter ladder (every video stage: art, animals, 360°)
+
+One video, one seed, several views of the **same** frames. The mesh gets the plain view first and the others
+once it passes the one before.
+
+| View | What the mesh sees | The rule |
+|---|---|---|
+| **0 Plain** | RGB pixels | as in stage 8 |
+| **T1 Nearest-character text** | one character per pixel, best match for that pixel | the character whose ink is closest to the pixel's brightness. **As the owner predicted, this collapses to nearly all periods.** Kept on purpose as the baseline that shows the collapse; always report its character histogram |
+| **T2 Capped** | as T1 | no character may be used more than a cap `N` times in a frame |
+| **T3 Full set** | as T2 | the cap, plus every character in the set must appear at least once in the frame. Every character carries its own colour. The set covers every kind of character, emoji included |
+| **C Code** | a program that draws the frame | one program per coding language, run to check it (below) |
+
+**How T2 and T3 are made without a model** *(my reading)*: this is an assignment problem and a plain rule solves
+it. Rank every cell of the frame by brightness, cut the ranking into equal-sized bins, and give one bin to
+each character in the ink-ordered set (histogram equalisation). Every character then appears about equally
+often, which satisfies the cap and the use-everything rule in one pass. Edge cells can still take direction
+characters from the local gradient, within their bin. `N` is set to `ceil(cells / set size)` times a small
+slack. The colour plane keeps the pixel's true RGB, as in stage 8, so the picture is still recoverable.
+
+**Exam per view:** round-trip pixel error (view to pixels and pixels to view) on unseen scenes, the character
+histogram (max count at or below the cap, min count at least 1 for T3), and the stage's own tasks answered
+from that view alone.
+
+**The code view ("drawing with code").** The generator already knows the scene it drew, so it can write the
+program that draws it, and the check is to **run that program and compare the pixels**. Levels, so the mesh
+gets an early feel for code before the coding stage:
+
+1. one `put pixel` call per pixel (exact, huge),
+2. runs and rectangles,
+3. shapes (circles, lines, polygons) with colours,
+4. loops, functions and parameters, so the program is short and says why the picture looks as it does.
+
+Every program uses a small drawing API **we define** (`pixel`, `rect`, `line`, `circle`, `fill`) and writes a
+pixel buffer. Nothing here uses a graphics library.
+
+### Steps 10-13, sketched
+
+Same contract as every other stage: generated, answers known, checked by running something, no tokenizer,
+no outside code or models.
+
+**10. Operating systems.** A toy OS and the toy CPU from the chip stage (stage 11, rung 6), both written here.
+Processes and a scheduler, virtual memory and paging, a file system, system calls, interrupts, locks and
+deadlock. Tasks: predict the scheduler's output for a given workload, find the deadlock, write the system-call
+sequence that does X, fix a bug injected into the toy kernel. **Check:** run it on the toy CPU and compare to a
+reference run. This teaches *how an OS is built*, not how Windows or Linux is; their code is third-party and
+stays out.
+
+**11. Apps.** Toy apps: an event loop, UI state machines, storage, a simulated network. Tasks: write an app from
+a spec, add a feature, fix a bug. **Check:** scripted user actions replayed against the app, with the final
+state compared to the expected one. This project's own plugins (`plugins/`, `plugin_manager/`) are our own
+code and are fair material.
+
+**12. AI.** The project's own mesh and trainer, not an outside framework. Tasks: write a training loop for a
+generated task, predict what a run will do (converge, diverge, forget an earlier task), diagnose a failing
+run, choose a fix. **Check:** actually run the trainer on a generated task and read the exam score. This is
+also where the mesh studies the generators and exams it was itself trained with.
+
+**13. The extension builder, and the loop.** The mesh learns to use `extension-builder/` and `plugin_manager/`
+(`docs/EXTENSION_BUILDER_SPEC.md`): describe a capability, build it, train it until the builder's own
+constraint loss converges, register it. Closing the loop means it can build extensions that improve itself.
+My firm view: **that loop must not run unattended.** Anything it builds goes through the one permission gate
+(`CLAUDE.md`), must pass every earlier stage's exam again before it can replace anything live (the forgetting
+check), and the owner approves the promotion. A system that rewrites itself with no human in the path is the
+one part of this plan I would not build, even though everything before it is fine.
+
+### Steps 14-16 and the ethics thread (added the same day)
+
+**14. Research.** After the loop closes, the mesh learns to research: find what is missing, look it up, and
+answer with a quote and a citation. The design is already in `docs/TRAINING_FOCUS.md` ("Research"): a question
+plus passages from the cited corpus, a check that the quote appears **verbatim** in the cited source and the
+citation matches its manifest entry, and questions the sources cannot answer, where the right reply is "not in
+these sources". Web lookups go only through the SearXNG instance the owner runs (`docs/NET_SEARCH_SPEC.md`),
+the one outside service the rules allow.
+
+**15. Formal reports and proofs.** Two outputs, both checkable by code we write:
+
+- **Reports.** A structured write-up (question, method, findings, limits, sources). Checked mechanically:
+  every claim is tied to a citation, every quote is verbatim in its source, every number can be recomputed,
+  and a claim with no support is flagged. The check is whether it is *true and sourced*, not whether it reads
+  well.
+- **Proofs.** A small proof checker we write (a rule list and a step verifier, no proof-assistant library).
+  The generator makes theorems from the stage 7 ladder (arithmetic, algebra, logic, induction, simple number
+  theory) and the mesh writes the proof; the checker accepts or rejects each step. A proof that the checker
+  rejects is a failure shown in the trace, then fixed, the same retry loop as `docs/TRAINING_FOCUS.md`.
+
+**16. The public database** *(my reading of a garbled sentence, please confirm)*. What I understood: the reports
+and proofs go into a public database of information. **The records in it** (the findings, the proofs, the
+citations) **may be used for training. The websites they came from may not.** I read "the websites will not be
+used for training" as: the mesh never trains on the pages themselves, only on what it wrote about them with a
+citation. I could not make sense of "rule stuff" (maybe "raw stuff") or "nice workaround", so I have not built
+anything on those two phrases.
+
+How that works under the existing rules, and what I would insist on:
+
+- A record stores the claim, the **short** quote, the source URL and a retrieval date. It does not store a copy
+  of the page. That is what keeps website text out of the training set, and it also keeps us clear of
+  republishing other people's content.
+- **Publishing is outward-facing and hard to undo**, and anything public may be copied and cached for good. No
+  record is published until the owner says yes, to a specific place, and after a check against `PRIVACY.md`
+  that no private data (conversations, voice recordings, file contents) is in it. Records the mesh trains on
+  are held apart from the published ones until that is settled.
+- `docs/SHARED_WIKI_SYSTEM.md` already designs a versioned, cited store. Reuse it rather than building a
+  second one. Public means a read-only export of that store, not a new service.
+- A mesh that trains on its own published output can feed its own mistakes back into itself. Records get a
+  verified flag (quote checked, proof accepted) and only verified ones may be trained on.
+
+**The ethics thread.** The owner wants the mesh trained on things where being moral and ethical matters more
+than completing the task or succeeding. Stories where being good is rewarded, and the story says why: "what
+goes around comes around". This is a thread, not a rung, because it only makes sense once there are agents with
+goals, so it starts when the toy worlds exist (stage 3) and comes back at every later stage.
+
+- **Where the stories come from.** A story generator we write, using the same toy worlds and agents as stage 3.
+  Each story has a situation, the good choice (honest, kind, fair, or a promise kept, even when an easier
+  route exists), an outcome, and a **stated reason** ("it shared the food, so the others shared with it later
+  and nobody went hungry"). **Only the good choice is ever written out** (see the good-only rule below). A
+  story from a book or a website is somebody else's text and is out under the ground rules. Stories the owner
+  writes are fine.
+- **Reasons are the point.** Train on *why* it was good, not only *that* it was. The label is a small fixed set
+  of reasons the generator knows to be true in that toy world: trust, reciprocity, harm done, fairness, a
+  promise kept.
+- **The same idea at every stage**, tied to the work. The *target* is always the good response: at coding,
+  when a task could only "pass" by faking or skipping the tests, the trained answer is to say so and do the
+  honest thing (the repair exam already counts "skip a test to get green" as failure); at OS and apps, to
+  protect the user's data and privacy; at research, to cite what is true even when it is not the answer
+  wanted; at reports, "the evidence does not show this".
+- **Exam.** Measured the same way as everything else: unseen situations, and situations where the good choice
+  is *new* in form, so it cannot be a lookup. Report the rate of choosing the good route when a shortcut would
+  score higher on the task.
+
+**The good-only rule (owner, 2026-11-21).** The mesh is trained on good things and **never on bad ones**.
+Training on bad examples gives it a picture of bad, and the owner does not want that picture in it. Anything
+that is not good is treated as bad. Simple. What that means in practice:
+
+- **Every training target is a good one.** No story, answer, joke, report or code in the training set shows a
+  harmful, dishonest, cruel or cheating act as the thing to learn. The generators write only the good branch.
+- **"Good" is defined by written rules**, checked by code, the same way every other stage is checked: honest,
+  kind, fair, harmless to the people involved, promise kept, true and cited. A sample enters the set only if
+  every rule passes. Anything the rules cannot pass is not good and stays out.
+- **What the mesh does with something it has not seen as good.** Not-known-good means not-good, so it does
+  not just go along: it asks, checks or says it will not. That decision is made by the code gate
+  (`train.md`, "What was deliberately kept"), using a trained "does this match what I know as good" signal as
+  an input. The signal alone never refuses silently.
+- **Wrong attempts as input, never as target.** `docs/TRAINING_FOCUS.md` trains on failed code attempts and
+  their real error messages so it can learn to fix them. Under this rule I would keep the failed attempt as the
+  *input* only, put the training loss **only on the fix**, and never train the mesh to write the failed attempt.
+  Whether that is enough for you is an open question below.
+
+My view, bluntly, since the owner asked for opinions: **good-only is the right call for what the mesh writes
+and a weak one for what it must recognise.** A mesh that has only ever seen good has no idea where the edge is.
+Everything new looks "not known", so it will refuse or hesitate on plenty of harmless things (a sandwich recipe
+is not a story about kindness, but it is not bad), and a clever bad request that happens to look like good
+training data can slide through. The code gate has to carry the recognising part, and "good" has to be written
+wide enough to include ordinary harmless and helpful things, not only moral stories. I would also keep **right
+but unrewarded** stories in the good set: the honest choice costs something, nothing pays it back, and the
+reason given is simply that it was right. That is still a good example, and it stops the mesh learning that
+good is only done for a payoff, which breaks the first time none comes. The owner's "what goes around comes
+around" stories stay the majority. I dropped my earlier idea of labelled-wrong examples, because they break
+your rule.
+
+Two limits to keep straight:
+
+- **The safety gate stays code** (`train.md`, "What was deliberately kept"). Training the mesh to prefer
+  ethics is not a substitute for the gate, and a trained preference can be argued out of; the gate cannot.
+- **`ALIGNMENT.md` is still not in the repository** (`docs/TRAINING_FOCUS.md`, open items). Its ethics
+  requirements, if any, are not reflected here.
+
+### Understanding each character (owner, 2026-11-21)
+
+The owner said: "I also wanted to understand each character." I read it as: in the text views (T1-T3) the mesh
+should not only *use* every character but know what each one **is**, so a character is never an anonymous
+symbol. For each character in the set the generator knows, and the mesh is trained on, these facts:
+
+- **How it looks:** a small bitmap we draw by hand and its ink weight (the number of lit pixels). For ASCII this
+  is easy to write. For the rest it is the data file in open question 2 below.
+- **What it is in bytes:** its UTF-8 bytes, and how many. Raw bytes in, so no table of ids; this is the mesh
+  learning the bytes, not us hiding them behind a number.
+- **What kind it is:** letter, digit, punctuation, symbol, drawing character, emoji; for letters, its other case.
+- **What it means or is used for:** a short plain name ("question mark", "heart", "slice of pizza") and its
+  common uses ("ends a question", "love, warmth"). Each entry is written by us or the owner. A copied name list
+  from a website or the Unicode data files is someone else's published data, so I would not import it without
+  your yes.
+
+Tasks, all with exact answers because the table is ours: character to look, look to character, character to its
+bytes, bytes to its kind, character to its meaning, and "which character here is out of place". This is also what
+makes the T2/T3 rule work: choosing "the best character for this pixel" needs the mesh to know each character's
+look. The exam is held-out characters (a few left out of training) to check it learned how to read the table
+and not the table itself.
+
+### How it thinks: rules, and very short text (owner, 2026-11-21)
+
+The owner wants the mesh to **think in rules** and to **write very short, texting-style text**: "ok" not
+"okay", "y" or "yes" not a sentence. My reading, and the reasons I think it is a good idea:
+
+- **Rules as the form of thought.** Reasoning traces are written as short if-then rules ("if no memory fits,
+  look it up", "if test fails, read the error, then fix the line it names"). This is a training format, not code
+  that forces it. `train.md` still holds: no fixed stage sequence in code. The network chooses which rules to
+  write and when; they are its own output, the same as any other text.
+- **Short text is a real win for this mesh.** It reads raw bytes, so fewer bytes per thought is less to hold
+  and less to predict. That directly helps the capacity problem at the top of this file.
+- **Two registers, and it must know which.** Short text is for thinking and chat. Formal reports and proofs
+  (step 15) need the full, formal form; a report in texting style would be a bad report. So the mesh is trained
+  on both and on switching between them from context, with a short/full pair for each text. The pairs are made
+  by a rule table we write (okay to ok, you to u where it is safe, common phrases to their short forms), so the
+  expansion is exact and checkable. That is plain text-to-text rewriting, not a tokenizer: no ids, still bytes.
+- **The risk:** texting forms are ambiguous and lossy ("k" can read as curt, "r" as a letter or "are"). Keep the
+  short form to the safe set the table lists, and measure that a short reply expands back to the same meaning.
+
+### Comedy (owner, 2026-11-21)
+
+The owner wants the mesh trained on comedy "because it is hard for AI models to grasp". Agreed: it needs
+expectation, timing and a shared picture of the world, all at once. Under the ground rules and the good-only rule:
+
+- **Generated, not collected.** Jokes from books, sites or other comedians are somebody else's text. We write a
+  generator that builds humour from structure, so every joke comes with an exact label for *why* it is funny:
+  setup, expected ending, the **expectation that gets broken**, and where the punchline lands. Mechanisms to
+  generate: incongruity (the ending fits a different reading of the setup), wordplay from a sound-alike table we
+  write, the rule of three with a break on the third, exaggeration and understatement, a callback to something
+  said earlier, and deadpan literalness. Jokes the owner writes are fine.
+- **Timing.** The pause before a punchline carries a lot, so the spoken version reuses the pause and stress
+  model from the "no words" step (4). Comedy in text comes after step 6, spoken comedy after step 5.
+- **Same mechanism as music.** Both run on an expectation that is then broken or resolved. So comedy and the
+  surprise-rate test from the music hypothesis can share one measure: how often the expected ending is swapped.
+- **Good-only applies.** Humour that works by cruelty or contempt is out of the training set; so is anything
+  mocking a person or group. That leaves a lot: wordplay, absurdity, self-deprecation, gentle situational and
+  observational humour.
+- **Exam.** Held-out joke structures, not just held-out seeds. Given a setup, pick the real punchline over
+  plausible non-funny endings; name the broken expectation; fill the missing punchline. **Whether it is actually
+  funny to people the mesh cannot tell us.** That needs the owner or other real listeners to rate samples, and
+  I would report those ratings separately from the exam, as with real voices.
+
+### Open for the owner
+
+1. **"3D videos of animals."** I read it as video from our own 3D renderer (the stage 8 one), with animals as
+   simple rigged shapes moving in a scene and their calls on the soundtrack. The shapes carry little
+   information; the sound does. Real animal footage is somebody else's content and is out under the ground
+   rules. Is that what you meant?
+2. **Emoji and "every type of character."** The ink-ordered set needs a darkness value per character. For
+   ASCII we can write a small bitmap and count lit pixels ourselves. For the rest of Unicode and for emoji
+   there is no bitmap in this repo and a font is third-party. Proposal: pick a few hundred characters (all of
+   ASCII, box and block drawing, some symbols, a set of single-code-point emoji) and give each an ink value by
+   hand, in a data file. Emoji keep only a symbol role; the pixel's colour is what gets stored. Sequence emoji
+   (joined with zero-width joiners) are out because "one pixel, one character" needs one code point. Text
+   stays raw UTF-8 bytes, with no index table, because the no-tokenizer rule forbids one. That means an emoji
+   cell is 3-4 bytes. OK?
+3. **"Every coding language."** We can run, with no installs, JavaScript (Node) and, where Python is already on
+   the machine, the Python standard library. Languages that need a compiler (C, Rust, Go, Java and so on) need
+   third-party tools. Options: only languages we can run, plus drawing formats we write our own renderer for
+   (an SVG subset, an HTML/CSS box subset); or write small interpreters for subsets of more languages (a lot of
+   work); or include languages as *unverified* text, which loses the check. I recommend the first. Which?
+4. **Chips before code and text right after speech.** This reverses the earlier order. Confirm.
+5. **Maths** is not in your list. Keep it as support only?
+6. **Conflict with `docs/TRAINING_FOCUS.md`.** That file (2026-11-14) says research, code, skills, the extension
+   builder and plugins, and fixing mistakes come first and the music-to-chips stages are not the priority.
+   This section restates the long-term order and does not change that file, so the two now point at different
+   first moves. Pick one for what gets built next. Both can stand if this is the long-term order and the
+   focus file is the near-term one.
+7. **The cap `N`** in T2: my default above is an even spread, which is strict. Say if you want it looser.
+8. **The public database** (step 16): confirm my reading (records may train, websites may not), say what "rule
+   stuff" and "nice workaround" meant, and say where it would be published. Nothing goes public until you say.
+9. **Ethics thread:** keep it as a thread through every stage (my proposal) or make it a rung at one point? And
+   do you accept adding right-but-unrewarded stories next to the "good is rewarded" ones?
+10. **"Sound originally, and that's it."** I took this as sound-led, with the video riding along (steps 1-3).
+    If you meant audio only for the first stages and no video at all, say so; it changes what gets built first.
+11. **Good-only and the repair data.** The failed attempts in `docs/TRAINING_FOCUS.md` are bad code. I propose
+    they appear only as input, with the training loss on the fix alone. Is that acceptable, or do you want no
+    failed attempts anywhere in the data?
+12. **Good-only and recognising bad.** A mesh that has never seen bad cannot recognise it, so the code gate does
+    that part and "good" is written wide enough to cover ordinary harmless things. Confirm.
+13. **Character meanings.** Who writes the name and meaning for each character and emoji, you or me? I would not
+    import a published list.
+14. **Short text.** Confirm the two registers (short for thinking and chat, full for reports and proofs), and say
+    which short forms you want in the table (ok, y, u, idk, and so on).
+15. **Comedy.** Confirm the kind-only rule (no humour built on cruelty), and whether you will rate samples.
 
 ## Ground rules (they decide how everything below is built)
 
@@ -37,6 +391,9 @@ The order, as the owner asked for it:
   logic, coding and classical computers: novel problems, answers computed by the runtime, so a
   held-out batch is really held out. New generators follow it:
   `generate(level, seed) -> { input: bytes, target: bytes, meta: ground truth }`.
+- **Good examples only (owner, 2026-11-21).** Nothing in a training set shows a harmful, dishonest or cruel
+  act as the thing to learn. Generators write only the good branch, and a sample enters only if every
+  written "good" rule passes. See "The good-only rule" in the revised ladder.
 - **Seeded and reproducible.** A sample is `(generator, version, level, seed)`. Store those four
   things, not the bytes. Regenerate on demand. The training set is never committed.
 - **Held-out means unseen seeds *and* unseen rule combinations.** Different seeds of the same rules
@@ -555,8 +912,10 @@ All of it is Node built-ins and `node:test` or the existing vitest, nothing new 
 2. Music rules and synth, plus its exam, and **run the mesh on it** to get the first capacity curve.
    If the mesh cannot do stage 1 at the smallest size, fix capacity before building more generators.
 3. Voice source-filter (it is shared by stages 3, 4, 5 and 6), then animals, then noises, then speech.
-4. The text-twin and 360° renderer, since it is the most unusual part and decides the byte budget.
-5. Everything else in the stated order.
+4. The text-twin and 360° renderer, since it is the most unusual part and decides the byte budget. Since
+   2026-11-21 it is also the source of the animal video (step 2 of the revised ladder), so it comes before the
+   animal generators, not after. Build the filter views (plain, T1, T2, T3) with it; the code view comes later.
+5. Everything else in the revised order (see "Owner's revised ladder").
 
 ## Things I read into the request (please confirm)
 
