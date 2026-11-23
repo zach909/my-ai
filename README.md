@@ -41,3 +41,10 @@ Native Android implementation of **NeuroClaw** — a local-first AI agent powere
   - Compose Canvas 2D 3D-projected 6-rise/6-dip Coral Crown Ring around the Shoggoth mascot with animated green skill tentacles for active mesh regions.
 - **Optional PC Sync (`SyncClient.kt`, `SettingsScreen.kt`)**:
   - Everything runs locally on-device without a server; optionally connect to a NeuroClaw PC host via `/api/phone-sync` and `/api/captures`.
+
+## Atlas: a map of anything (`atlas/`)
+
+Put data in space so redundant data collapses and good data is kept: notes, files of any kind, numbers about anything
+(how many people liked a video, a smell, a temperature), depth from two cameras. `install.sh` installs it as
+`neuroclaw-atlas` with a private data folder; live cameras stay off until you run `neuroclaw-atlas capture on`, and nothing
+is started, scheduled or enabled at boot. See [`atlas/README.md`](atlas/README.md). Tests: `python3 -m unittest discover -s tests/atlas`.

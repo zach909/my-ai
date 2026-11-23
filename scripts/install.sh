@@ -626,6 +626,52 @@ install_osai() {
     echo -e "    ${GRAY}Next: osai status${NC}"
 }
 
+# Atlas: a map of anything (atlas/). Put data in space so redundant data collapses and good data is kept; ask it what it
+# holds, where and when. This installs a launcher (`neuroclaw-atlas`), a private data folder and the agent tool
+# description. It starts NOTHING: no daemon, no schedule, no autostart, nothing at boot. Live cameras stay OFF until
+# the user runs `neuroclaw-atlas capture on`. NEUROCLAW_SKIP_ATLAS=1 skips it.
+ATLAS_BIN_DIR="${ATLAS_BIN_DIR:-$HOME/.local/bin}"
+
+install_atlas() {
+    [ "${NEUROCLAW_SKIP_ATLAS:-0}" = "1" ] && return 0
+    if [ ! -f "atlas/atlas_core.py" ]; then
+        echo -e "    ${YELLOW}atlas/ is missing; skipping the map.${NC}"
+        return 0
+    fi
+    local py home
+    py="$(command -v python3 2>/dev/null || true)"
+    if [ -z "$py" ]; then
+        echo -e "    ${YELLOW}Python 3 was not found; skipping the map.${NC}"
+        return 0
+    fi
+    home="${NEUROCLAW_ATLAS_HOME:-$HOME/.neuroclaw/atlas}"
+    mkdir -p "$home" || return 0
+    chmod 700 "$home" 2>/dev/null || true
+    # Cameras are off until the owner turns them on. A reinstall never turns them off or on again.
+    if [ ! -f "$home/config.json" ]; then
+        printf '{"capture": false}\n' > "$home/config.json" || return 0
+        chmod 600 "$home/config.json" 2>/dev/null || true
+    fi
+    mkdir -p config/tools 2>/dev/null && cp atlas/tool.json config/tools/atlas.json 2>/dev/null || true
+    mkdir -p "$ATLAS_BIN_DIR" || return 0
+    {
+        printf '#!/bin/sh\n'
+        if [ -n "${NEUROCLAW_ATLAS_HOME:-}" ]; then
+            printf 'NEUROCLAW_ATLAS_HOME="${NEUROCLAW_ATLAS_HOME:-%s}"; export NEUROCLAW_ATLAS_HOME\n' "$NEUROCLAW_ATLAS_HOME"
+        fi
+        printf 'PYTHONPATH="%s${PYTHONPATH:+:$PYTHONPATH}"; export PYTHONPATH\n' "$(pwd)"
+        printf 'exec "%s" -m atlas "$@"\n' "$py"
+    } > "$ATLAS_BIN_DIR/neuroclaw-atlas" || return 0
+    chmod +x "$ATLAS_BIN_DIR/neuroclaw-atlas" 2>/dev/null || true
+    echo -e "    ${GREEN}✓ Atlas (a map of anything) installed as $ATLAS_BIN_DIR/neuroclaw-atlas${NC}"
+    echo -e "    ${GRAY}Your map lives in $home (private to you). Live cameras are off.${NC}"
+    case ":$PATH:" in
+        *":$ATLAS_BIN_DIR:"*) ;;
+        *) echo -e "    ${YELLOW}Add $ATLAS_BIN_DIR to your PATH to use \`neuroclaw-atlas\`.${NC}" ;;
+    esac
+    echo -e "    ${GRAY}Next: neuroclaw-atlas put hello some words   then   neuroclaw-atlas find hello${NC}"
+}
+
 # AI OS: the four layers (button clicker, app commands, kernel commands, auto skill maker) that KOS
 # (kernal-os, `kos aios`) drives. Report only; this changes nothing on the computer.
 show_ai_os_layers() {
@@ -660,6 +706,7 @@ main() {
     esac
     
     install_osai
+    install_atlas
     install_kos
     show_ai_os_layers
     show_completion

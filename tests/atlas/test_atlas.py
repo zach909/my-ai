@@ -1,0 +1,515 @@
+"""Atlas for NeuroClaw / OpenBrain (atlas/): a map of anything.
+
+Run: ``python3 -m unittest discover -s tests/atlas``
+
+What is tested here, and what is not. Tested with scenes whose answer is known: depth from two picture files, the
+store's atomic writes and permissions, every command, the tool description an agent reads, and the promises that matter
+for privacy (no picture is ever written, nothing touches the network, cameras are off until switched on). The live-camera
+path is tested against a fake ``cv2`` and the sensor path against a fake sysfs tree: **no real camera or sensor was used.**
+The core (``atlas_core.py``) is shared byte for byte with the KOS operating system and is tested there at length
+(kernal-os ``tests/test_atlas_core.py``); a hash check here fails if the two copies drift."""
+
+from __future__ import annotations
+
+import ast
+import hashlib
+import io
+import json
+import os
+import random
+import sys
+import tempfile
+import types
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT))
+
+from atlas import atlas_core as core  # noqa: E402
+from atlas import cli, sensors, vision  # noqa: E402
+from atlas.store import DirBackend, open_store  # noqa: E402
+
+PKG = ROOT / "atlas"
+NOW = 1_763_900_000
+
+
+def rng_bytes(n, seed):
+    r = random.Random(seed)
+    return bytes(r.getrandbits(8) for _ in range(n))
+
+
+def texture(seed, w, h):
+    r = random.Random(seed)
+    return [[r.getrandbits(8) for _ in range(w)] for _ in range(h)]
+
+
+W, H = 96, 72
+
+
+def pair(d_bg=4, d_fg=12, rect=(28, 92, 8, 62)):
+    """Left and right pictures of a flat wall (disparity d_bg) with a nearer square (d_fg), as flat grey lists."""
+    bg, fg = texture(1, W + 80, H), texture(2, W + 80, H)
+    left, right = [], []
+    for y in range(H):
+        for x in range(W):
+            inside = rect[0] <= x < rect[1] and rect[2] <= y < rect[3]
+            left.append(fg[y][x] if inside else bg[y][x])
+    for y in range(H):
+        row = [bg[y][x + d_bg] for x in range(W)]
+        for x in range(rect[0], rect[1]):
+            if rect[2] <= y < rect[3] and 0 <= x - d_fg < W:
+                row[x - d_fg] = fg[y][x]
+        right.extend(row)
+    return left, right
+
+
+class Home(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name) / "map"
+        p = mock.patch.object(cli, "NOW", lambda: NOW)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def run_cli(self, *argv, json_out=False):
+        lines = []
+        code = cli.main((["--json"] if json_out else []) + ["--home", str(self.home)] + [str(a) for a in argv], out=lines.append)
+        return code, lines
+
+    def ok(self, *argv, json_out=False):
+        code, lines = self.run_cli(*argv, json_out=json_out)
+        self.assertEqual(code, 0, lines)
+        return "\n".join(lines)
+
+    def files(self):
+        return sorted(p.name for p in self.home.iterdir()) if self.home.exists() else []
+
+
+class TestTheCoreIsTheSharedOne(unittest.TestCase):
+    def test_it_is_byte_for_byte_the_core_kos_uses(self):
+        want = (PKG / "CORE_SHA256").read_text().strip()
+        self.assertEqual(hashlib.sha256((PKG / "atlas_core.py").read_bytes()).hexdigest(), want,
+                         "atlas_core.py changed: take it from kernal-os suite/atlas_core.py and update CORE_SHA256")
+
+    def test_it_uses_whole_numbers_only(self):
+        tree = ast.parse((PKG / "atlas_core.py").read_text())
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Constant) and isinstance(n.value, float):
+                self.fail(f"float at line {n.lineno}")
+            if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div):
+                self.fail(f"'/' at line {n.lineno}")
+
+
+class TestTheStore(Home):
+    def test_the_folder_and_its_files_are_private(self):
+        s = open_store(self.home)
+        s.add([core.mark("note", None, label="x", ref="x", t=1)])
+        self.assertEqual(oct(os.stat(self.home).st_mode & 0o777), "0o700")
+        for p in self.home.iterdir():
+            self.assertEqual(oct(os.stat(p).st_mode & 0o777), "0o600", p.name)
+
+    def test_a_write_is_atomic_and_leaves_no_litter(self):
+        b = DirBackend(self.home)
+        self.assertTrue(b.put("c.world.0_0_0", "one"))
+        with mock.patch("os.replace", side_effect=OSError("disk full")):
+            self.assertFalse(b.put("c.world.0_0_0", "two"))
+        self.assertEqual(b.get("c.world.0_0_0"), "one", "the old text is untouched")
+        self.assertEqual([n for n in os.listdir(self.home) if n.startswith(".tmp")], [], "no temporary file is left behind")
+
+    def test_a_failed_write_is_an_error_and_loses_nothing(self):
+        s = open_store(self.home)
+        s.add([core.mark("note", None, label="keep me", ref="a", t=1)])
+        with mock.patch("os.replace", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                s.add([core.mark("note", None, label="new", ref="b", t=2)])
+        self.assertEqual([m["r"] for m in s.search(kind="note")], ["a"])
+
+    def test_keys_cannot_leave_the_folder(self):
+        b = DirBackend(self.home)
+        for bad in ("../x", "a/b", "", ".hidden", "A", "x" * 80, "c.world/../../etc"):
+            with self.assertRaises(ValueError, msg=bad):
+                b._path(bad)
+        self.assertFalse(b.delete("../../etc/passwd"))
+
+    def test_a_chunk_that_is_a_symlink_is_neither_read_nor_written_through(self):
+        b = DirBackend(self.home)
+        outside = Path(self.tmp.name) / "outside.txt"
+        outside.write_text("TOP SECRET")
+        os.symlink(outside, self.home / "c.world.1_1_1")
+        self.assertIsNone(b.get("c.world.1_1_1"))
+        self.assertFalse(b.put("c.world.1_1_1", "overwritten"))
+        self.assertEqual(outside.read_text(), "TOP SECRET")
+        self.assertNotIn("c.world.1_1_1", b.keys())
+        self.assertFalse(b.delete("c.world.1_1_1"))
+
+    def test_hostile_files_in_the_folder_are_cleaned_not_believed(self):
+        b = DirBackend(self.home)
+        b.put("c.world.0_0_0", json.dumps([{"k": "note", "v": 1, "l": "ok"}, {"k": "x", "v": 1.5}, "junk", {"k": "A"}]))
+        b.put("index", "{{{")
+        s = core.MarkStore(b)
+        self.assertEqual(s.stats()["refused"], 3, "three entries were refused when the folder was read")
+        self.assertEqual(len(s.search()), 1)
+
+
+class TestPuttingThingsIn(Home):
+    def test_a_note_is_put_in_and_found_again(self):
+        self.assertIn("put in", self.ok("put", "recipe", "espresso", "machine", "descaling", "needs", "citric", "acid"))
+        self.assertIn("recipe", self.ok("find", "descaling"))
+        self.assertIn("nothing", self.ok("find", "tax", "filing"))
+
+    def test_a_note_from_standard_input(self):
+        with mock.patch("sys.stdin", io.StringIO("espresso machine descaling needs citric acid")):
+            self.ok("put", "piped", "-")
+        self.assertIn("piped", self.ok("find", "descaling"))
+        with mock.patch("sys.stdin", io.StringIO("   ")):
+            self.assertEqual(self.run_cli("put", "empty", "-")[0], 2)
+
+    def test_a_number_about_anything_how_many_people_liked_a_video(self):
+        self.ok("reading", "likes", 900, "--ref", "video:cats", "--unit", "likes", "--space", "videos")
+        card = json.loads(self.ok("about", "video:cats", json_out=True))
+        self.assertEqual(card["likes"]["latest"], 900)
+        for bad in (["reading", "Likes!", 5], ["reading", "likes", 5, "--at", "1,2"]):
+            self.assertEqual(self.run_cli(*bad)[0], 2, bad)
+        with mock.patch("sys.stderr", io.StringIO()):
+            with self.assertRaises(SystemExit) as e:               # a decimal is refused by the argument parser
+                self.run_cli("reading", "likes", "1.5")
+        self.assertEqual(e.exception.code, 2)
+
+    def test_what_has_a_place_can_be_asked_for_by_place(self):
+        self.ok("reading", "smell", 12000, "--at", "100,100,100", "--ref", "nose-1", "--unit", "ohm")
+        near = json.loads(self.ok("near", 120, 90, 110, 500, json_out=True))
+        self.assertEqual(len(near), 1)
+        self.assertEqual(self.ok("near", 9000, 9000, 9000, 100), "nothing")
+
+    def test_random_files_and_folders_all_get_a_place_and_copies_fold(self):
+        src = Path(self.tmp.name) / "stuff"
+        (src / "sub").mkdir(parents=True)
+        blob = rng_bytes(50_000, 5)
+        (src / "photo.jpg").write_bytes(b"\xff\xd8\xff" + blob)
+        (src / "sub" / "photo copy.jpg").write_bytes(b"\xff\xd8\xff" + blob)
+        (src / "noise.bin").write_bytes(rng_bytes(50_000, 6))
+        (src / "empty.dat").write_bytes(b"")
+        (src / "notes.txt").write_text("espresso machine descaling needs citric acid " * 4)
+        (src / "notes copy.txt").write_text("espresso machine descaling needs citric acid " * 4)
+        (src / ".env").write_text("API_KEY=hunter2")
+        (src / "my_token.txt").write_text("tok-abc")
+        os.symlink("/etc/hostname", src / "link")
+        outside = Path(self.tmp.name) / "outside"
+        outside.mkdir()
+        (outside / "private-diary.txt").write_text("TOP SECRET plans for the weekend")
+        os.symlink(outside, src / "linkdir")                      # a symlink to a FOLDER: a walk that followed it would descend
+        out = json.loads(self.ok("ingest", src, json_out=True))
+        self.assertGreaterEqual(out["marks"], 8)
+        self.assertTrue(any("secret" in n or "symlink" in n for n in out["notes"]), out)
+        blob_all = "".join((self.home / n).read_text() for n in self.files() if n.startswith("c."))
+        self.assertNotIn("hunter2", blob_all)
+        self.assertNotIn("tok-abc", blob_all)
+        self.assertNotIn("hostname", blob_all)
+        self.assertNotIn("private-diary", blob_all, "a symlinked folder was not walked into")
+        self.assertNotIn("TOP SECRET", blob_all)
+        stats = json.loads(self.ok("stats", json_out=True))
+        self.assertEqual(stats["kinds"]["data"], 6, "every readable file has a place")
+        rep = json.loads(self.ok("digest", json_out=True))
+        self.assertEqual(rep["duplicates_merged"], 2, "the photo and the note each exist twice")
+        self.assertEqual(json.loads(self.ok("stats", json_out=True))["kinds"]["data"], 4)
+        self.assertIn("photo", self.ok("find", "photo"))
+
+    def test_one_file_and_the_ways_it_can_go_wrong(self):
+        f = Path(self.tmp.name) / "a.bin"
+        f.write_bytes(rng_bytes(3000, 7))
+        self.assertIn("a.bin: placed", self.ok("ingest", f))
+        out = self.ok("ingest", Path(self.tmp.name) / "missing", Path(self.tmp.name) / "id_rsa")
+        self.assertIn("missing", out)
+        (Path(self.tmp.name) / "id_rsa").write_text("-----BEGIN-----")
+        self.assertIn("looks like a secret", self.ok("ingest", Path(self.tmp.name) / "id_rsa"))
+
+    def test_similar_finds_data_like_a_text(self):
+        self.ok("put", "a", "espresso machine descaling needs citric acid every month")
+        self.ok("put", "b", "quarterly tax filing deadlines estimated payment accountant receipts")
+        got = self.ok("similar", "espresso", "descaling", "citric", "acid")
+        self.assertIn("a (text", got)
+        self.assertNotIn("b (text", got)
+
+    def test_the_map_folds_what_repeats_and_works_out_trends(self):
+        for i, n in enumerate((100, 250, 400, 700, 1100)):
+            with mock.patch.object(cli, "NOW", lambda i=i: NOW + 3600 * i):
+                self.ok("reading", "likes", n, "--ref", "video:cats", "--unit", "likes")
+        rep = json.loads(self.ok("digest", json_out=True))
+        self.assertEqual(rep["trend"], 1)
+        self.assertIn("rising", self.ok("find", "--kind", "trend"))
+
+    def test_bad_arguments_are_a_message_not_a_crash(self):
+        self.assertEqual(self.run_cli("digest", "--floor", "smell=abc")[0], 2)
+        self.assertEqual(self.run_cli("scan")[0], 2)
+
+
+class TestDepthFromPictureFiles(Home):
+    def write(self, name, data):
+        p = Path(self.tmp.name) / name
+        vision.write_pgm(p, W, H, data)
+        return p
+
+    def test_pgm_round_trip_and_hostile_files(self):
+        data = list(range(256)) * 27
+        p = Path(self.tmp.name) / "t.pgm"
+        vision.write_pgm(p, 64, 27 * 4, data[:64 * 108])
+        self.assertEqual(vision.read_pgm(p), (64, 108, data[:64 * 108]))
+        for name, raw in (("magic", b"P6\n2 2\n255\nabcd"), ("short", b"P5\n9 9\n255\nab"), ("deep", b"P5\n2 2\n65535\nabcdefgh"),
+                          ("huge", b"P5\n99999 99999\n255\n"), ("junk", b"hello"), ("comment", b"P5\n# c\n2 2\n255\nabcd")):
+            q = Path(self.tmp.name) / name
+            q.write_bytes(raw)
+            if name == "comment":
+                self.assertEqual(vision.read_pgm(q), (2, 2, list(b"abcd")))
+            else:
+                with self.assertRaises(ValueError, msg=name):
+                    vision.read_pgm(q)
+
+    def test_two_pictures_give_the_right_depth_and_no_picture_is_stored(self):
+        left, right = pair(4, 4)                              # a flat wall: f=100, spacing 60, disparity 4 -> 1500 mm
+        a, b = self.write("l.pgm", left), self.write("r.pgm", right)
+        out = self.ok("scan", "--pgm", a, b, "--focal", 100, "--xs", "0,60")
+        self.assertIn("cells", out)
+        ys = sorted(m["p"][1] for m in open_store(self.home).search(kind="sight", limit=200))
+        self.assertTrue(1300 <= ys[len(ys) // 2] <= 1700, ys[len(ys) // 2])
+        for name in self.files():
+            self.assertTrue(name.startswith(("c.", "index")) or name == "config.json", name)
+            self.assertFalse((self.home / name).read_bytes().startswith((b"P5", b"\x89PNG", b"\xff\xd8")), "a picture was stored")
+
+    def test_three_cameras_and_refusals(self):
+        left, right = pair(4, 4)
+        a, b = self.write("l.pgm", left), self.write("r.pgm", right)
+        for argv, want in ((["--pgm", a], 2), (["--pgm", a, b, "--xs", "0,0"], 2), (["--pgm", a, b, "--xs", "0"], 2),
+                           (["--pgm", a, b, "--pose", "1,2,3"], 2), (["--pgm", a, Path(self.tmp.name) / "nope.pgm"], 2)):
+            self.assertEqual(self.run_cli("scan", *argv)[0], want, argv)
+        small = Path(self.tmp.name) / "small.pgm"
+        vision.write_pgm(small, 8, 8, [0] * 64)
+        self.assertEqual(self.run_cli("scan", "--pgm", a, small)[0], 2, "pictures of different sizes cannot be compared")
+
+    def test_the_room_is_learned_then_what_is_new_is_an_event(self):
+        bare, near = pair(4, 4), pair(4, 12)
+        bg = core.Background(keep=3)
+        rig = {"f": 100, "xs": [0, 60], "pose": [0, 0, 0, 0], "voxel": 100}
+        sets = [{"t": NOW + i, "frames": list(f)} for i, f in enumerate((bare, bare, bare, near))]
+        marks, sm = vision.analyse(rig, sets, W, H, bg)
+        self.assertEqual((sm["looks"], sm["skipped"], sm["learning"]), (4, 0, False))
+        ev = [m for m in marks if m["k"] == "event"]
+        self.assertEqual(len(ev), 1)
+        self.assertTrue(300 <= ev[0]["p"][1] <= 900, ev[0]["p"])
+        only, sm2 = vision.analyse(rig, sets[3:], W, H, core.Background(keep=3))
+        self.assertEqual(sm2["events"], 0, "nothing is new before the room is known")
+        bad, sm3 = vision.analyse(rig, [{"t": 1, "frames": [[0] * 5, [0] * 5]}], W, H, core.Background())
+        self.assertEqual((bad, sm3["skipped"]), ([], 1))
+
+
+class FakeCapture:
+    opened, released, reads = [], [], 0
+
+    def __init__(self, index):
+        self.index = index
+        FakeCapture.opened.append(index)
+
+    def isOpened(self):
+        return self.index != 9
+
+    def read(self):
+        FakeCapture.reads += 1
+        return True, types.SimpleNamespace(ndim=2, shape=(H, W), data=pair(4, 4)[0 if self.index == 0 else 1])
+
+    def release(self):
+        FakeCapture.released.append(self.index)
+
+
+def fake_cv2():
+    m = types.SimpleNamespace(VideoCapture=FakeCapture, COLOR_BGR2GRAY=6, INTER_AREA=3)
+    m.cvtColor = lambda img, code: img
+    m.resize = lambda img, size, interpolation=None: types.SimpleNamespace(
+        shape=(size[1], size[0]), reshape=lambda *_: img.data, ndim=2)
+    return m
+
+
+class TestLiveCameras(Home):
+    def setUp(self):
+        super().setUp()
+        FakeCapture.opened, FakeCapture.released, FakeCapture.reads = [], [], 0
+
+    def test_they_are_off_until_the_owner_says_so(self):
+        self.assertIn("off", self.ok("capture"))
+        code, lines = self.run_cli("scan", "--cams", "0,1")
+        self.assertEqual(code, 3)
+        self.assertIn("capture on", lines[0])
+        self.assertEqual(FakeCapture.opened, [], "nothing was opened")
+        self.assertIn("on", self.ok("capture", "on"))
+        self.assertIn("off", self.ok("capture", "off"))
+        self.assertEqual(self.run_cli("scan", "--cams", "0,1")[0], 3)
+
+    def test_opencv_cameras_are_opened_read_and_always_released(self):
+        data = vision.grab_opencv([0, 1], W, H, count=2, every_ms=0, cv2=fake_cv2(), now=lambda: NOW)
+        self.assertEqual((data["w"], data["h"], len(data["sets"])), (W, H, 2))
+        self.assertEqual(FakeCapture.opened, [0, 1])
+        self.assertEqual(sorted(FakeCapture.released), [0, 1])
+        self.assertEqual(FakeCapture.reads, 4)
+        FakeCapture.opened, FakeCapture.released = [], []
+        with self.assertRaises(RuntimeError):
+            vision.grab_opencv([0, 9], W, H, cv2=fake_cv2())
+        self.assertEqual(sorted(FakeCapture.released), [0, 9], "released even when one failed to open")
+        for bad in ([], [0, 0], [0, 1, 2, 3, 4]):
+            with self.assertRaises(ValueError):
+                vision.grab_opencv(bad, W, H, cv2=fake_cv2())
+
+    def test_without_opencv_it_says_what_to_install(self):
+        with mock.patch.dict(sys.modules, {"cv2": None}):
+            with self.assertRaises(RuntimeError) as e:
+                vision.grab_opencv([0, 1], W, H)
+        self.assertIn("opencv-python-headless", str(e.exception))
+
+    def test_a_watch_runs_in_the_foreground_for_the_time_asked_and_no_longer(self):
+        self.ok("capture", "on")
+        bare, near = pair(4, 4), pair(4, 12)
+        calls, clock = [], [NOW]
+
+        def grab(cams, w, h, count, every_ms):
+            calls.append((cams, w, h, count))
+            frames = [bare, bare, bare, near][:count]
+            return {"w": W, "h": H, "sets": [{"t": clock[0] + i, "frames": list(f)} for i, f in enumerate(frames)]}
+        sleeps = []
+
+        def sleep(s):
+            sleeps.append(s)
+            clock[0] += s
+        with mock.patch.object(cli, "GRAB", grab), mock.patch.object(cli, "SLEEP", sleep), \
+                mock.patch.object(cli, "NOW", lambda: clock[0]):
+            code, lines = self.run_cli("scan", "--cams", "0,1", "--focal", 100, "--width", W, "--height", H,
+                                       "--for", 90, "--every", 30)
+        self.assertEqual(code, 0, lines)
+        self.assertEqual(len(calls), 3, "looks at 0, 30 and 60 seconds; at 90 the time is up, so it stops")
+        self.assertEqual(sleeps, [30, 30, 30])
+        self.assertLessEqual(clock[0] - NOW, 90, "it never runs past the time asked for")
+        self.assertEqual(calls[0], ([0, 1], W, H, 4))
+        self.assertTrue(any("things that moved" in l for l in lines))
+        self.assertIn("event", json.loads(self.ok("stats", json_out=True))["kinds"])
+
+    def test_one_look_without_for_and_a_camera_failure_is_a_message(self):
+        self.ok("capture", "on")
+        with mock.patch.object(cli, "GRAB", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("camera 0 did not open"))):
+            code, lines = self.run_cli("scan", "--cams", "0,1")
+        self.assertEqual(code, 1)
+        self.assertIn("camera 0 did not open", lines[0])
+        self.assertEqual(self.run_cli("scan", "--cams", "0,1,2")[0], 2, "three cameras but two positions")
+
+
+class TestSensors(Home):
+    def tree(self):
+        root = Path(self.tmp.name) / "iio"
+        for i, (ohm, name) in enumerate(((50000, "bme-a"), (30000, "bme-b"), (41000, "bme-c"), (20000, "bme-d"))):
+            d = root / f"iio:device{i}"
+            d.mkdir(parents=True)
+            (d / "name").write_text(name + "\n")
+            (d / "in_resistance_raw").write_text(f"{ohm}\n")
+            (d / "in_temp_input").write_text("23500\n")
+            (d / "serial").write_text("SECRET\n")
+        return root
+
+    def test_a_sweep_reads_whole_numbers_and_never_the_serial(self):
+        root = self.tree()
+        with mock.patch.object(sensors, "IIO", root):
+            data = sensors.sweep()
+        self.assertEqual(len(data["sensors"]), 4)
+        self.assertNotIn("SECRET", json.dumps(data))
+        self.assertTrue(all(type(r["v"]) is int for s in data["sensors"] for r in s["readings"]))
+        self.assertEqual(sensors.to_milli("101.325"), 101325)
+        with self.assertRaises(sensors.SensorError):
+            sensors.to_milli("1e5")
+
+    def test_sensors_placed_in_a_room_find_where_a_smell_comes_from(self):
+        root = self.tree()
+        src = (500, 1500, 0)
+        corners = [(0, 0, 0), (2000, 0, 0), (0, 2000, 0), (2000, 2000, 0)]
+        for i, p in enumerate(corners):
+            d2 = sum((p[j] - src[j]) ** 2 for j in range(3))
+            (root / f"iio:device{i}" / "in_resistance_raw").write_text(f"{4_000_000_000 // d2 + 100}\n")
+            self.ok("place", "sensor", i, *p)
+        with mock.patch.object(sensors, "IIO", root):
+            self.assertIn("4 sensors", self.ok("sense"))
+        self.assertEqual(json.loads(self.ok("stats", json_out=True))["kinds"]["smell"], 4)
+        rep = json.loads(self.ok("digest", "--floor", "smell=100", json_out=True))
+        self.assertEqual(rep["source"], 1)
+        found = json.loads(self.ok("find", "--kind", "source", json_out=True))[0]
+        self.assertLessEqual(core.isqrt(sum((found["p"][i] - src[i]) ** 2 for i in range(3))), 400)
+
+    def test_no_sensors_is_not_an_error(self):
+        with mock.patch.object(sensors, "IIO", Path(self.tmp.name) / "nothing"):
+            self.assertIn("no sensors found", self.ok("sense"))
+
+
+class TestTheToolDescription(Home):
+    SAMPLES = {"words": ["descaling"], "kind": "data", "ref": "recipe", "text": ["espresso", "descaling"], "x": 0, "y": 0, "z": 0,
+               "radius": 100, "name": "n", "value": 5, "paths": ["SAMPLE_FILE"], "limit": 5}
+
+    def tools(self):
+        return json.loads((PKG / "tool.json").read_text())["tools"]
+
+    def test_every_tool_names_a_real_command_and_says_truthfully_whether_it_changes_the_map(self):
+        parser = cli.parser()
+        sub = [a for a in parser._actions if a.dest == "cmd"][0].choices
+        for t in self.tools():
+            cmd = [a for a in t["argv"] if not a.startswith(("--", "[", "{"))][0]
+            self.assertIn(cmd, sub, t["name"])
+        self.assertEqual({t["name"] for t in self.tools() if not t["mutates"]},
+                         {"atlas_find", "atlas_about", "atlas_similar", "atlas_near", "atlas_stats", "atlas_recent"})
+
+    def test_the_read_only_tools_really_change_nothing_and_every_tool_gives_json(self):
+        self.ok("put", "recipe", "espresso", "machine", "descaling", "needs", "citric", "acid")
+        self.ok("reading", "smell", 5, "--at", "0,0,0", "--ref", "recipe", "--unit", "ohm")
+        sample = Path(self.tmp.name) / "sample.txt"
+        sample.write_text("some words to place in the map")
+        before = {n: (self.home / n).read_bytes() for n in self.files()}
+        for t in self.tools():
+            argv = []
+            for a in t["argv"]:
+                if a.startswith("[") or a == "--json":
+                    continue
+                if a.startswith("{"):
+                    key = a.strip("{}.")
+                    val = self.SAMPLES[key]
+                    argv += [str(sample) if v == "SAMPLE_FILE" else str(v) for v in val] if isinstance(val, list) else [str(val)]
+                else:
+                    argv.append(a)
+            code, lines = self.run_cli(*argv, json_out=True)
+            self.assertEqual(code, 0, (t["name"], lines))
+            json.loads("\n".join(lines))
+            if not t["mutates"]:
+                after = {n: (self.home / n).read_bytes() for n in self.files()}
+                self.assertEqual(after, before, f"{t['name']} claims to be read-only but wrote")
+            else:
+                before = {n: (self.home / n).read_bytes() for n in self.files()}
+
+
+class TestPrivacy(unittest.TestCase):
+    def test_nothing_in_the_package_touches_the_network_or_starts_programs(self):
+        banned = {"socket", "ssl", "urllib", "http", "requests", "subprocess", "ftplib", "smtplib", "asyncio", "multiprocessing",
+                  "threading", "sched", "ctypes"}
+        for p in PKG.glob("*.py"):
+            for n in ast.walk(ast.parse(p.read_text())):
+                mods = ([n.module] if isinstance(n, ast.ImportFrom) and n.module else
+                        [a.name for a in n.names] if isinstance(n, ast.Import) else [])
+                for m in mods:
+                    self.assertNotIn(m.split(".")[0], banned, f"{p.name} imports {m}")
+
+    def test_the_only_things_written_are_chunks_index_and_two_small_settings(self):
+        text = "".join(p.read_text() for p in (PKG / "cli.py", PKG / "store.py", PKG / "vision.py"))
+        self.assertNotIn("write_pgm(", (PKG / "cli.py").read_text(), "the command line never writes a picture")
+        for name in ("config.json", "sensors.json"):
+            self.assertIn(name, text)
+
+    def test_the_documented_command_matches_the_installer(self):
+        install = (ROOT / "scripts" / "install.sh").read_text()
+        self.assertIn("neuroclaw-atlas", install)
+        self.assertEqual(cli.parser().prog, "neuroclaw-atlas")
+
+
+if __name__ == "__main__":
+    unittest.main()
