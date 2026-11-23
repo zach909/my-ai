@@ -1,0 +1,42 @@
+﻿Name,Link
+MAESTRO Music Dataset,https://magenta.tensorflow.org/datasets/maestro
+Free Music Archive Dataset,https://github.com/mdeff/fma
+MusicCaps Dataset,https://github.com/google-research-datasets/musiccaps
+AudioSet,https://research.google.com/audioset/
+Earth Species Project Dataset Library,https://github.com/earthspecies/library
+Macaulay Library,https://www.macaulaylibrary.org/
+Xeno-canto Wildlife Sound Recordings,https://xeno-canto.org/
+iNaturalist Observations and Media,https://www.inaturalist.org/
+FSD50K Sound Events Dataset,https://zenodo.org/records/4060432
+ESC-50 Environmental Sound Dataset,https://github.com/karolpiczak/ESC-50
+Clotho Audio Captioning Dataset,https://zenodo.org/records/3490684
+Deeply Nonverbal Vocalization Dataset,https://openslr.org/99/
+NonSpeech7K Dataset,https://github.com/ITEC-THU/NonSpeech7K
+RAVDESS Audio-Visual Speech and Song,https://zenodo.org/records/1188976
+LibriSpeech,https://www.openslr.org/12
+Mozilla Common Voice,https://commonvoice.mozilla.org/en/datasets
+Unicode Character Database,https://www.unicode.org/ucd/
+Unicode Emoji Charts and Data,https://unicode.org/emoji/charts/
+Unicode CLDR,https://github.com/unicode-org/cldr
+StoryWeaver Open Stories,https://storyweaver.org.in/
+OpenAlex,https://openalex.org/
+arXiv,https://arxiv.org/
+PubMed Central Open Access Subset,https://pmc.ncbi.nlm.nih.gov/tools/openftlist/
+Semantic Scholar Open Research Corpus,https://allenai.org/data/s2orc
+NASA Open Data,https://data.nasa.gov/
+NIST Semiconductor and Microelectronics Resources,https://www.nist.gov/programs-projects/semiconductor-and-microelectronics
+MIT OpenCourseWare - Microelectronics,https://ocw.mit.edu/
+The Stack Source Code Dataset,https://huggingface.co/datasets/bigcode/the-stack
+CodeSearchNet,https://github.com/github/CodeSearchNet
+GitHub Code Search Dataset and Benchmarks,https://github.com/github/CodeSearchNet
+Linux Kernel Documentation,https://docs.kernel.org/
+xv6 Operating System Teaching Source,https://github.com/mit-pdos/xv6-riscv
+Debian Source Packages,https://sources.debian.org/
+F-Droid Open-Source Android Apps,https://f-droid.org/
+Hugging Face Datasets,https://huggingface.co/datasets
+BEIR Information Retrieval Benchmark,https://github.com/beir-cellar/beir
+MS MARCO,https://microsoft.github.io/msmarco/
+SciFact,https://github.com/allenai/scifact
+QASPER,https://allenai.org/data/qasper
+Zenodo Research Repository,https://zenodo.org/
+OpenCitations,https://opencitations.net/
