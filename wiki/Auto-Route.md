@@ -20,6 +20,8 @@ API: `POST /api/chat` takes `auto`, `instant`, `optimize` (only a real `true` co
 
 ## Islands
 
+> These are **compute islands**: groups found *inside* an existing network so the ones a message doesn't need can be switched off. They are a different thing from the **learning islands** in [[Wake-Sleep-Islands]], which are brand-new neurons grown to hold a new skill or memory.
+
 Imagine every weight is only a 0 or a 1: a connection is there or it is not. Most strong connections run between neurons that work together, so once the weak ones are rounded down to 0 the network falls apart into groups wired to each other and to nothing else. Each group is an island, and an island nobody needs for this message can be switched off. It is a mixture of experts that makes itself.
 
 `partitionIslands()` picks the threshold itself (just above the steepest fall in link strength), finds the islands (union-find), and measures how much of all the weight lies inside them (`insideMass`). Below 60% the split is not real and **the whole network runs**. `planIslands()` then chooses which run. Islands are named as group labels (`applyIslandLabels()` -> `setNeuronGroup`), which the engine already gates on with `activeGroups`.
@@ -41,3 +43,4 @@ Auto never sends a message to another computer unless borrowing is already on (`
 - [[MoE]] - net-skill routing, which this sits beside
 - [[Zip-IO]] - the effort port
 - [[Neuron-Mesh]] - the all-to-all mesh the islands are cut from
+- [[Wake-Sleep-Islands]] - islands that are grown to learn, not cut to save compute
