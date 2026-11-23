@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,9 +23,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +38,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.example.engine.IslandMesh
 import com.example.model.BrainCheckpoint
+import com.example.model.IslandTuning
 import com.example.ui.components.CoralPillButton
 import com.example.ui.components.GlassPanel
 import com.example.ui.components.PillTextField
@@ -56,6 +61,7 @@ fun MetricsScreen(
     onExportDelta: () -> Unit,
     onTeachYesNo: (String, String, Boolean) -> Unit,
     onAskYesNo: (String, String) -> Unit,
+    onSetIslandTuning: (id: String, gain: Float?, bias: Float?, influence: Float?) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -165,6 +171,31 @@ fun MetricsScreen(
                                     stats.activeRegions.forEach { region ->
                                         StatusChip(label = region, toneColor = NeuroColors.ShoggothGreen)
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        GlassPanel {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("Island Dials", style = MaterialTheme.typography.titleMedium, color = NeuroColors.CoralSoft)
+                                Text(
+                                    text = "Soft control per island, no on/off. Link × and + change how strongly a message connects to the island " +
+                                        "(strength = match × link + offset; it answers once that clears 0.42). Weights × changes how much its " +
+                                        "neurons count in the self-model. Defaults ×1, +0, ×1 change nothing.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeuroColors.InkDim
+                                )
+                                if (state.islandTunings.isEmpty()) {
+                                    Text(
+                                        text = "No learned islands yet. They appear after the brain sleeps on something new.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NeuroColors.InkDim
+                                    )
+                                }
+                                state.islandTunings.forEach { t ->
+                                    IslandDialRow(t, onSetIslandTuning)
                                 }
                             }
                         }
@@ -502,6 +533,88 @@ fun MetricsScreen(
 
             item { Spacer(Modifier.height(12.dp)) }
         }
+    }
+}
+
+/** One island: three dials (link x, link +/-, weights x) that apply when released, with a reset to x1, +0, x1. */
+@Composable
+private fun IslandDialRow(
+    t: IslandTuning,
+    onSet: (String, Float?, Float?, Float?) -> Unit
+) {
+    var gain by remember(t.id, t.gain) { mutableFloatStateOf(t.gain) }
+    var bias by remember(t.id, t.bias) { mutableFloatStateOf(t.bias) }
+    var influence by remember(t.id, t.influence) { mutableFloatStateOf(t.influence) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(NeuroColors.GlassFill)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(t.label, style = MaterialTheme.typography.titleSmall, color = NeuroColors.Ink, maxLines = 1)
+                Text(
+                    "${t.kind.lowercase()} • ${t.uses} uses",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NeuroColors.InkDim
+                )
+            }
+            if (gain != 1f || bias != 0f || influence != 1f) {
+                CoralPillButton(
+                    text = "Reset",
+                    primary = false,
+                    onClick = {
+                        gain = 1f; bias = 0f; influence = 1f
+                        onSet(t.id, 1f, 0f, 1f)
+                    }
+                )
+            }
+        }
+        DialSlider(
+            label = "Link ×", valueText = "×%.2f".format(gain), value = gain,
+            range = IslandMesh.GAIN_MIN..IslandMesh.GAIN_MAX,
+            onChange = { gain = it }, onDone = { onSet(t.id, gain, null, null) }
+        )
+        DialSlider(
+            label = "Link +/−", valueText = "%+.2f".format(bias), value = bias,
+            range = IslandMesh.BIAS_MIN..IslandMesh.BIAS_MAX,
+            onChange = { bias = it }, onDone = { onSet(t.id, null, bias, null) }
+        )
+        DialSlider(
+            label = "Weights ×", valueText = "×%.2f".format(influence), value = influence,
+            range = IslandMesh.INFLUENCE_MIN..IslandMesh.INFLUENCE_MAX,
+            onChange = { influence = it }, onDone = { onSet(t.id, null, null, influence) }
+        )
+    }
+}
+
+@Composable
+private fun DialSlider(
+    label: String,
+    valueText: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onChange: (Float) -> Unit,
+    onDone: () -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = NeuroColors.InkDim, modifier = Modifier.width(84.dp))
+        Slider(
+            value = value.coerceIn(range.start, range.endInclusive),
+            onValueChange = onChange,
+            onValueChangeFinished = onDone,
+            valueRange = range,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            valueText,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = NeuroColors.CoralSoft,
+            modifier = Modifier.width(52.dp)
+        )
     }
 }
 

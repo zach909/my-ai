@@ -9,6 +9,7 @@ import com.example.model.DrillRunResult
 import com.example.model.EnduranceRoundResult
 import com.example.model.HealingCheck
 import com.example.model.HiveVote
+import com.example.model.IslandTuning
 import com.example.model.MeshStatsSnapshot
 import com.example.model.MistakeRecord
 import com.example.model.YesNoExample
@@ -315,6 +316,23 @@ class OneBrainEngine(private val context: Context) {
             activeIslands = routed.map { it.first.label },
             sleepReport = sleepReport
         )
+    }
+
+    /** Sets one island's soft dials (link x and +, weights x) and saves them. False for an unknown island. */
+    fun setIslandTuning(id: String, gain: Float?, bias: Float?, influence: Float?): Boolean = synchronized(lock) {
+        val ok = brain.mesh.setTuning(id, gain, bias, influence)
+        if (ok) persistIslands()
+        ok
+    }
+
+    /** One row per learned island with its current dials, for the Metrics screen. */
+    fun islandTunings(): List<IslandTuning> = synchronized(lock) {
+        brain.mesh.learned().map {
+            IslandTuning(
+                id = it.id, label = it.label, kind = it.kind.name, uses = it.uses,
+                gain = it.gain, bias = it.bias, influence = it.influence
+            )
+        }
     }
 
     /** Sleep on demand: consolidate what is waiting into islands, prune, dream, and refresh the self-model. */

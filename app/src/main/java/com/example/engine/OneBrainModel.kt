@@ -207,6 +207,9 @@ class OneBrainModel {
                     .put("uses", island.uses)
                     .put("lastUsedCycle", island.lastUsedCycle)
                     .put("dreamRecall", island.dreamRecall.toDouble())
+                    .put("gain", island.gain.toDouble())
+                    .put("bias", island.bias.toDouble())
+                    .put("influence", island.influence.toDouble())
                     .put("neurons", JSONArray().apply {
                         island.neurons.forEach { n ->
                             put(
@@ -248,6 +251,13 @@ class OneBrainModel {
             island.uses = o.optInt("uses")
             island.lastUsedCycle = o.optInt("lastUsedCycle", island.bornCycle)
             island.dreamRecall = o.optDouble("dreamRecall", -1.0).toFloat()
+            // Dials saved before they existed load as the defaults (x1, +0, x1); bad values are clamped.
+            island.gain = o.optDouble("gain", 1.0).toFloat().takeIf { it.isFinite() }
+                ?.coerceIn(IslandMesh.GAIN_MIN, IslandMesh.GAIN_MAX) ?: 1f
+            island.bias = o.optDouble("bias", 0.0).toFloat().takeIf { it.isFinite() }
+                ?.coerceIn(IslandMesh.BIAS_MIN, IslandMesh.BIAS_MAX) ?: 0f
+            island.influence = o.optDouble("influence", 1.0).toFloat().takeIf { it.isFinite() }
+                ?.coerceIn(IslandMesh.INFLUENCE_MIN, IslandMesh.INFLUENCE_MAX) ?: 1f
             if (mesh.restoreIsland(island)) added++
         }
         if (added > 0) {

@@ -297,6 +297,17 @@ data class AppSettings(
     val dynamicColorEnabled: Boolean = true
 )
 
+/** A learned island and its soft dials: link = score x [gain] + [bias]; [influence] scales its weights in the self-map. */
+data class IslandTuning(
+    val id: String,
+    val label: String,
+    val kind: String,
+    val uses: Int = 0,
+    val gain: Float = 1f,
+    val bias: Float = 0f,
+    val influence: Float = 1f
+)
+
 data class MeshStatsSnapshot(
     val neuronCount: Int = 32,
     val dimensions: Int = 32,

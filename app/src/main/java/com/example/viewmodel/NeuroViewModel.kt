@@ -31,6 +31,7 @@ import com.example.model.DesktopWorkspace
 import com.example.model.DrillRunResult
 import com.example.model.EnduranceRoundResult
 import com.example.model.HealingCheck
+import com.example.model.IslandTuning
 import com.example.model.MeshStatsSnapshot
 import com.example.model.MessageRole
 import com.example.model.MistakeRecord
@@ -78,6 +79,7 @@ data class NeuroUiState(
     val captures: List<CapturedPhotoRecord> = emptyList(),
     val meshStats: MeshStatsSnapshot = MeshStatsSnapshot(),
     val valeDistribution: List<Float> = emptyList(),
+    val islandTunings: List<IslandTuning> = emptyList(),
     val drillResults: List<DrillRunResult> = emptyList(),
     val permissionEntries: List<PermissionAuditEntry> = emptyList(),
     val specialAccess: SpecialAccessStatus = SpecialAccessStatus(false, false, false, true, false),
@@ -208,6 +210,7 @@ class NeuroViewModel(application: Application) : AndroidViewModel(application) {
                 captures = captures,
                 meshStats = engine.snapshot(unsyncedTurns, unsyncedTeach, pendingPhotos, lastSync),
                 valeDistribution = engine.getValeDistribution(),
+                islandTunings = engine.islandTunings(),
                 permissionEntries = permAudit,
                 specialAccess = special,
                 deviceToolCatalog = toolCatalog,
@@ -823,6 +826,14 @@ class NeuroViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.saveCheckpoints(updated) }
     }
 
+    /** Sets one island's soft dials (link x and +, weights x); null leaves a dial alone. Saved by the engine. */
+    fun setIslandTuning(id: String, gain: Float?, bias: Float?, influence: Float?) {
+        viewModelScope.launch {
+            withContext(Dispatchers.Default) { engine.setIslandTuning(id, gain, bias, influence) }
+            _uiState.update { it.copy(islandTunings = engine.islandTunings()) }
+        }
+    }
+
     fun restoreCheckpoint(cp: BrainCheckpoint) {
         val ok = engine.restoreCheckpoint(cp)
         if (ok) exciteRing(0.65f)
@@ -953,6 +964,7 @@ class NeuroViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 meshStats = engine.snapshot(unsyncedTurns, unsyncedTeach, pendingPhotos, lastSync),
                 valeDistribution = engine.getValeDistribution(),
+                islandTunings = engine.islandTunings(),
                 topByteEdges = engine.topByteEdges(),
                 permissionEntries = deviceTools.auditPermissions(),
                 specialAccess = deviceTools.specialAccessStatus()

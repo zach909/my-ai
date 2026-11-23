@@ -258,7 +258,8 @@ private fun NeuroClawApp(viewModel: NeuroViewModel) {
                                 onImportWeightsUri = viewModel::importMeshDeltaFromUri,
                                 onExportDelta = viewModel::exportMeshDeltaPreview,
                                 onTeachYesNo = viewModel::teachYesNo,
-                                onAskYesNo = viewModel::askYesNo
+                                onAskYesNo = viewModel::askYesNo,
+                                onSetIslandTuning = viewModel::setIslandTuning
                             )
                         }
                         composable<CommonsRoute> {

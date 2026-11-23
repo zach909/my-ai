@@ -51,7 +51,13 @@ class IslandMeshChecks {
         "dreamingTouchesOnlyLearnedIslands" to ::dreamingTouchesOnlyLearnedIslands,
         "selfIslandTracksWhatHasBeenLearnedAndDescribesIt" to ::selfIslandTracksWhatHasBeenLearnedAndDescribesIt,
         "selfWithNothingLearnedSaysSo" to ::selfWithNothingLearnedSaysSo,
-        "valeStaysConservedThroughGrowthPruningAndUse" to ::valeStaysConservedThroughGrowthPruningAndUse
+        "valeStaysConservedThroughGrowthPruningAndUse" to ::valeStaysConservedThroughGrowthPruningAndUse,
+        "defaultDialsChangeNothing" to ::defaultDialsChangeNothing,
+        "linkGainAndBiasSoftlyMoveAnIslandAcrossTheRouteLine" to ::linkGainAndBiasSoftlyMoveAnIslandAcrossTheRouteLine,
+        "negativeBiasAndZeroGainMuteAnIslandWithoutRemovingIt" to ::negativeBiasAndZeroGainMuteAnIslandWithoutRemovingIt,
+        "dialsAreClampedIgnoreNonFiniteAndRefuseCoreSelfAndUnknown" to ::dialsAreClampedIgnoreNonFiniteAndRefuseCoreSelfAndUnknown,
+        "dialsNeverTouchNeuronsOrVale" to ::dialsNeverTouchNeuronsOrVale,
+        "weightsInfluenceMovesTheSelfMapOnly" to ::weightsInfluenceMovesTheSelfMapOnly
     )
 
 
@@ -285,5 +291,131 @@ class IslandMeshChecks {
             m.redistributeVale(m.neurons[r], 0.08f)
             assertValeConserved(m)
         }
+    }
+
+    // ---------------------------------------------------------------- per-island soft dials
+
+    private fun oneIsland(m: IslandMesh = IslandMesh()): Island {
+        m.learnNow("skill:bh", IslandKind.SKILL, "Black holes", listOf(topics[0]), "dial test", 1, 1L)
+        return m.islands.getValue("skill:bh")
+    }
+
+    /** A loose query of the island's subject: recognised a little, but below the route line (0.12 <= score < 0.42). */
+    private fun looseQuery(m: IslandMesh, island: Island): HDVector {
+        val candidates = listOf(
+            "Schwarzschild", "black hole", "radius grows", "mass of a black hole", "linearly with its mass",
+            "Schwarzschild radius", "hole radius mass", "grows linearly"
+        )
+        val v = candidates.map { m.encode(it) }.firstOrNull { island.score(it) in 0.12f..(IslandMesh.ROUTE_MIN - 0.01f) }
+        return v ?: throw AssertionError("no candidate query scored in the loose band: " + candidates.map { "%.2f".format(island.score(m.encode(it))) })
+    }
+
+    fun defaultDialsChangeNothing() {
+        val m = IslandMesh()
+        val a = oneIsland(m)
+        assertEquals(1f, a.gain, 0f)
+        assertEquals(0f, a.bias, 0f)
+        assertEquals(1f, a.influence, 0f)
+        assertFalse(a.isTuned)
+        for (t in topics) {
+            val v = m.encode(t)
+            assertEquals(a.score(v), a.linkStrength(v), 0f)
+        }
+        val v = m.encode(topics[0])
+        assertEquals(1, m.route(v).size)
+    }
+
+    fun linkGainAndBiasSoftlyMoveAnIslandAcrossTheRouteLine() {
+        val m = IslandMesh()
+        val a = oneIsland(m)
+        val v = looseQuery(m, a)
+        val s = a.score(v)
+        assertTrue("loose query starts below the line", m.route(v).isEmpty())
+
+        // Multiply: enough gain lifts it over the line; a little gain does not, so it is a dial and not a switch.
+        val needed = IslandMesh.ROUTE_MIN / s
+        assertTrue(m.setTuning("skill:bh", gain = 1f + (needed - 1f) / 2f))
+        assertTrue("half the needed gain is still below the line", m.route(v).isEmpty())
+        assertTrue(m.setTuning("skill:bh", gain = needed + 0.05f))
+        assertEquals("full gain routes it", 1, m.route(v).size)
+        assertEquals(s * a.gain, m.route(v).first().second, 1e-5f)
+
+        // Add: same effect with the offset instead.
+        m.setTuning("skill:bh", gain = 1f, bias = 0f)
+        assertTrue(m.route(v).isEmpty())
+        m.setTuning("skill:bh", bias = IslandMesh.ROUTE_MIN - s + 0.02f)
+        assertEquals(1, m.route(v).size)
+
+        // Back to the defaults restores the original behaviour exactly.
+        m.setTuning("skill:bh", gain = 1f, bias = 0f, influence = 1f)
+        assertTrue(m.route(v).isEmpty())
+        assertFalse(a.isTuned)
+    }
+
+    fun negativeBiasAndZeroGainMuteAnIslandWithoutRemovingIt() {
+        val m = IslandMesh()
+        val a = oneIsland(m)
+        val v = m.encode(topics[0])
+        assertEquals(1, m.route(v).size)
+        m.setTuning("skill:bh", bias = -0.9f)
+        assertTrue("a strong negative offset pushes it under the line", m.route(v).isEmpty())
+        m.setTuning("skill:bh", bias = 0f, gain = 0f)
+        assertTrue("gain 0 mutes it", m.route(v).isEmpty())
+        assertTrue("the island and its neurons are still there", m.islands.containsKey("skill:bh") && a.neurons.isNotEmpty())
+        // A muted island no longer makes its subject "familiar", so the same text is novel again.
+        assertTrue(m.novelty(v) > 0.9f)
+        m.setTuning("skill:bh", gain = 1f)
+        assertTrue(m.novelty(v) < 0.2f)
+    }
+
+    fun dialsAreClampedIgnoreNonFiniteAndRefuseCoreSelfAndUnknown() {
+        val m = IslandMesh()
+        val a = oneIsland(m)
+        m.setTuning("skill:bh", gain = 99f, bias = -99f, influence = -5f)
+        assertEquals(IslandMesh.GAIN_MAX, a.gain, 0f)
+        assertEquals(IslandMesh.BIAS_MIN, a.bias, 0f)
+        assertEquals(IslandMesh.INFLUENCE_MIN, a.influence, 0f)
+        m.setTuning("skill:bh", gain = Float.NaN, bias = Float.POSITIVE_INFINITY)
+        assertEquals(IslandMesh.GAIN_MAX, a.gain, 0f)
+        assertEquals(IslandMesh.BIAS_MIN, a.bias, 0f)
+        // null leaves a dial alone.
+        m.setTuning("skill:bh", gain = 2f)
+        assertEquals(IslandMesh.BIAS_MIN, a.bias, 0f)
+        assertFalse(m.setTuning("core", gain = 2f))
+        assertFalse(m.setTuning("self", gain = 2f))
+        assertFalse(m.setTuning("nope", gain = 2f))
+        assertEquals(1f, m.core.gain, 0f)
+    }
+
+    fun dialsNeverTouchNeuronsOrVale() {
+        val m = IslandMesh()
+        wakeAll(m, topics)
+        m.sleep(10, 1L)
+        m.learnNow("skill:bh", IslandKind.SKILL, "Black holes", listOf(topics[0]), "dial test", 11, 2L)
+        val before = m.neurons.map { it.state.data.copyOf() to it.vale }
+        // The self island is retrained by a dial change, so compare everything but it.
+        for (i in m.learned()) m.setTuning(i.id, gain = 2.5f, bias = 0.3f, influence = 3f)
+        val after = m.neurons.map { it.state.data to it.vale }
+        val selfCount = m.islands.getValue("self").neurons.size
+        val selfStart = m.core.neurons.size
+        for (k in before.indices) {
+            if (k in selfStart until selfStart + selfCount) continue
+            assertTrue("neuron $k unchanged", before[k].first.contentEquals(after[k].first))
+            assertEquals(before[k].second, after[k].second, 0f)
+        }
+        assertValeConserved(m)
+    }
+
+    fun weightsInfluenceMovesTheSelfMapOnly() {
+        val m = IslandMesh()
+        m.learnNow("skill:a", IslandKind.SKILL, "Black holes", listOf(topics[0]), "dial test", 1, 1L)
+        m.learnNow("skill:b", IslandKind.SKILL, "Quantum", listOf(topics[1]), "dial test", 2, 2L)
+        val v = m.encode(topics[0])
+        val routedBefore = m.route(v).map { it.first.id to it.second }
+        val selfBefore = m.islands.getValue("self").neurons[0].state.data.copyOf()
+        m.setTuning("skill:a", influence = 4f)
+        m.setTuning("skill:b", influence = 0f)
+        assertFalse("self-map follows the weights dial", selfBefore.contentEquals(m.islands.getValue("self").neurons[0].state.data))
+        assertEquals("routing is not touched by the weights dial", routedBefore, m.route(v).map { it.first.id to it.second })
     }
 }

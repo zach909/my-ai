@@ -71,12 +71,29 @@ class Island(
     /** Share of this island's synthetic dream cues that routed back to it at the last sleep (-1 = never dreamed). */
     var dreamRecall = -1f
 
+    /**
+     * Soft dials, set per island by the user. The defaults (x1, +0, x1) change nothing.
+     * - [gain] and [bias] shape the link between a message and this island: strength = score * gain + bias.
+     *   Gain 0 mutes the island, gain 2 doubles how strongly it answers, a negative bias pushes it down,
+     *   a positive bias lets it answer even to messages that only loosely match.
+     * - [influence] scales how much this island's neuron weights count in the self-model's map of the mesh.
+     * They only change routing and the self-map; no neuron or vale is ever touched by them.
+     */
+    var gain = 1f
+    var bias = 0f
+    var influence = 1f
+
+    val isTuned: Boolean get() = gain != 1f || bias != 0f || influence != 1f
+
     /** How well the island recognises [v]: its best neuron, so each neuron can specialise on one part of the subject. */
     fun score(v: HDVector): Float {
         var best = -1f
         for (n in neurons) best = max(best, HDVector.cosineSimilarity(v, n.state))
         return best
     }
+
+    /** The link from [v] to this island after the user's dials. Equals [score] at the defaults. */
+    fun linkStrength(v: HDVector): Float = score(v) * gain + bias
 
     fun centroid(dimensions: Int): HDVector = IslandMesh.centroidOf(neurons.map { it.state }, dimensions)
 
@@ -150,6 +167,14 @@ class IslandMesh(
         const val SELF_TRAIN_GAIN = 8f
         const val MIN_ISLAND_NEURONS = 2
         const val MAX_ISLAND_NEURONS = 6
+
+        /** Limits of the per-island dials. */
+        const val GAIN_MIN = 0f
+        const val GAIN_MAX = 4f
+        const val BIAS_MIN = -1f
+        const val BIAS_MAX = 1f
+        const val INFLUENCE_MIN = 0f
+        const val INFLUENCE_MAX = 4f
 
         /** A newborn neuron holds this much of its one vale point (low = plastic); the rest hardens older neurons. */
         const val NEWBORN_VALE = 0.5f
@@ -245,16 +270,33 @@ class IslandMesh(
     val pressure: Float get() = shortTerm.fold(0f) { a, e -> a + e.novelty }
     fun shouldSleep(): Boolean = pressure >= SLEEP_PRESSURE
 
-    /** How unfamiliar [v] is to everything learned so far (1 = nothing learned resembles it). */
+    /**
+     * How unfamiliar [v] is to everything learned so far (1 = nothing learned resembles it). Uses the island links
+     * after the user's dials, so an island turned up makes its subject count as familiar sooner.
+     */
     fun novelty(v: HDVector): Float {
         var best = 0f
-        for (i in learned()) best = max(best, i.score(v))
-        return 1f - best
+        for (i in learned()) best = max(best, i.linkStrength(v))
+        return (1f - best).coerceIn(0f, 1f)
     }
 
-    /** The learned islands that recognise [v], best first. Read-only. */
+    /**
+     * Sets one learned island's dials; null leaves a dial as it is. Values are clamped to the limits above and a
+     * non-finite value is ignored. Returns false for an unknown id, or for the frozen core and the self island,
+     * which have no dials. Training, sleep and dreaming keep using the raw score, so the dials never skew learning.
+     */
+    fun setTuning(id: String, gain: Float? = null, bias: Float? = null, influence: Float? = null): Boolean {
+        val island = islands[id]?.takeIf { it.kind == IslandKind.SKILL || it.kind == IslandKind.MEMORY } ?: return false
+        gain?.takeIf { it.isFinite() }?.let { island.gain = it.coerceIn(GAIN_MIN, GAIN_MAX) }
+        bias?.takeIf { it.isFinite() }?.let { island.bias = it.coerceIn(BIAS_MIN, BIAS_MAX) }
+        influence?.takeIf { it.isFinite() }?.let { island.influence = it.coerceIn(INFLUENCE_MIN, INFLUENCE_MAX) }
+        refreshSelf()
+        return true
+    }
+
+    /** The learned islands whose link to [v], after the dials, clears [ROUTE_MIN], strongest first. Read-only. */
     fun route(v: HDVector, k: Int = 2): List<Pair<Island, Float>> =
-        learned().map { it to it.score(v) }
+        learned().map { it to it.linkStrength(v) }
             .filter { it.second >= ROUTE_MIN }
             .sortedByDescending { it.second }
             .take(k)
@@ -607,7 +649,7 @@ class IslandMesh(
         val bounds = HDVector.computeBounds(dimensions)
         val acc = FloatArray(bounds[4])
         for (island in l) {
-            val w = 1f + ln(1f + island.reinforcements + island.uses)
+            val w = (1f + ln(1f + island.reinforcements + island.uses)) * island.influence
             val c = island.centroid(dimensions)
             for (i in acc.indices) acc[i] += w * c.data[i]
         }
@@ -628,7 +670,7 @@ class IslandMesh(
         val bounds = HDVector.computeBounds(dimensions)
         val acc = FloatArray(bounds[4])
         for (island in l) {
-            val w = 1f + ln(1f + island.reinforcements + island.uses)
+            val w = (1f + ln(1f + island.reinforcements + island.uses)) * island.influence
             val c = island.centroid(dimensions)
             for (i in acc.indices) acc[i] += w * c.data[i]
         }

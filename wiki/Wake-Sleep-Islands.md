@@ -33,6 +33,20 @@ Ask "who are you", "what have you learned" or "describe yourself". It answers fr
 
 It is a readout of real state, not awareness, and says so. The history (sleep count and the last sleep) is saved, so it is still the same self after a restart.
 
+## Per-island dials (soft, not on/off)
+
+Each learned island has three dials, set on the **Metrics screen (Telemetry tab, "Island Dials")** and saved with the island. The defaults (x1, +0, x1) change nothing.
+
+| Dial | Range | What it does |
+|---|---|---|
+| **Link x** (`gain`) | 0 to 4 | Multiplies how strongly a message connects to this island. x2 doubles it; 0 mutes it. |
+| **Link +/-** (`bias`) | -1 to +1 | Adds to that link. Negative pushes the island down; positive lets it answer to messages that only loosely match. |
+| **Weights x** (`influence`) | 0 to 4 | Scales how much this island's neuron weights count in the self-model's map of the mesh. |
+
+Link strength is `match x gain + bias`, and an island answers once that clears `ROUTE_MIN` (0.42), so a dial moves an island across the line gradually instead of flipping it. It feeds routing (`route()`) and novelty (`novelty()`), so an island turned up also makes its subject count as familiar sooner and an island turned down makes it novel again. Sleep, clustering and dreaming keep using the raw match, so the dials never skew learning, and a dial never changes a neuron or a vale (a check asserts it; only the self island is refreshed). The frozen core and the self island have no dials.
+
+Honest limit: the Kotlin mesh has no neuron-to-neuron links inside an island, so "Weights x" cannot scale internal wiring. It scales the island's weight in the self-model only. Scaling real internal wiring existed only in the deleted TypeScript compute islands.
+
 ## The vale budget
 
 Still zero-sum, now **one point per neuron**, so the budget grows with the mesh. A newborn neuron keeps half its point (plastic, learns fast) and the other half goes to the existing neurons in proportion (what they know hardens a little). Pruning retires a point. Nothing else changes the total, and a test checks it after growth, pruning and use. Use moves vale only, never a weight.
@@ -87,7 +101,7 @@ Run on the final code (no third-party libraries; the checks are plain Kotlin).
 
 ## Checks
 
-- `app/src/test/java/com/example/engine/IslandMeshChecks.kt`: 19 dependency-free checks, with the command to run them in the file header. (No JUnit: the project takes no third-party code.)
+- `app/src/test/java/com/example/engine/IslandMeshChecks.kt`: 25 dependency-free checks, with the command to run them in the file header. (No JUnit: the project takes no third-party code.)
 
 ## See Also
 
