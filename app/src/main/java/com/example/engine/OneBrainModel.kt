@@ -4,9 +4,6 @@ import com.example.model.YesNoExample
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** One learned byte transition from the pretrained OneBrain graph (`memory_input_b*` -> `memory_output_b*`). */
-data class ByteEdge(val fromByte: Int, val toByte: Int, val weight: Float)
-
 /** A named region of the mesh, anchored by the hypervector of what it means. */
 data class SkillRegion(
     val id: String,
@@ -28,7 +25,7 @@ data class MemoryTrace(
  * The one OneBrain model.
  *
  * Everything OneBrain has learned or been taught lives here and nowhere else: the pretrained byte
- * graph, the growable island mesh ([IslandMesh]: a frozen core, a self island, and one island of neurons
+ * graph (hub-routed, see [SynapseGraph]), the growable island mesh ([IslandMesh]: a frozen core, a self island, and one island of neurons
  * per learned skill or memory, with its zero-sum vale ledger), the skill regions, the episodic
  * memories and the yes/no doorway examples. [OneBrainEngine] is the one engine that runs it, and
  * this class is the one place that knows how to load and exchange it (bundled `model.json`, a
@@ -46,6 +43,7 @@ class OneBrainModel {
         /** The island mesh is wider than the legacy 32-D vectors: byte n-grams need the room to tell subjects apart. */
         const val MESH_DIMENSIONS = 64
         const val DELTA_FORMAT = "neuroclaw-mesh-delta-v2"
+        const val SYNAPSE_FORMAT = "neuroclaw-synapses-v1"
         private val INPUT_EDGE_REGEX = Regex("""^memory_(input|output)_b(\d+)$""")
     }
 
@@ -56,8 +54,11 @@ class OneBrainModel {
      */
     val mesh = IslandMesh(dimensions = MESH_DIMENSIONS, coreNeurons = CORE_NEURONS)
 
-    /** Pretrained byte-transition graph. */
-    val byteEdges = ArrayList<ByteEdge>()
+    /**
+     * The byte-transition graph. It starts as the pretrained graph re-wired through hubs (not all-to-all), then changes
+     * with use: unused connections fade and are deleted, neurons that keep firing together get connected.
+     */
+    val synapses = SynapseGraph()
 
     /** Skill regions by id: built-ins, grafted extensions, store skills, corrections and yes/no doorways. */
     val regions = LinkedHashMap<String, SkillRegion>()
@@ -86,7 +87,10 @@ class OneBrainModel {
         )
     }
 
-    /** Replaces the byte graph with the one in a OneBrain `model.json`. Returns the edge count. */
+    /**
+     * Replaces the byte graph with the one in a OneBrain `model.json`, re-wired through hubs.
+     * Returns the number of connections it now has (far fewer than the dense graph in the file).
+     */
     fun loadByteGraph(modelJson: String): Int {
         val obj = JSONObject(modelJson)
         version = obj.optLong("modifiedAt", obj.optLong("updatedAt", 0L))
@@ -108,7 +112,7 @@ class OneBrainModel {
 
         val weightsArr = obj.optJSONArray("weights")
         val connArr = obj.optJSONArray("connections")
-        byteEdges.clear()
+        val dense = ArrayList<ByteEdge>()
         if (connArr != null && weightsArr != null) {
             for (i in 0 until connArr.length()) {
                 val pair = connArr.optJSONArray(i) ?: continue
@@ -119,11 +123,12 @@ class OneBrainModel {
                 val wIdx = cObj.optInt("weightIndex", -1)
                 if (wIdx in 0 until weightsArr.length() && !weightsArr.isNull(wIdx)) {
                     val w = weightsArr.optDouble(wIdx, 0.0).toFloat()
-                    byteEdges.add(ByteEdge(from.second, to.second, w))
+                    dense.add(ByteEdge(from.second, to.second, w))
                 }
             }
         }
-        return byteEdges.size
+        synapses.loadDense(dense)
+        return synapses.size
     }
 
     /** Exports the vale ledger and every region as a mesh delta another OneBrain can merge. */
@@ -157,8 +162,8 @@ class OneBrainModel {
         val obj = runCatching { JSONObject(raw) }.getOrNull()
             ?: return false to "Invalid JSON mesh delta."
         if (obj.has("neurons") && obj.has("connections")) {
-            val edgeCount = loadByteGraph(raw)
-            return true to "Imported full OneBrain model ($edgeCount byte edges)."
+            val connections = loadByteGraph(raw)
+            return true to "Imported full OneBrain model ($connections hub-routed connections)."
         }
         // Islands first (additive: a local island is never replaced), then the ledger only if it fits the grown mesh.
         val importedIslands = obj.optJSONArray("islands")?.let { loadIslands(it) } ?: 0
@@ -186,6 +191,40 @@ class OneBrainModel {
             }
         }
         return true to "Applied mesh delta ($importedRegions regions, $importedIslands new islands merged)."
+    }
+
+    // ------------------------------------------------------------ synapse persistence
+
+    /** The graph as it has evolved, so growth and pruning survive a restart. Tied to the pretrained model it grew from. */
+    fun synapsesToJson(): JSONObject = JSONObject()
+        .put("format", SYNAPSE_FORMAT)
+        .put("modelVersion", version)
+        .put("steps", synapses.steps)
+        .put("formed", synapses.totalFormed)
+        .put("pruned", synapses.totalPruned)
+        .put("neurons", JSONArray(synapses.neuronIds()))
+        .put("synapses", JSONArray().apply {
+            synapses.all().forEach { put(JSONArray().put(it.from).put(it.to).put(it.weight.toDouble())) }
+        })
+
+    /**
+     * Restores an evolved graph. Ignored (the freshly loaded pretrained graph stays) when it was grown from a different
+     * pretrained model than the one loaded now, or is malformed.
+     */
+    fun loadSynapses(o: JSONObject): Boolean {
+        if (o.optString("format") != SYNAPSE_FORMAT || o.optLong("modelVersion", -1L) != version) return false
+        val nArr = o.optJSONArray("neurons") ?: return false
+        val sArr = o.optJSONArray("synapses") ?: return false
+        val neurons = (0 until nArr.length()).map { nArr.optInt(it, -1) }.filter { it >= 0 }
+        val saved = ArrayList<Synapse>()
+        for (i in 0 until sArr.length()) {
+            val t = sArr.optJSONArray(i) ?: continue
+            if (t.length() != 3) continue
+            saved.add(Synapse(t.optInt(0, -1), t.optInt(1, -1), t.optDouble(2, 0.0).toFloat()))
+        }
+        if (neurons.isEmpty()) return false
+        synapses.restore(neurons, saved, o.optInt("steps"), o.optInt("formed"), o.optInt("pruned"))
+        return true
     }
 
     // ------------------------------------------------------------ island persistence

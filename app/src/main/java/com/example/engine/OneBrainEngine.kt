@@ -51,10 +51,16 @@ class OneBrainEngine(private val context: Context) {
     companion object {
         /** The frozen pretrained core. The live mesh is bigger once islands have grown: see [OneBrainEngine.neuronCount]. */
         const val CORE_NEURONS = OneBrainModel.CORE_NEURONS
+        /** What low-power mode scales: the frozen core, the one fixed-size part of the mesh (learned islands add to it). */
+        const val PHONE_NEURONS = OneBrainModel.CORE_NEURONS
         const val PHONE_DIMENSIONS = OneBrainModel.DIMENSIONS
         const val MESH_DIMENSIONS = OneBrainModel.MESH_DIMENSIONS
         private const val INFLUENCE_DECAY = 0.95f
         private const val ISLANDS_FILE = "onebrain_islands.json"
+        private const val SYNAPSES_FILE = "onebrain_synapses.json"
+
+        /** The synapse graph is saved when its shape changes, and otherwise at least this often (weights drift every turn). */
+        private const val SYNAPSE_SAVE_EVERY = 10
 
         /** Chat only mentions a yes/no doorway whose examples resemble the message at least this much. */
         private const val YES_NO_HINT_MIN_SIMILARITY = 0.25f
@@ -85,6 +91,7 @@ class OneBrainEngine(private val context: Context) {
 
     init {
         loadBundledOneBrain()
+        loadSynapsesFromDisk()
         registerDefaultRegions()
         loadIslandsFromDisk()
     }
@@ -108,15 +115,30 @@ class OneBrainEngine(private val context: Context) {
         o.optJSONObject("history")?.let { brain.loadSleepHistory(it) }
     }
 
+    private val synapsesFile get() = File(context.filesDir, SYNAPSES_FILE)
+
+    /** The byte graph changes with use (connections fade, delete and grow), so what it became is saved. */
+    private fun persistSynapses() {
+        runCatching { synapsesFile.writeText(brain.synapsesToJson().toString()) }
+    }
+
+    /** Picks the evolved graph back up, if it grew from the same pretrained model that is loaded now. */
+    private fun loadSynapsesFromDisk() {
+        val raw = runCatching { synapsesFile.takeIf { it.exists() }?.readText() }.getOrNull() ?: return
+        val o = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        brain.loadSynapses(o)
+    }
+
     private fun loadBundledOneBrain() {
         val raw = runCatching {
             context.assets.open("onebrain/model.json").bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
-        parseOneBrainModel(raw)
+        brain.loadByteGraph(raw)
     }
 
+    /** Loads a (synced) pretrained model: the byte graph is rebuilt from it, hub-routed, replacing whatever grew before. */
     fun parseOneBrainModel(modelJson: String): Int = synchronized(lock) {
-        brain.loadByteGraph(modelJson)
+        brain.loadByteGraph(modelJson).also { persistSynapses() }
     }
 
     private fun registerDefaultRegions() {
@@ -196,20 +218,12 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun recallBytes(text: String, topK: Int = 5): List<String> = synchronized(lock) {
-        if (brain.byteEdges.isEmpty()) return emptyList()
-        val active = HashSet<Int>()
-        for (b in text.toByteArray(Charsets.UTF_8)) active.add(b.toInt() and 0xFF)
-        val scores = HashMap<Int, Float>()
-        for (edge in brain.byteEdges) {
-            if (edge.fromByte in active) {
-                scores[edge.toByte] = (scores[edge.toByte] ?: 0f) + edge.weight
-            }
-        }
-        return scores.entries
-            .sortedByDescending { it.value }
-            .take(topK)
-            .map { (b, _) -> byteLabel(b) }
+        if (brain.synapses.size == 0) return emptyList()
+        return brain.synapses.recall(distinctBytes(text), topK).map { byteLabel(it) }
     }
+
+    private fun distinctBytes(text: String): Set<Int> =
+        text.toByteArray(Charsets.UTF_8).mapTo(HashSet()) { it.toInt() and 0xFF }
 
     fun selectRegions(text: String, topK: Int = 3): List<SkillRegion> = synchronized(lock) {
         val inputVec = HDVector.encodeBytes(text.toByteArray(Charsets.UTF_8), PHONE_DIMENSIONS)
@@ -235,21 +249,10 @@ class OneBrainEngine(private val context: Context) {
         val mesh = brain.mesh
         val lower = message.trim().lowercase()
 
-        // Propagate across mesh with Vale-weighted plasticity (high-vale neurons resist rapid drift)
-        var maxSim = -1f
-        var bestIdx = 0
-        for (i in 0 until lowPowerNeuronCount()) {
-            val sim = HDVector.cosineSimilarity(inputVec, brain.neuronStates[i])
-            if (sim > maxSim) {
-                maxSim = sim
-                bestIdx = i
-            }
-            val plasticity = (LEARNING_RATE / (0.5f + brain.valeLedger[i])).coerceIn(0.005f, 0.08f)
-            val mixWeight = max(0f, sim + 0.25f) * plasticity
-            if (mixWeight > 0f) {
-                brain.neuronStates[i] = HDVector.bundle(brain.neuronStates[i], inputVec, 1f - mixWeight, mixWeight)
-            }
-        }
+        // Keeps the low-power governor's battery history current (it backs [isLowPower]). Nothing is mixed into any
+        // neuron here any more: awake, chat only reads and routes, and learning happens in sleep.
+        lowPowerNeuronCount()
+
         // WAKE: the islands that recognise this message are routed to, and anything new to me is remembered for
         // sleep. No neuron changes while awake, so a chat can never overwrite what the mesh already knows.
         val routed = mesh.wake(message, brain.cyclesRun, System.currentTimeMillis())
@@ -270,6 +273,10 @@ class OneBrainEngine(private val context: Context) {
 
         val matchedRegions = selectRegions(message)
         val recalled = recallBytes(message)
+        // Answered from the graph as it was; now the graph itself moves on: connections that were used together
+        // strengthen, the rest fade (and are deleted at ~0), neurons that keep firing together get connected.
+        val synapseStep = brain.synapses.step(distinctBytes(message))
+        if (synapseStep.changedStructure || brain.synapses.steps % SYNAPSE_SAVE_EVERY == 0) persistSynapses()
         brain.cyclesRun++
 
         // Recall closest prior episodic memory if relevant
@@ -440,7 +447,7 @@ class OneBrainEngine(private val context: Context) {
         return buildString {
             when {
                 lower.contains("hello") || lower == "hi" || lower.startsWith("hey") -> {
-                    append("OneBrain mesh is awake on this device (${brain.byteEdges.size} byte edges, ${brain.regions.size} active skill regions). ")
+                    append("OneBrain mesh is awake on this device (${brain.synapses.size} connections routed through ${brain.synapses.hubCount} hubs, ${brain.regions.size} active skill regions). ")
                     append("Every character you send enters through the Zip Loop as raw UTF-8 bytes without a tokenizer.")
                     append("\n\n[[ask: Inspect mesh stats | What is the current mesh and vale state?]]")
                     append(" [[ask: Audit permissions | tool: permission_audit]]")
@@ -450,7 +457,8 @@ class OneBrainEngine(private val context: Context) {
                     val totalVale = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat()
                     append("Mesh state: ${brain.mesh.neuronCount} hyper-neurons x $MESH_DIMENSIONS dims in ${brain.mesh.islands.size} islands ")
                     append("(${brain.mesh.learned().size} learned), ")
-                    append("${brain.byteEdges.size} OneBrain byte connections, ")
+                    append("${brain.synapses.size} OneBrain byte connections through ${brain.synapses.hubCount} hubs ")
+                    append("(${brain.synapses.totalFormed} grown, ${brain.synapses.totalPruned} pruned so far), ")
                     append("Vale budget conserved at ${"%.2f".format(totalVale)}/${"%.2f".format(brain.mesh.valeTotal)}. ")
                     append("Cycle surprise is ${"%.2f".format(surprise)} across ${brain.memoryTraces.size} consolidated traces.")
                     append("\n\n[[ask: Teach Yes/No | How do I teach OneBrain a new yes/no rule?]]")
@@ -591,8 +599,8 @@ class OneBrainEngine(private val context: Context) {
         listOf(
             HealingCheck(
                 component = "OneBrain Byte Graph",
-                healthy = brain.byteEdges.isNotEmpty(),
-                detail = "${brain.byteEdges.size} learned byte edges loaded (v$oneBrainVersion)"
+                healthy = brain.synapses.size > 0,
+                detail = "${brain.synapses.size} hub-routed byte connections loaded (v$oneBrainVersion)"
             ),
             HealingCheck(
                 component = "Vale Zero-Sum Ledger",
@@ -627,7 +635,7 @@ class OneBrainEngine(private val context: Context) {
         MeshStatsSnapshot(
             neuronCount = brain.mesh.neuronCount,
             dimensions = MESH_DIMENSIONS,
-            oneBrainEdges = brain.byteEdges.size,
+            oneBrainEdges = brain.synapses.size,
             oneBrainVersion = oneBrainVersion,
             activeRegions = brain.regions.values.map { it.name },
             valeTotal = sum,
@@ -711,17 +719,17 @@ class OneBrainEngine(private val context: Context) {
     }
 
     fun topByteEdges(limit: Int = 18): List<ByteEdgePreview> = synchronized(lock) {
-        brain.byteEdges
+        brain.synapses.all()
             .sortedByDescending { abs(it.weight) }
             .take(limit)
-            .map { e -> ByteEdgePreview(byteLabel(e.fromByte), byteLabel(e.toByte), e.weight) }
+            .map { e -> ByteEdgePreview(nodeLabel(e.from), nodeLabel(e.to), e.weight) }
     }
 
     fun captureCheckpoint(label: String): BrainCheckpoint = synchronized(lock) {
         BrainCheckpoint(
             id = UUID.randomUUID().toString(),
             label = label.ifBlank { "Checkpoint #${brain.cyclesRun}" },
-            edgesCount = brain.byteEdges.size,
+            edgesCount = brain.synapses.size,
             valeTotal = brain.mesh.neurons.sumOf { it.vale.toDouble() }.toFloat(),
             memoriesCount = brain.memoryTraces.size,
             valeSnapshot = brain.mesh.neurons.map { it.vale }
@@ -748,4 +756,7 @@ class OneBrainEngine(private val context: Context) {
 
     private fun byteLabel(b: Int): String =
         if (b in 32..126) "'${b.toChar()}'" else "0x${b.toString(16).padStart(2, '0')}"
+
+    private fun nodeLabel(node: Int): String =
+        if (Nodes.role(node) == NodeRole.HUB) "hub ${Nodes.hubIndex(node)}" else byteLabel(Nodes.byteOf(node))
 }
