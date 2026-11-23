@@ -39,6 +39,56 @@ const DEFAULT_TRAINING_CONFIG: TrainingConfig = {
   elasticStateDim: 16,
 };
 
+/**
+ * Numerically stable softmax. Subtracts the largest finite logit, treats a
+ * non-finite logit as -100 (effectively zero probability), and falls back to
+ * a uniform distribution when nothing usable is left. Always returns a valid
+ * probability vector. Writes into `out` when given, so hot loops can reuse a buffer.
+ */
+export function stableSoftmax(
+  logits: ArrayLike<number>,
+  out: Float32Array = new Float32Array(logits.length),
+): Float32Array {
+  const n = logits.length;
+  let max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const l = logits[i]!;
+    if (Number.isFinite(l) && l > max) max = l;
+  }
+  if (!Number.isFinite(max)) {
+    // No usable logit at all: exact uniform, not a normalised pile of float32 denormals.
+    out.fill(n > 0 ? 1 / n : 0);
+    return out;
+  }
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    const l = logits[i]!;
+    const e = Math.exp((Number.isFinite(l) ? l : -100) - max);
+    out[i] = e;
+    sum += e;
+  }
+  if (!(sum > 0) || !Number.isFinite(sum)) {
+    out.fill(n > 0 ? 1 / n : 0);
+  } else {
+    for (let i = 0; i < n; i++) out[i] = out[i]! / sum;
+  }
+  return out;
+}
+
+/** Cross-entropy of one target class, floored so a zero probability never gives Infinity. */
+export function crossEntropyLoss(probs: ArrayLike<number>, targetId: number): number {
+  const p = probs[targetId]!;
+  return -Math.log(Number.isFinite(p) ? Math.max(p, 1e-10) : 1e-10);
+}
+
+/** Scale factor (<= 1) that brings a gradient's L2 norm down to `maxNorm`. */
+export function gradClipScale(grad: ArrayLike<number>, maxNorm = 10): number {
+  let sq = 0;
+  for (let i = 0; i < grad.length; i++) sq += grad[i]! * grad[i]!;
+  const norm = Math.sqrt(sq);
+  return norm > maxNorm ? maxNorm / norm : 1;
+}
+
 const TRAINING_CORPUS = "the quick brown fox jumps over the lazy dog the cat sat on the mat hello world this is a test of the emergency broadcast system the rain in spain falls mainly on the plain it was the best of times it was the worst of times to be or not to be that is the question all that glitters is not gold a journey of a thousand miles begins with a single step knowledge is power time is money the early bird catches the worm practice makes perfect actions speak louder than words the pen is mightier than the sword when in rome do as the romans do necessity is the mother of invention a picture is worth a thousand words where there is smoke there is fire if you want something done right do it yourself the squeaky wheel gets the grease birds of a feather flock together dont count your chickens before they hatch every cloud has a silver lining two heads are better than one the grass is always greener on the other side";
 
 /** How many inner-loop iterations run before yielding to the event loop once. */
@@ -305,31 +355,8 @@ export class NeuroclawTrainer {
           }
         }
 
-        let maxLogit = -Infinity;
-        let hasValid = false;
-        for (let v = 0; v < this.vocabSize; v++) {
-          const l = logits[v]!;
-          if (isFinite(l) && l > maxLogit) { maxLogit = l; hasValid = true; }
-        }
-        if (!hasValid) maxLogit = 0;
-        let sumExp = 0;
-        const probs = new Float32Array(this.vocabSize);
-        for (let v = 0; v < this.vocabSize; v++) {
-          const l = logits[v]!;
-          const safe = isFinite(l) ? l : -100;
-          probs[v] = Math.exp(safe - maxLogit);
-          sumExp += probs[v]!;
-        }
-        if (sumExp <= 0 || !isFinite(sumExp)) {
-          const uniform = 1.0 / this.vocabSize;
-          for (let v = 0; v < this.vocabSize; v++) probs[v] = uniform;
-        } else {
-          for (let v = 0; v < this.vocabSize; v++) probs[v] = probs[v]! / sumExp;
-        }
-
-        const tp = probs[targetId]!;
-        const targetProb = (isFinite(tp) ? Math.max(tp, 1e-10) : 1e-10);
-        totalLoss += -Math.log(targetProb);
+        const probs = stableSoftmax(logits);
+        totalLoss += crossEntropyLoss(probs, targetId);
         count++;
 
         const gradOutput = new Float32Array(this.vocabSize);
@@ -338,8 +365,7 @@ export class NeuroclawTrainer {
         }
         gradOutput[targetId] = gradOutput[targetId]! - 1;
 
-        const gradNorm = Math.sqrt(gradOutput.reduce((s, g) => s + g * g, 0));
-        const gradScale = gradNorm > 10 ? 10 / gradNorm : 1;
+        const gradScale = gradClipScale(gradOutput);
 
         for (let v = 0; v < this.vocabSize; v++) {
           const ow = this.weights.outputWeights[v];
@@ -427,19 +453,16 @@ export class NeuroclawTrainer {
           for (let d = 0; d < dim; d++) dot += hidden[d] * ow[d];
           logits[v] = dot;
         }
-        let maxLogit = -Infinity;
-        for (const l of logits) if (Number.isFinite(l) && l > maxLogit) maxLogit = l;
-        if (!Number.isFinite(maxLogit)) maxLogit = 0;
-        const probs = new Float32Array(this.vocabSize);
-        let sumExp = 0;
-        for (let v = 0; v < this.vocabSize; v++) { probs[v] = Math.exp((Number.isFinite(logits[v]) ? logits[v] : -100) - maxLogit); sumExp += probs[v]; }
-        for (let v = 0; v < this.vocabSize; v++) probs[v] = sumExp > 0 ? probs[v] / sumExp : 1 / this.vocabSize;
-        totalLoss += -Math.log(Math.max(probs[targetId], 1e-10));
+        const probs = stableSoftmax(logits);
+        totalLoss += crossEntropyLoss(probs, targetId);
         count++;
 
         const gradOutput = new Float32Array(this.vocabSize);
         for (let v = 0; v < this.vocabSize; v++) gradOutput[v] = probs[v];
         gradOutput[targetId] -= 1;
+        // Same clip the dense path uses; without it one bad step can blow up the elastic core.
+        const gradScale = gradClipScale(gradOutput);
+        if (gradScale < 1) for (let v = 0; v < this.vocabSize; v++) gradOutput[v] *= gradScale;
 
         const gradHidden = new Float32Array(dim);
         for (let v = 0; v < this.vocabSize; v++) {
