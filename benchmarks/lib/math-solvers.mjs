@@ -7,18 +7,6 @@ import { evalParts } from './math-problems.mjs';
 
 const coreUrl = (dist) => pathToFileURL(`${dist}/models && skills/core/`).href;
 
-/** The mesh and zip solvers run the compiled TypeScript backend (dist/). The repo is now the Android app, which has no
- *  such build, so say so plainly instead of failing with a bare module-not-found. Use --solver path/to/solver.mjs for a
- *  model that Node can call. */
-async function importCore(dist, file) {
-  try { return await import(coreUrl(dist) + file); } catch (e) {
-    if (e && (e.code === 'ERR_MODULE_NOT_FOUND' || e.code === 'MODULE_NOT_FOUND')) {
-      throw new Error(`the built-in mesh/zip solvers need the compiled TypeScript backend (${dist}/models && skills/core/${file}), which is not in this repo. Use --solver reference, --solver memorise, or --solver path/to/solver.mjs.`);
-    }
-    throw e;
-  }
-}
-
 /** Exact arithmetic. Must score 100%: if it does not, the exam itself is broken. */
 export const reference = () => ({ name: 'reference (exact)', solve: (p) => evalParts(p.parts) });
 
@@ -31,8 +19,8 @@ export function memoriser({ train }) {
 /** The repo's own arithmetic network (math-engine.ts on the HyperDimensionalEngine): trained on the facts, then asked. Chains are
  *  answered by asking it one step at a time, so its errors compound, as they would for any composed answer. */
 export async function mesh({ train, seed, dist }) {
-  const { scaleForFacts, trainArithmetic, askArithmetic } = await importCore(dist, 'math-engine.js');
-  const { HyperDimensionalEngine } = await importCore(dist, 'onebrain.js');
+  const { scaleForFacts, trainArithmetic, askArithmetic } = await import(coreUrl(dist) + 'math-engine.js');
+  const { HyperDimensionalEngine } = await import(coreUrl(dist) + 'onebrain.js');
   const facts = train.map(({ a, b, op, result }) => ({ a, b, op, result }));
   const scale = scaleForFacts(facts);
   const engine = new HyperDimensionalEngine({ neuronCount: 24, dimensions: 8, seed });
@@ -49,8 +37,8 @@ export async function mesh({ train, seed, dist }) {
 
 /** The Zip Loop: taught question text -> answer text, asked the exam's text. No parsing on our side; bytes in, bytes out. */
 export async function zip({ train, seed, dist }) {
-  const { ZipSpeaker } = await importCore(dist, 'zip-speech.js');
-  const { HyperDimensionalEngine } = await importCore(dist, 'onebrain.js');
+  const { ZipSpeaker } = await import(coreUrl(dist) + 'zip-speech.js');
+  const { HyperDimensionalEngine } = await import(coreUrl(dist) + 'onebrain.js');
   const engine = new HyperDimensionalEngine({ neuronCount: 64, dimensions: 64, seed });
   const sp = new ZipSpeaker(engine, { maxAnswerBytes: 10 });
   sp.teach(train.map((f) => ({ question: f.text, answer: String(f.result) })));

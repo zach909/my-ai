@@ -5,11 +5,11 @@
 //   node scripts/model-change-test.mjs --watch         # stay running; test whenever a big change has settled
 //   options: --min-lines 20  --solver mesh  --n 400  --skip-build  --no-fail
 //
-// "The model" is the code under MODEL_DIRS (the Android engine, the OneBrain assets and training/). "Big" is MIN_LINES changed lines (added + removed) in them since the
+// "The model" is the code under MODEL_DIRS. "Big" is MIN_LINES changed lines (added + removed) in them since the
 // last tested state. The state tested is the working tree, uncommitted edits included. Small edits pile up until
 // together they reach the limit.
 //
-// Before testing, the backend is rebuilt when scripts/build-backend.mjs exists (the Android layout has none) so the exam measures the code as it is now and never a
+// Before testing, the backend is rebuilt (scripts/build-backend.mjs) so the exam measures the code as it is now and never a
 // stale dist/. The exam (benchmarks/math_exam.mjs) draws fresh random problems each time. The ANCHOR score of each run is
 // kept in history.jsonl next to the git state it was measured on, and compared with the median of the recent runs. Problems
 // are new every time, so a score moves a little by chance; a drop is reported as a regression only when it is larger than
@@ -24,7 +24,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = process.cwd();
-export const MODEL_DIRS = ['app/src/main/java/com/example/engine', 'app/src/main/assets/onebrain', 'training'];
+export const MODEL_DIRS = ['asi_core', 'models && skills', 'model && skills manager', 'training'];
 const STATE_DIR = join(ROOT, '.neuroclaw', 'mutating-tests');
 const LAST = join(STATE_DIR, 'last-tested.json'), HISTORY = join(STATE_DIR, 'history.jsonl');
 const HISTORY_CAP = 200;
@@ -86,12 +86,12 @@ export function droppedBeyondChance(baseline, now, n) {
 }
 
 function runExam() {
-  if (!flag('skip-build') && existsSync(join(ROOT, 'scripts', 'build-backend.mjs'))) {   // no build script in the Android layout: nothing to rebuild
+  if (!flag('skip-build')) {
     const b = spawnSync(process.execPath, [join(ROOT, 'scripts', 'build-backend.mjs')], { cwd: ROOT, stdio: 'inherit' });
     if (b.status !== 0) { console.error('model-change-test: the backend did not build, so the exam would measure old code. Not run. (--skip-build to use the current dist/.)'); return null; }
   }
   const out = join(STATE_DIR, 'last-report.json'); mkdirSync(STATE_DIR, { recursive: true });
-  const solver = opt('solver', 'mesh');   // mesh needs a built dist/; pass --solver path/to/solver.mjs for a model Node can call
+  const solver = opt('solver', 'mesh');
   const r = spawnSync(process.execPath, [join(ROOT, 'benchmarks', 'math_exam.mjs'), '--solver', solver, '--n', opt('n', '400'), '--json', out], { cwd: ROOT, stdio: 'inherit' });
   if (r.status !== 0) { console.error(`model-change-test: the exam failed (exit ${r.status}).`); return null; }
   return readJson(out);
