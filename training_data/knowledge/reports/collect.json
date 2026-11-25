@@ -5,7 +5,7 @@
     "use": "train",
     "nc": true,
     "sa": true,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -15,7 +15,7 @@
     "use": "reference",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Per-track licences differ; ND/NC tracks must be filtered out. github.com is not reachable from the build sandbox, raw.githubusercontent.com is."
   },
@@ -25,7 +25,7 @@
     "use": "train",
     "nc": false,
     "sa": true,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -35,7 +35,7 @@
     "use": "train",
     "nc": false,
     "sa": true,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -45,7 +45,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Pointer list, not data. Not downloaded."
   },
@@ -55,7 +55,7 @@
     "use": "none",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "skipped: catalogue says not ingestible (No open bulk download. Terms page could not be fetched (HTTP 404 on the URL tried), so the exact terms are UNVERIFIED; treated as not ingestible.)"
   },
@@ -65,7 +65,7 @@
     "use": "reference",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Licence varies per file; must be filtered. Not downloaded here."
   },
@@ -75,7 +75,7 @@
     "use": "reference",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - API reference page returned HTTP 403 to the build sandbox; licence per record must be filtered. Not downloaded."
   },
@@ -85,7 +85,7 @@
     "use": "train",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -95,7 +95,7 @@
     "use": "train",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 2,
     "status": "obtained"
   },
@@ -105,7 +105,7 @@
     "use": "eval",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 2,
     "status": "obtained"
   },
@@ -115,7 +115,7 @@
     "use": "eval",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - No-Derivatives: whether a trained model is a derivative is unsettled, so it is NOT used for training here; not downloaded."
   },
@@ -125,7 +125,7 @@
     "use": "none",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "skipped: catalogue says not ingestible (Licence and size could not be verified, so it is not ingested.)"
   },
@@ -135,7 +135,7 @@
     "use": "train",
     "nc": true,
     "sa": true,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - Acted emotions, North American English, 24 speakers; NC+SA. Not downloaded (size)."
   },
@@ -145,7 +145,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - Read speech only; not downloaded (size; no speech-recognition model is trained here)."
   },
@@ -155,7 +155,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Needs interactive acceptance; no unauthenticated bulk URL found. Not downloaded."
   },
@@ -165,7 +165,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -175,7 +175,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -185,7 +185,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 1,
     "status": "obtained"
   },
@@ -195,7 +195,7 @@
     "use": "none",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "skipped: catalogue says not ingestible (The site page returned no machine-readable terms; not ingested.)"
   },
@@ -205,7 +205,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - The anonymous daily budget for this network was already used up (HTTP 429), so nothing was fetched. Abstracts are inverted indexes and metadata quality varies."
   },
@@ -215,7 +215,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 4,
     "status": "obtained"
   },
@@ -225,7 +225,7 @@
     "use": "reference",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Peer-reviewed but includes retracted papers; per-article licence must be filtered. Not downloaded."
   },
@@ -235,7 +235,7 @@
     "use": "none",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "skipped: catalogue says not ingestible (Needs an API key and large disk; page not retrievable here. Not ingested.)"
   },
@@ -245,7 +245,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - A catalogue, not a corpus. Not downloaded."
   },
@@ -255,7 +255,7 @@
     "use": "none",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "skipped: catalogue says not ingestible (The page itself did not load; not ingested.)"
   },
@@ -265,7 +265,7 @@
     "use": "eval",
     "nc": true,
     "sa": true,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - NC+SA, PDF extraction needed; not downloaded."
   },
@@ -275,7 +275,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Gated and far beyond local hardware; includes low-quality and some insecure code, so a quality/safety filter is mandatory. Not downloaded."
   },
@@ -285,7 +285,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - Not downloaded (size). Annotation set (99 queries) is the retrieval benchmark."
   },
@@ -295,7 +295,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Duplicate catalogue row; counted as a source but adds nothing new."
   },
@@ -305,7 +305,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - GPL-2.0: derivative text carries copyleft. Not downloaded."
   },
@@ -315,7 +315,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 10,
     "status": "obtained"
   },
@@ -325,7 +325,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - The API path tried returned 404; licence per package. Not downloaded."
   },
@@ -335,7 +335,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Index only gives metadata and links; each app's source repo must be cloned. Not downloaded."
   },
@@ -345,7 +345,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Used in this build only as a download host and to read licence cards."
   },
@@ -355,7 +355,7 @@
     "use": "eval",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - The BEIR README warns users to verify each licence. Only SciFact (the smallest) is used."
   },
@@ -365,7 +365,7 @@
     "use": "eval",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: too large or gated for this build - Strictly non-commercial; large; not downloaded. Treated as eval-only reference."
   },
@@ -375,7 +375,7 @@
     "use": "train",
     "nc": true,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 4,
     "status": "obtained"
   },
@@ -385,7 +385,7 @@
     "use": "train",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 2,
     "status": "obtained"
   },
@@ -395,7 +395,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Used as a download host for FSD50K, Clotho and RAVDESS metadata."
   },
@@ -405,7 +405,7 @@
     "use": "reference",
     "nc": false,
     "sa": false,
-    "accessed": "2026-11-21",
+    "accessed": "2026-11-25",
     "files": 0,
     "status": "not-fetched: reference/pointer source - Citation links only (no texts). Not downloaded."
   }
