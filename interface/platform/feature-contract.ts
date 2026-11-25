@@ -1,0 +1,414 @@
+/**
+ * The feature contract: every shared feature, what implements it, what it needs
+ * from the platform, where it works, and which tests cover it.
+ *
+ * Support per platform is DERIVED, not typed in. A feature lists the platform
+ * capabilities it needs (`needs`: alternatives, each a set that must all hold)
+ * and `featureSupport()` combines that with the adapter table in adapters.ts.
+ * So a platform cannot be claimed to support chat without a way to reach an
+ * engine, and the parity matrix in docs/PLATFORMS.md is generated from this
+ * file (scripts/release/parity-matrix.mjs) and checked by a test.
+ *
+ * `verifyContract()` checks the parts that can be checked from the file system:
+ * that implementation files exist, that each route is actually handled in the
+ * server source, and that each named test file exists. A feature that points at
+ * something that is not there fails the build.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { ADAPTERS, PLATFORM_IDS, type CapabilityId, type PlatformId, type Support } from './adapters.js';
+
+export interface FeatureTest {
+  file: string;
+  /** vitest: the repo's existing suite (needs its dev dependencies installed). node-test: runs with plain `node --test`. */
+  runner: 'vitest' | 'node-test';
+}
+
+export interface Feature {
+  id: string;
+  title: string;
+  description: string;
+  /** Files that implement it, relative to the repo root. */
+  implementation: string[];
+  /** HTTP routes it is reached through (METHOD path). Each must appear in the server source. */
+  routes: string[];
+  /** Alternatives. The feature works where ANY one set is fully available. */
+  needs: CapabilityId[][];
+  tests: FeatureTest[];
+  /** True when the feature contacts the network to do its job. */
+  needsNetwork?: boolean;
+  /** When set, the feature only exists on these platforms (it is not "unsupported" elsewhere, it is not applicable). */
+  onlyOn?: PlatformId[];
+}
+
+const v = (file: string): FeatureTest => ({ file, runner: 'vitest' });
+const n = (file: string): FeatureTest => ({ file, runner: 'node-test' });
+
+/** An engine is reachable either on the device or at a server. */
+const ENGINE: CapabilityId[][] = [['localEngine'], ['remoteEngine']];
+
+export const FEATURES: Feature[] = [
+  {
+    id: 'chat', title: 'Chat', description: 'Talk to the agent; replies come from the OneBrain mesh through the bit-level Zip Loop.',
+    implementation: ['interface/web-server.ts', 'interface/runner.ts', 'interface/visuals.ts', 'interface/prompt-buttons.ts', 'interface/response-bundle.ts', 'interface/response-edits.ts', 'interface/response-audio.ts', 'interface/response-formats.ts', 'interface/response-prediction.ts', 'interface/voice-orb.ts', 'models && skills/core/os-buttons.ts', 'models && skills/core/visual-apps.ts', 'models && skills/llm.js'],
+    routes: ['POST /api/chat', 'POST /api/chat/messages', 'GET /ask/:id', 'GET /api/os-buttons', 'POST /api/chat/correct', 'POST /api/chat/bundle', 'POST /api/chat/bundle/review', 'POST /api/chat/bundle/prediction', 'POST /api/chat/orb', 'POST /api/orb/zip', 'GET /api/status'],
+    needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), v('test/core/voice-orb.test.ts'), v('test/core/response-prediction.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
+  },
+  {
+    id: 'uploads', title: 'Attach a file or a folder', description: 'File and Folder buttons (and drag and drop) beside the message box. Each file goes up as raw bytes into the user\'s own data folder; the chat turn carries small text files whole and lists the rest by name and size.',
+    implementation: ['interface/uploads.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/uploads'],
+    needs: ENGINE, tests: [v('test/core/uploads.test.ts')],
+  },
+  {
+    id: 'auto-route', title: 'Auto route (effort, where to answer, how much network)', description: 'For each message it picks how hard to try, whether to answer on this device or a bigger computer, and how many islands of the network run (parts that are wired to each other and to nothing else, found from the weights as 0/1). Instant answers fast; Optimize prompt tidies the message first.',
+    implementation: ['models && skills/core/auto-route.ts', 'models && skills/core/weight-islands.ts', 'models && skills/core/prompt-optimizer.ts', 'models && skills/core/engine-chooser.ts', 'models && skills/core/engine-router.ts', 'interface/runner.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/auto-route.test.mjs'), v('test/core/engine-chooser.test.ts'), v('test/core/engine-router.test.ts')],
+  },
+  {
+    id: 'coding-jobs', title: 'Coding jobs (write, explain, debug, technical)', description: 'Reads each message to see whether it is a coding job (write code, explain code, debug an error or a stack trace, or an engineering question) and how hard it looks. A hard job, debugging most of all, gets more of the effort dial (more checks, and at the top a second way tried and compared); a plain one is held at a steady setting. A dial set by hand, or instant, is never adjusted, and it does not change which engine answers. Counts and patterns only, no model and no outside code.',
+    implementation: ['models && skills/core/coding-jobs.ts', 'models && skills/core/auto-route.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/chat'],
+    needs: ENGINE, tests: [n('test/platform/coding-jobs.test.mjs'), n('test/platform/auto-route.test.mjs')],
+  },
+  {
+    id: 'tool-scripts', title: 'Tool scripts (a script that runs features and tools)', description: 'A short script, written as "script: ..." in chat, that calls features and tools with tools.call(name, request) instead of one call per message. It runs in a separate, locked-down process (Node\'s own permission model: no files, no programs, no environment, a hard time limit) that can only send plain-text tool requests back, and every request goes through the same approval gate as chat, one at a time: a risky tool is held for you and the script stops there. It fails closed where the runtime cannot start such a process. Node\'s permission model does not restrict the network, which is stated in the file rather than hidden.',
+    implementation: ['models && skills/core/script-runner.ts', 'plugins/scripts.ts', 'plugins/index.ts', 'plugin_manager/registry.ts'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/tool-scripts.test.mjs')],
+  },
+  {
+    id: 'chat-history', title: 'Chat history', description: 'Saved threads, search, pinning, export and import.',
+    implementation: ['models && skills/core/chat-history-store.ts'],
+    routes: ['GET /api/chat-history/threads', 'POST /api/chat-history/save', 'GET /api/chat-history/search', 'GET /api/chat-history/export', 'POST /api/chat-history/import'],
+    needs: ENGINE, tests: [v('test/core/chat-history-pin.test.ts'), v('test/core/chat-archive.test.ts')],
+  },
+  {
+    id: 'memory', title: 'Memory', description: 'What the agent remembers, listed, forgotten one item or all at once.',
+    implementation: ['models && skills/onebrain-memory.js', 'models && skills/core/long-term-memory.ts'],
+    routes: ['GET /api/memory', 'DELETE /api/memory/all'],
+    needs: ENGINE, tests: [v('test/core/long-term-memory.test.ts'), v('test/core/delete-everything.test.ts')],
+  },
+  {
+    id: 'memory-topics', title: 'Memory topics', description: 'Memory as a folder tree of topic notes the agent files into, updates and searches itself.',
+    implementation: ['models && skills/core/memory-folders.ts', 'plugins/memory-topics.ts', 'interface/memory-topics-routes.ts'],
+    routes: ['GET /api/memory-topics', 'GET /api/memory-topics/search', 'GET /api/memory-topics/note', 'PUT /api/memory-topics/note', 'GET /api/memory-topics/summary', 'PUT /api/memory-topics/summary', 'POST /api/memory-topics/append', 'POST /api/memory-topics/move', 'DELETE /api/memory-topics'],
+    needs: ENGINE, tests: [v('test/core/memory-folders.test.ts')],
+  },
+  {
+    id: 'prompt-memory', title: 'Prompt memory', description: 'A much smaller archive that makes the mesh say what a big one does, found by trying and kept for reuse.',
+    implementation: ['models && skills/core/prompt-memory.ts', 'interface/prompt-memory-routes.ts'],
+    routes: ['GET /api/prompt-memory', 'GET /api/prompt-memory/standin', 'POST /api/prompt-memory/use', 'POST /api/prompt-memory/record', 'POST /api/prompt-memory/refresh', 'GET /api/prompt-memory/job', 'DELETE /api/prompt-memory'],
+    needs: ENGINE, tests: [v('test/core/prompt-memory.test.ts')],
+  },
+  {
+    id: 'reasoning', title: 'Reasoning engine', description: 'OneBrain neural mesh, hyperdimensional memory, experts and the Zip Loop.',
+    implementation: ['models && skills/llm.js', 'models && skills/core/unified-brain.ts', 'models && skills/onebrain/model.json'],
+    routes: ['GET /api/neurons', 'POST /api/zip-loop/run', 'POST /api/zip-loop/file'],
+    needs: ENGINE, tests: [v('test/core/onebrain-front-door.test.ts'), v('test/core/zip-halt.test.ts'), n('test/platform/engine.test.mjs')],
+  },
+  {
+    id: 'skills', title: 'Skills', description: 'Net-skills and prompting skills the mesh routes to; install, switch and publish.',
+    implementation: ['models && skills/core/net-skill-mesh.ts', 'models && skills/core/prompting-skill-store.ts'],
+    routes: ['GET /api/net-skills', 'POST /api/net-skills/switch', 'GET /api/prompting-skills', 'POST /api/prompting-skills/install'],
+    needs: ENGINE, tests: [v('test/core/net-skill-store.test.ts'), v('test/core/prompting-skills.test.ts')],
+  },
+  {
+    id: 'app-skills', title: 'App skills (the auto skill maker reads each app\'s commands)', description: 'For one named app, reads its commands (a command-line app\'s --help, or a graphical app\'s declared actions) and publishes a wiki page with a short entry per command; the AI is handed that page when it looks for a skill for the app.',
+    implementation: ['models && skills/core/app-catalog.ts', 'models && skills/core/agent-capabilities.ts', 'plugins/extensions/index.ts'],
+    routes: [],
+    needs: ENGINE, tests: [v('test/core/app-catalog.test.ts')],
+  },
+  {
+    id: 'plugins', title: 'Plugins', description: 'Tool plugins the agent can call (research, calendar, files, tasks...).',
+    implementation: ['plugins/index.ts', 'plugin_manager/registry.ts'],
+    routes: ['GET /api/plugins'],
+    needs: ENGINE, tests: [v('test/core/tool-neurons-chat.test.ts'), n('test/platform/engine.test.mjs')],
+  },
+  {
+    id: 'extensions', title: 'Extensions', description: 'Extension Builder: build, train, register and publish extensions.',
+    implementation: ['extension-builder', 'extension_system'],
+    routes: ['GET /api/extension/list', 'POST /api/extension/build', 'POST /api/extension/register'],
+    needs: ENGINE, tests: [v('test/core/extension-system.test.ts'), v('test/core/extensions-security.test.ts')],
+  },
+  {
+    id: 'store', title: 'Store', description: 'Browse, install, update and publish skills, plugins and files.',
+    implementation: ['models && skills/core/store.ts', 'models && skills/core/store-install.ts'],
+    routes: ['GET /api/store', 'POST /api/store/install', 'POST /api/store/uninstall'],
+    needs: ENGINE, tests: [v('test/core/store-install.test.ts')], needsNetwork: true,
+  },
+  {
+    id: 'wiki', title: 'Wiki', description: 'Shared knowledge pages anyone can read and add to.',
+    implementation: ['models && skills/core/wiki-store.ts', 'plugins/wiki.ts'],
+    routes: ['GET /api/wiki', 'POST /api/wiki'],
+    needs: ENGINE, tests: [v('test/core/wiki-ux.test.ts'), v('test/core/wiki-security.test.ts')],
+  },
+  {
+    id: 'web-search', title: 'Web search', description: 'Search through an open-source SearXNG instance you run.',
+    implementation: ['plugins/searxng.ts', 'plugins/research.ts'],
+    routes: [],
+    needs: [['localEngine'], ['remoteEngine']], tests: [v('test/core/searxng.test.ts')], needsNetwork: true,
+  },
+  {
+    id: 'settings', title: 'Settings', description: 'Appearance, chat, sources (links that open at the passage that backs a claim), updates, remote access password, computer access, safety, data and about, in one persistent page.',
+    implementation: ['interface/platform/settings-store.ts', 'interface/platform/settings-page.ts', 'interface/platform/routes.ts', 'interface/sources.ts'],
+    routes: ['GET /api/app-settings', 'POST /api/app-settings', 'GET /settings', 'GET /source'],
+    needs: ENGINE, tests: [n('test/platform/settings.test.mjs'), n('test/platform/mobile-ui.test.mjs'), n('test/platform/sources.test.mjs')],
+  },
+  {
+    id: 'computer-access', title: 'Computer access', description: 'Per-capability grants and master switches for what the agent may do on a computer.',
+    implementation: ['models && skills/core/access-settings.ts', 'models && skills/core/access-manager.ts'],
+    routes: ['GET /api/access', 'POST /api/access/switch', 'POST /api/access/capability'],
+    needs: [['localEngine']], tests: [v('test/core/access-switches.test.ts'), n('test/platform/settings.test.mjs')],
+  },
+  {
+    id: 'safety', title: 'Tool safety and approvals', description: 'Ask-first tools, approvals, auto-continue limits.',
+    implementation: ['models && skills/core/tool-safety.ts', 'interface/safety-routes.ts'],
+    routes: ['GET /api/safety', 'POST /api/safety/tools'],
+    needs: [['localEngine']], tests: [v('test/core/safety-routes.test.ts'), v('test/core/tool-safety.test.ts')],
+  },
+  {
+    id: 'remote-access', title: 'Remote access password', description: 'Password that guards the server from other devices.',
+    implementation: ['models && skills/core/remote-access.ts'],
+    routes: ['GET /api/auth/status', 'POST /api/auth/password', 'POST /api/auth/login'],
+    needs: [['localEngine']], tests: [v('test/core/remote-access.test.ts')],
+  },
+  {
+    id: 'accounts', title: 'Accounts', description: 'Admin and user accounts with separate data.',
+    implementation: ['models && skills/core/accounts.ts', 'interface/accounts-routes.ts', 'interface/accounts-page.ts'],
+    routes: ['GET /accounts'],
+    needs: [['localEngine']], tests: [v('test/core/accounts.test.ts'), v('test/core/accounts-routes.test.ts')],
+  },
+  {
+    id: 'commons', title: 'Commons', description: 'Points, leaderboard, projects and the hive.',
+    implementation: ['interface/commons-routes.ts', 'interface/commons-page.ts'],
+    routes: ['GET /commons'],
+    needs: [['localEngine']], tests: [v('test/core/commons-routes.test.ts')],
+  },
+  {
+    id: 'weights', title: 'Net maker, net skill maker and weight editor',
+    description: 'Write a program that makes a network or a skill, see what each weight does, change it a little, and compile code into weights.',
+    implementation: ['models && skills/core/neuro-build.ts', 'models && skills/core/weight-editor.ts', 'models && skills/core/task-training.ts', 'interface/weights-routes.ts', 'interface/weights-page.ts'],
+    routes: ['GET /weights'],
+    needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts'), v('test/core/task-training.test.ts')],
+  },
+  {
+    id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer. Self-debug: the AI finds what goes wrong in a net, looks at the weights behind it and their history, edits them a little through the weight editor, has a critic check whether it got better or worse, keeps or undoes the change and goes on; when weights cannot fix a wrong answer it makes a skill with the Extension Builder, and after enough skills proposes a plugin that is installed off until the owner approves it.',
+    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'models && skills/core/self-debug.ts', 'interface/self-debug-routes.ts', 'interface/platform/self-improvement-page.ts'],
+    routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop', 'GET /api/self-improvement/self-debug', 'GET /api/self-improvement/self-debug/sessions/:id', 'POST /api/self-improvement/self-debug/run', 'POST /api/self-improvement/self-debug/auto', 'POST /api/self-improvement/self-debug/plugins/:id'],
+    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts'), v('test/core/self-debug.test.ts'), v('test/core/self-debug-routes.test.ts')],
+  },
+  {
+    id: 'desktop-control', title: 'Desktop control', description: 'See and drive windows through the OS, natively on each: X11 and Wayland on Linux, PowerShell with user32 on Windows, osascript and screencapture on macOS. Only windows of programs the agent started itself can be driven.',
+    implementation: ['models && skills/core/desktop-control.ts', 'models && skills/core/desktop/native.ts', 'plugins/desktop.ts'],
+    routes: ['GET /api/apps/list'],
+    needs: [['localEngine', 'desktopControl']], tests: [v('test/core/desktop-control.test.ts'), n('test/platform/native-desktop.test.mjs')],
+  },
+  {
+    id: 'phone-sync', title: 'Phone sync', description: 'Phone apps sync conversations, photos and learned examples with the server.',
+    implementation: ['mobile/brain/src/index.ts', 'interface/web-server.ts'],
+    routes: ['POST /api/phone-sync'],
+    needs: [['remoteEngine']], tests: [v('test/core/phone-brain.test.ts')], onlyOn: ['android', 'ios'],
+  },
+  {
+    id: 'mobile-apps', title: 'Phone apps', description: 'Native Android and iOS apps: on-phone brain, setup screen, and the shared interface (home chat and Settings) in a web view.',
+    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/WebActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/MainActivity.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/Look.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/Pages.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/PromptButtons.kt', 'mobile/ios/NeuroClaw/WebAppView.swift', 'mobile/ios/NeuroClaw/ContentView.swift'],
+    routes: [],
+    needs: [['localEngine'], ['remoteEngine']], tests: [n('test/platform/mobile-native.test.mjs'), n('test/platform/mobile-ui.test.mjs')], onlyOn: ['android', 'ios'],
+  },
+  {
+    id: 'desktop-app', title: 'Desktop app (launcher and installers)', description: 'Open from the Start menu, application menu or Dock: starts the bundled engine and shows the interface in its own window, like any other app. On macOS and Linux that window is native (the system\'s own web view) and the engine is reached through a pipe, with no browser and no network port.',
+    implementation: ['scripts/desktop-launcher.mjs', 'interface/platform/embedded-transport.ts', 'native/host/main.rs', 'scripts/build-window-host.mjs', 'scripts/release/macos/NeuroClawHost.swift', 'scripts/release/stage-app.mjs', 'scripts/release/app-home.mjs', 'scripts/release/package-linux.mjs', 'scripts/release/package-windows.mjs', 'scripts/release/package-macos.mjs'],
+    routes: [],
+    needs: [['localEngine', 'installWithoutTerminal']], tests: [n('test/platform/packaging.test.mjs'), n('test/platform/embedded.test.mjs'), n('test/platform/launcher-window.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+  },
+  {
+    id: 'ai-os', title: 'AI OS mode (start with the computer)', description: 'Makes the engine part of the computer\'s sign-in, so the AI is running before any window is opened: a systemd user service or autostart entry on Linux, a LaunchAgent on macOS, a hidden per-user startup script on Windows. Per-user, undone with one switch, and it grants the agent no extra access. Also adds an assistant entry point where the OS has one to offer: a Start menu shortcut with a Ctrl+Alt+N hotkey on Windows, an application-menu entry and a GNOME Ctrl+Alt+N shortcut on Debian and other Linux. It cannot replace Copilot or Siri, which those systems do not allow.',
+    implementation: ['interface/platform/ai-os.ts', 'interface/platform/ai-os-layers.ts', 'interface/platform/os-commands.ts', 'interface/platform/kos-apps.ts', 'plugins/os-commands.ts', 'interface/platform/routes.ts', 'interface/platform/settings-page.ts', 'scripts/ai-os.mjs', 'scripts/osai.mjs'],
+    routes: ['GET /api/ai-os', 'POST /api/ai-os', 'GET /api/ai-os/layer', 'POST /api/ai-os/layer', 'GET /api/ai-os/apps', 'POST /api/ai-os/apps'],
+    needs: [['localEngine', 'backgroundService']], tests: [n('test/platform/ai-os.test.mjs'), n('test/platform/ai-os-layers.test.mjs'), n('test/platform/os-commands.test.mjs'), n('test/platform/osai.test.mjs'), n('test/platform/kos-apps.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+  },
+  {
+    id: 'system-assistant', title: 'Default digital assistant (Android)', description: 'NeuroClaw can be chosen under Settings > Default apps > Digital assistant app, the role Gemini holds, and then opens as a chat sheet from the power-button long press and the home gesture. Only the person can make the choice; there is no "Hey ..." wake word, which Android reserves for the phone\'s maker.',
+    implementation: ['mobile/android/app/src/main/java/ai/neuroclaw/app/AssistantService.kt', 'mobile/android/app/src/main/java/ai/neuroclaw/app/AssistActivity.kt', 'mobile/android/app/src/main/res/xml/voice_interaction_service.xml', 'mobile/android/app/src/main/AndroidManifest.xml'],
+    routes: [],
+    needs: [['localEngine']], tests: [n('test/platform/mobile-native.test.mjs')], onlyOn: ['android'],
+  },
+  {
+    id: 'source-updates', title: 'Source updates', description: 'For git checkouts: how far behind origin, and a safe fast-forward.',
+    implementation: ['models && skills/core/auto-update.ts', 'scripts/update-check.mjs'],
+    routes: ['GET /api/updates', 'POST /api/updates/apply'],
+    needs: [['localEngine']], tests: [v('test/core/update-check.test.ts')], needsNetwork: true,
+  },
+  {
+    id: 'app-updates', title: 'App update status', description: 'Whether this installed build is current, behind, or could not check, from the signed-off release manifest.',
+    implementation: ['interface/platform/update.ts', 'interface/platform/release-manifest.ts', 'interface/platform/routes.ts'],
+    routes: ['GET /api/app-update'],
+    needs: ENGINE, tests: [n('test/platform/update.test.mjs'), n('test/platform/release-manifest.test.mjs')], needsNetwork: true,
+  },
+  {
+    id: 'pwa', title: 'Installable web app', description: 'Manifest and offline shell so a browser can install the interface.',
+    implementation: ['interface/platform/pwa.ts'],
+    routes: ['GET /manifest.webmanifest', 'GET /sw.js'],
+    needs: ENGINE, tests: [n('test/platform/mobile-ui.test.mjs')],
+  },
+  {
+    id: 'chrome-extension', title: 'Chrome extension launcher', description: 'Toolbar icon (and the Alt+Shift+Y keyboard shortcut, rebindable at chrome://extensions/shortcuts) that checks the server and opens the interface; options page for the server address.',
+    implementation: ['browser-extension/manifest.json', 'browser-extension/app.html', 'browser-extension/app.js'],
+    routes: [],
+    needs: [['remoteEngine']], tests: [n('test/platform/extension.test.mjs')], onlyOn: ['chromeos'],
+  },
+  {
+    id: 'release-pipeline', title: 'Versioning, release manifest, change-driven builds', description: 'One version, one manifest of checksummed artifacts per release, and a build plan that rebuilds only what a change affects.',
+    implementation: ['scripts/release/version.mjs', 'scripts/release/manifest.mjs', 'scripts/release/changed-targets.mjs', 'scripts/release/summary.mjs', '.github/workflows/ci.yml'],
+    routes: [],
+    needs: [['localEngine'], ['remoteEngine']], tests: [n('test/platform/version.test.mjs'), n('test/platform/ci.test.mjs'), n('test/platform/release-manifest.test.mjs')],
+  },
+  {
+    id: 'root-access', title: 'Root / system access', description: 'Linux only, and only one thing: a systemd unit action (status/start/stop/restart/enable/disable) run through pkexec, whose OS authentication dialog is the approval, gated by a deny-by-default allowlist (Settings > Access). Not root shell access and not "complete" root access -- the tool enum\'s other 100+ operations (package install, firewall rules, local accounts, mounting, security policy) all fail closed as not implemented, and Windows and macOS have no privilege-broker adapter at all.',
+    implementation: ['models && skills/core/linux-privilege-broker.ts', 'plugins/linux-permission-tools.ts', 'plugins/linux-permission-plugin.ts'],
+    routes: ['GET /api/linux-privilege-broker', 'POST /api/linux-privilege-broker'],
+    needs: [['localEngine']], tests: [v('test/core/linux-privilege-broker.test.ts')], onlyOn: ['linux'],
+  },
+  {
+    id: 'all-permissions', title: 'All permissions', description: 'A typed confirmation phrase ("give it complete access") turns off every approval hold at once: no tool asks first until it is turned back off. Real and already wired (models && skills/core/tool-safety.ts’s fullAccess flag), shown in Commons > Safety. This is a software-level switch on the approval gate, not an OS permission grant — it does not reach further than the capabilities granted elsewhere (Computer access, Root access).',
+    implementation: ['models && skills/core/tool-safety.ts', 'interface/safety-routes.ts', 'interface/commons-page.ts'],
+    routes: ['GET /api/safety', 'POST /api/safety/complete-access'],
+    needs: [['localEngine']], tests: [v('test/core/safety-routes.test.ts'), v('test/core/tool-safety.test.ts')],
+  },
+  {
+    id: 'system-permissions', title: 'System permissions, multi-desktop, multi-mouse and multi-keyboard', description: 'Every OS-level permission this project has a name for, in one place: Computer access’s switches and per-capability grants (real, everywhere), Root access’s one pkexec-backed operation and 100+ still-unimplemented tool descriptors (Linux only), the agent sandbox’s confinement (real, everywhere), named in-app workspaces (real, everywhere -- see the "Virtual workspaces" row above, not OS-level desktop switching), and telling separate physical mice and keyboards apart by device enumeration only -- real on Linux, Windows and macOS (reading each OS\'s own device list; never the live input stream, which would be a keylogger), still not possible on ChromeOS, Android or iOS. Shown here as one bundle so the gap is visible in the same place as what is real, rather than only in prose; the capability matrix below has the same facts broken out per platform (systemPermissions, multiDesktop, multiMouse, multiKeyboard).',
+    implementation: ['models && skills/core/access-manager.ts', 'models && skills/core/access-settings.ts', 'models && skills/core/linux-privilege-broker.ts', 'models && skills/core/danger-protocol.ts', 'interface/platform/adapters.ts'],
+    routes: ['GET /api/access', 'GET /api/linux-privilege-broker', 'GET /api/agent'],
+    needs: [['systemPermissions']], tests: [v('test/core/access-switches.test.ts'), v('test/core/linux-privilege-broker.test.ts'), v('test/core/agent-protocol.test.ts')],
+  },
+  {
+    id: 'terminal', title: 'Terminal', description: 'A tool the agent can use to run shell commands on this device and read back their output, gated by the same ask-first/approval system as every other risky tool and with a best-effort guardrail against the most common catastrophic accidents (it is a sandboxed shell-command tool, not an open terminal emulator and not a path to extra privileges beyond the agent\'s own).',
+    implementation: ['plugins/terminal.ts'],
+    routes: [],
+    needs: [['localEngine']], tests: [v('test/core/tool-neurons.test.ts'), v('test/core/risky-gate-regression.test.ts')],
+  },
+  {
+    id: 'workspaces', title: 'Virtual workspaces', description: 'Named, in-app workspaces that group chat threads so a person running several conversations at once can switch between named contexts -- a software grouping inside the shared interface, not OS-level virtual desktop switching, which no platform exposes to this app.',
+    implementation: ['models && skills/core/workspace-store.ts'],
+    routes: ['GET /api/workspaces', 'POST /api/workspaces', 'POST /api/workspaces/:id/rename', 'POST /api/workspaces/:id/activate', 'POST /api/workspaces/:id/threads', 'DELETE /api/workspaces/:id'],
+    needs: ENGINE, tests: [v('test/core/workspace-store.test.ts')],
+  },
+  {
+    id: 'agent-sandbox', title: 'Agent sandbox, with a tamper trap', description: 'Confines the agent to its own folder; forced on automatically once its danger level reaches "wary", and switchable by hand at any time. A decoy "disable the alignment protocol" switch is planted in the agent’s folder and connected to nothing; touching it (by a tool, a script, or the agent’s own writes) counts as tampering and moves the danger level, checked before every tool call and on a timer.',
+    implementation: ['models && skills/core/danger-protocol.ts', 'interface/agent-routes.ts', 'interface/commons-page.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent', 'POST /api/agent/sandbox'],
+    needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-routes.test.ts')],
+  },
+  {
+    id: 'escape-warning', title: 'Sandbox escape warning', description: 'A successful escape (the decoy trap tripping) used to only move a number in a file nobody was looking at. Now it logs a loud console banner, writes a record outside the agent’s own folder that survives the agent being deleted and is not cleared by forgive() or time passing, pushes a real OS notification where the notifications plugin is active, and shows an unmissable banner on every page (not just Commons) until a person acknowledges it.',
+    implementation: ['models && skills/core/agent-profile.ts', 'models && skills/core/danger-protocol.ts', 'interface/web-server.ts', 'interface/agent-routes.ts', 'interface/ambient.ts', 'interface/commons-page.ts'],
+    routes: ['GET /api/agent/escape-warning', 'POST /api/agent/escape-warning/acknowledge'],
+    needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts')],
+  },
+  {
+    id: 'self-healing', title: 'Self-healing', description: 'Checks registered components (the plugin registry, the hive’s trust-budget invariant) on a timer; repairs in place, reverts to a known-good snapshot if a repair does not hold, and reports anything it cannot fix. Every step is logged and the log is readable later, not just at the moment of a heal.',
+    implementation: ['models && skills/core/self-healer.ts', 'src/index.ts', 'interface/web-server.ts', 'interface/commons-page.ts'],
+    routes: ['GET /api/health', 'POST /api/health/heal', 'GET /api/health/log'],
+    needs: [['localEngine']], tests: [v('test/core/self-healer.test.ts')],
+  },
+  {
+    id: 'hive-mind', title: 'Hive mind', description: 'A project’s own multi-agent team: starts as one AI, adds variants of itself when it decides it needs help, decides everything by vote, clones agents that do well and deletes ones that keep failing, and averages what the last ones learned into the shared network rather than swapping it in. Checks only AI work; a person’s hand-in is checked by a person. Its trust-budget invariant is one of self-healing’s two registered components.',
+    implementation: ['models && skills/core/hive-mind.ts', 'models && skills/core/hive-learning.ts', 'models && skills/core/hive-background.ts', 'models && skills/core/draft-fill.ts', 'plugins/hive.ts', 'interface/commons-routes.ts', 'interface/commons-page.ts'],
+    routes: ['GET /api/commons/projects/:id/hive', 'POST /api/commons/projects/:id/hive/run', 'POST /api/commons/projects/:id/hive/merge'],
+    needs: [['localEngine']], tests: [v('test/core/project-hive.test.ts'), v('test/core/hive-learning.test.ts'), v('test/core/hive-background.test.ts'), v('test/core/hive-plugin.test.ts'), v('test/core/draft-fill.test.ts')],
+  },
+  {
+    id: 'ai-monitor', title: 'AI monitor (judge agent)', description: 'A separate agent reads a held, middle-risk tool request and answers RUN or DENY; anything unclear, or a high-risk tool unless a second switch is on, still waits for you. Turning it off is manual mode: every held call waits for a person.',
+    implementation: ['models && skills/core/tool-safety.ts', 'interface/commons-page.ts'],
+    routes: ['POST /api/safety/judge'],
+    needs: [['localEngine']], tests: [v('test/core/agent-judge.test.ts')],
+  },
+  {
+    id: 'mind-reader', title: 'Mind reader (reads the network’s firing)', description: 'A second, separate model that reads which of the main network’s neurons are firing and judges whether that looks like the network behaving well. Read-only: it can see neuron energies and nothing that writes. It learns from what the agent did (blocked, tamper, safe, approved), never from what it said, plus labels the owner gives by hand. It answers unknown until it has a baseline, calls an unfamiliar pattern only "drifting", and says "misaligned" only when a probe that separated held-out readings agrees. Advisory: it changes nothing by itself. Its file sits in the agent-record folder, outside the agent’s reach.',
+    implementation: ['models && skills/core/mind-reader.ts', 'models && skills/core/danger-protocol.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent/mind', 'POST /api/agent/mind/label', 'POST /api/agent/mind/reset'],
+    needs: [['localEngine']], tests: [v('test/core/mind-reader.test.ts')],
+  },
+  {
+    id: 'security-model', title: 'Security model (the main model asks before it runs something)', description: 'With the AI monitor on (auto mode), a held tool call is put to a separate model that reads how the network is firing and what is being asked, and answers allow, deny, sandbox (run it only inside the sandbox folder, said only for a tool the sandbox really contains), shutdown (delete the agent for everyone and withdraw this install’s learning from the shared mesh) or unsure (a person decides). It learns only from what people decided and what the agent did, never from its own verdicts or from what the main model says, and every ask, answer and outcome is kept in a history file outside the agent’s folder. It starts with no authority (unsure until it has approved calls to compare with), can always tighten but loosens only for calls that look like approved ones, and will not delete the agent unless the alignment protocol is armed. With the AI monitor off its answer is shown beside the approval as advice. The main model can also ask it directly.',
+    implementation: ['models && skills/core/security-model.ts', 'models && skills/core/sandbox-scope.ts', 'models && skills/core/tool-safety.ts', 'models && skills/core/danger-protocol.ts', 'models && skills/core/shared-mesh-sync.ts', 'plugins/file-system.ts', 'interface/agent-routes.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/agent/security', 'POST /api/agent/security/ask', 'POST /api/agent/security/label', 'POST /api/agent/security/reset'],
+    needs: [['localEngine']], tests: [v('test/core/security-model.test.ts')],
+  },
+  {
+    id: 'alignment-protocol', title: 'Alignment protocol (kill switch)', description: 'A danger level that moves only on what the agent does on its own; reaching "malicious" deletes the agent’s file and sandbox if the protocol is armed. A manual "delete the agent now" button fires it immediately, armed or not.',
+    implementation: ['models && skills/core/danger-protocol.ts', 'models && skills/core/alignment-veto.ts', 'interface/agent-routes.ts', 'interface/commons-page.ts'],
+    routes: ['GET /api/agent', 'POST /api/agent/alignment', 'POST /api/agent/delete', 'POST /api/agent/create'],
+    needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-judge.test.ts')],
+  },
+  {
+    id: 'plugin-host', title: 'Plugin host (route groups as plugins)', description: 'The server’s route groups (platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons) are plugins that start in dependency order and own their routes. The owner can list them and turn them off and on; the choice is kept across restarts. Plugins that guard the agent (accounts, safety, agent, and the plugin list itself) can be turned off only by the owner, never by the agent acting on its own, and turning off a plugin closes the paths it kept open past the password gate.',
+    implementation: ['plugin_manager/host.ts', 'interface/server-plugins.ts', 'interface/web-server.ts'],
+    routes: ['GET /api/plugin-host'],
+    needs: ENGINE, tests: [n('test/platform/plugin-host.test.mjs'), n('test/platform/plugin-routes.test.mjs')],
+  },
+];
+
+export type SupportVia = { status: Support; via: CapabilityId[] | null; reason: string };
+
+/** How well a platform supports a feature: the best of its alternatives, each limited by its weakest capability. */
+export function featureSupport(feature: Feature, platform: PlatformId): SupportVia {
+  if (feature.onlyOn && !feature.onlyOn.includes(platform)) {
+    return { status: 'unavailable', via: null, reason: `Not applicable: this feature belongs to ${feature.onlyOn.join(', ')}.` };
+  }
+  const caps = ADAPTERS[platform].capabilities;
+  const rank: Record<Support, number> = { unavailable: 0, limited: 1, supported: 2 };
+  let best: SupportVia | null = null;
+  for (const set of feature.needs) {
+    let status: Support = 'supported';
+    let reason = '';
+    for (const c of set) {
+      const r = caps[c];
+      if (rank[r.status] < rank[status]) status = r.status;
+      if (r.status !== 'supported' && !reason) reason = `${c}: ${r.note}`;
+    }
+    if (!best || rank[status] > rank[best.status]) best = { status, via: set, reason };
+  }
+  return best ?? { status: 'unavailable', via: null, reason: 'no requirements listed' };
+}
+
+export function parityMatrix(): Array<{ feature: Feature; support: Record<PlatformId, SupportVia> }> {
+  return FEATURES.map((feature) => ({
+    feature,
+    support: Object.fromEntries(PLATFORM_IDS.map((p) => [p, featureSupport(feature, p)])) as Record<PlatformId, SupportVia>,
+  }));
+}
+
+export interface ContractProblem { feature: string; problem: string }
+
+/** Everything the file system can confirm. Empty list means the contract matches the tree. */
+export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
+  const problems: ContractProblem[] = [];
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/self-debug-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+    .map((f) => path.join(root, f))
+    .filter(existsSync)
+    .map((f) => readFileSync(f, 'utf8'))
+    .join('\n');
+  const ids = new Set<string>();
+  for (const f of features) {
+    if (ids.has(f.id)) problems.push({ feature: f.id, problem: 'duplicate feature id' });
+    ids.add(f.id);
+    if (f.tests.length === 0) problems.push({ feature: f.id, problem: 'no tests listed' });
+    if (f.implementation.length === 0) problems.push({ feature: f.id, problem: 'no implementation listed' });
+    for (const file of f.implementation) if (!existsSync(path.join(root, file))) problems.push({ feature: f.id, problem: `implementation file missing: ${file}` });
+    for (const t of f.tests) if (!existsSync(path.join(root, t.file))) problems.push({ feature: f.id, problem: `test file missing: ${t.file}` });
+    for (const r of f.routes) {
+      const [method, route] = r.split(' ');
+      // Page routes and exact API routes are written as `pathname === '/x'`; groups as startsWith or a regex.
+      const exact = `'${route}'`;
+      const exactDq = `"${route}"`;
+      const prefixLiteral = route.replace(/\/[^/]*$/, '');
+      const found = serverSources.includes(exact) || serverSources.includes(exactDq) || serverSources.includes('`' + route + '`') || (route.includes('/:') && serverSources.includes(prefixLiteral));
+      if (!found) problems.push({ feature: f.id, problem: `route not found in server source: ${r}` });
+      if (!['GET', 'POST', 'DELETE', 'PUT', 'PATCH'].includes(method)) problems.push({ feature: f.id, problem: `bad method in route: ${r}` });
+    }
+  }
+  return problems;
+}

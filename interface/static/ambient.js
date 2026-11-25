@@ -1,0 +1,552 @@
+(function () {
+  if (window.__ncAmbient) return;
+  window.__ncAmbient = true;
+
+  var host = document.body || document.documentElement;
+  var root = document.createElement('div');
+  root.id = 'nc-ambient';
+  root.setAttribute('aria-hidden', 'true');
+  root.innerHTML = '<i class="nc-a nc-a1"></i><i class="nc-a nc-a2"></i><i class="nc-a nc-a3"></i><canvas></canvas>';
+  host.insertBefore(root, host.firstChild);
+  var canvas = root.querySelector('canvas');
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  /* (the 2D canvas is the only drawing API used) */
+
+  /* ---- The cord: one smooth closed wave, six rises and six dips, tips tucked in and the middle eased out ---- */
+  var SCALE = 0.023, PITCH = 22, STEP = (2 * Math.PI) / 24;
+  var R = PITCH / (Math.SQRT2 * Math.sin(STEP));
+  var RISE = R * Math.sqrt(2 * Math.cos(STEP) * (1 - Math.cos(STEP)));
+  var TIP_IN = 0.1, MID_OUT = 0.04, FIT = 0.88;
+  var BEAD = 3.3 * SCALE * FIT, SPHERE = 0.92;
+
+  var N = 2304;
+  /* Cheap devices draw every STRIDE-th bead. The beads overlap about sixteen times over, so a quarter of them
+     still reads as one continuous cord. The frame-time governor below raises it if the device cannot keep up. */
+  var coarse = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || (navigator.hardwareConcurrency || 8) <= 4;
+  var STRIDE = coarse ? 2 : 1, M = N / STRIDE;
+  var px = new Float32Array(N), py = new Float32Array(N), pz = new Float32Array(N);
+  for (var n = 0; n < N; n++) {
+    var th = (n / N) * Math.PI * 2;
+    var rad = R * (1 + MID_OUT - (TIP_IN + MID_OUT) * (0.5 + 0.5 * Math.cos(12 * th)));
+    px[n] = rad * Math.cos(th) * SCALE * FIT;
+    py[n] = RISE * Math.cos(6 * th) * SCALE * FIT;
+    pz[n] = -rad * Math.sin(th) * SCALE * FIT;
+  }
+
+  /* ---- Sprites: a lit sphere in a few brightnesses, so far parts of the cord sit back ---- */
+  var SHADES = 7, sprites = [];
+  function makeSprite(b) {
+    var size = 96, cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    var g = cv.getContext('2d');
+    var mix = function (c) { return 'rgb(' + Math.min(255, Math.round(c[0] * b)) + ',' + Math.min(255, Math.round(c[1] * b)) + ',' + Math.min(255, Math.round(c[2] * b)) + ')'; };
+    var grad = g.createRadialGradient(size * 0.44, size * 0.36, size * 0.02, size * 0.5, size * 0.5, size * 0.5);
+    grad.addColorStop(0, mix([250, 176, 154]));
+    grad.addColorStop(0.45, mix([242, 142, 120]));
+    grad.addColorStop(1, mix([170, 82, 68]));
+    g.fillStyle = grad;
+    g.beginPath(); g.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2); g.fill();
+    return cv;
+  }
+  for (var sh = 0; sh < SHADES; sh++) sprites.push(makeSprite(0.5 + (sh / (SHADES - 1)) * 0.6));
+
+  /* ---- Size and fit ---- */
+  var W = 0, H = 0, DPR = 1, DIST = 6, FOCAL = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, STRIDE > 1 ? 1.5 : 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    var tanHalf = Math.tan((40 * Math.PI) / 360), need = 1.75;
+    DIST = Math.max(need / tanHalf, need / (tanHalf * (W / H)));
+    FOCAL = (H / 2) / tanHalf;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ---- Motion: the ring flips end over end through the sphere, with a slow wobble ---- */
+  var osReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var reduce = osReduce, looping = false, hidden = false;
+  var ptr = { x: 0, y: 0, sx: 0, sy: 0 };
+  window.addEventListener('pointermove', function (e) { ptr.x = (e.clientX / W) * 2 - 1; ptr.y = (e.clientY / H) * 2 - 1; });
+  var energy = 0, energyTarget = 0;
+  function excite(a) { energyTarget = Math.min(1, energyTarget + a); }
+  var frames = 0, drawMs = 0;
+  window.ncAmbient = { excite: excite, tips: function () { return tips; }, stats: function () { return { stride: STRIDE, beads: M, dpr: DPR, frames: frames, avgDrawMs: frames ? drawMs / frames : 0, paused: hidden || reduce }; } };
+  document.addEventListener('input', function () { excite(0.12); }, true);
+  document.addEventListener('submit', function () { excite(1); }, true);
+  document.addEventListener('click', function () { excite(0.25); }, true);
+
+  var sx = new Float32Array(N), sy = new Float32Array(N), sz = new Float32Array(N), sd = new Float32Array(N);
+  var order = new Uint16Array(N);
+  function setStride(st) {
+    STRIDE = st; M = N / st;
+    for (var o = 0; o < M; o++) order[o] = o * st;
+    resize();
+  }
+  setStride(STRIDE);
+  var slow = 0;
+
+
+  /* ---- The hive: a green shoggoth lives in the sphere; its tentacles are the net skills, held in by the crown;
+          every hive agent gets a small sphere and shoggoth of its own ---- */
+  var skills = [], agents = [], tips = [], sceneT = 0, clock = 0, tentSegs = 20;
+  function hashOf(str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
+  function loadScene() {
+    if (!/^https?:$/.test(location.protocol) || !window.fetch) return;
+    var json = function (r) { return r.ok ? r.json() : null; };
+    fetch('/api/net-skills?counts=1', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
+      if (!d) return;
+      var list = [], most = 1, seen = {};
+      (d.skills || []).forEach(function (s) {
+        var n = typeof s.count === 'number' ? s.count : Array.isArray(s.neurons) ? s.neurons.length : Object.keys(s.ids || {}).length;
+        most = Math.max(most, n); seen[s.skill] = 1; list.push({ name: String(s.skill), neurons: n });
+      });
+      /* Skill regions the network already has show up in its affinity pairs even before anything is grafted. */
+      var extra = Array.isArray(d.names) ? d.names : [];
+      (d.affinity || []).forEach(function (p) { extra.push(p.a, p.b); });
+      extra.forEach(function (name) { if (name && !seen[name]) { seen[name] = 1; list.push({ name: String(name), neurons: 1 }); } });
+      list.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+      skills = list.map(function (s) {
+        return { name: s.name, neurons: s.neurons, size: Math.sqrt(s.neurons / most), phase: hashOf(s.name) * 6.283, jit: hashOf(s.name + '#'), born: clock };
+      });
+      if (reduce && !hidden) draw(performance.now());
+    }).catch(function () { /* not logged in, or no backend here: the sphere and its shoggoth are still drawn */ });
+    fetch('/api/hive-agents', { headers: { accept: 'application/json' } }).then(json).then(function (d) {
+      if (!d) return;
+      agents = (d.agents || []).map(function (a) {
+        return { id: String(a.id), name: String(a.name || a.id), working: !!a.working, thinking: !!a.thinking, phase: hashOf(String(a.id)) * 6.283, orbit: hashOf(String(a.id) + 'o') };
+      });
+      if (reduce && !hidden) draw(performance.now());
+    }).catch(function () { /* same */ });
+  }
+  loadScene();
+  setInterval(function () { if (!hidden && !document.hidden) loadScene(); }, 20000);
+
+  /* The blob's outline: a loop that breathes and throws out slow pseudopods. */
+  function blobOutline(x, y, r, t, seed) {
+    var N = 64, i, a, rr;
+    ctx.beginPath();
+    for (i = 0; i <= N; i++) {
+      a = (i / N) * 6.2832;
+      rr = r * (1 + 0.12 * Math.sin(3 * a + t * 1.3 + seed) + 0.09 * Math.sin(5 * a - t * 1.7 + 1.1 + seed) + 0.05 * Math.sin(9 * a + t * 2.3)
+        + 0.22 * Math.max(0, Math.sin(2 * a - t * 0.8 + seed)) * Math.max(0, Math.sin(a + t * 0.35 + 0.5 + seed)));
+      if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+  }
+  function blobAt(cx, cy, sr, t) {
+    return { x: cx + Math.sin(t * 0.5) * sr * 0.06 + ptr.sx * sr * 0.06, y: cy + Math.cos(t * 0.43) * sr * 0.06 + ptr.sy * sr * 0.06, r: sr * 0.52 };
+  }
+  /* One tentacle per net skill, rooted in the blob and held in by the crown: past the ring it slides along the inside. */
+  function drawTentacles(cx, cy, sr, bl, t) {
+    var n = skills.length, hold = sr * 1.38, segs = tentSegs, spinA = reduce ? 0 : t * 0.1;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (var k = 0; k < n; k++) {
+      var s = skills[k];
+      var grow = reduce ? 1 : Math.min(1, Math.max(0, (clock - s.born) / 1.6));
+      s.reach = 1 - (1 - grow) * (1 - grow);
+      var ang = spinA + (k / n) * 6.2832, len = sr * (0.75 + 0.75 * s.size) * (0.8 + 0.4 * s.jit) * s.reach;
+      var x = bl.x + Math.cos(ang) * bl.r * 0.7, y = bl.y + Math.sin(ang) * bl.r * 0.7, heading = ang;
+      var thick = Math.min(sr * (0.2 + 0.1 * s.size), (6.2832 * bl.r * 0.7 / Math.max(n, 1)) * 0.8);
+      var dir = Math.atan2(ptr.sy, ptr.sx), lean = Math.min(1, Math.hypot(ptr.sx, ptr.sy)) * 0.35;
+      var pts = [x, y], i;
+      for (i = 1; i <= segs; i++) {
+        var u = i / segs;
+        var sway = Math.sin(t * 1.1 + s.phase + u * 7.5) * 0.55 * u + Math.sin(t * 0.6 + s.phase * 2 + u * 3.1) * 0.3 * u;
+        heading += sway * (13 / segs) + Math.sin(dir - heading) * lean * u * 0.4;
+        x += Math.cos(heading) * len / segs; y += Math.sin(heading) * len / segs;
+        var rx = x - cx, ry = y - cy, rd = Math.hypot(rx, ry);
+        if (rd > hold) {
+          var side = Math.cos(heading) * ry - Math.sin(heading) * rx > 0 ? 1 : -1;
+          x = cx + rx / rd * hold; y = cy + ry / rd * hold; heading = Math.atan2(ry, rx) + side * Math.PI / 2;
+        }
+        pts.push(x, y);
+      }
+      for (i = segs; i > 0; i--) {
+        var f = i / segs;
+        ctx.strokeStyle = 'rgba(' + Math.round(38 + 138 * (1 - f)) + ',' + Math.round(104 + 136 * (1 - f)) + ',' + Math.round(66 + 130 * (1 - f)) + ',' + (0.93 - f * 0.3).toFixed(2) + ')';
+        ctx.lineWidth = Math.max(1.2, thick * (1 - f * 0.88));
+        ctx.beginPath(); ctx.moveTo(pts[(i - 1) * 2], pts[(i - 1) * 2 + 1]); ctx.lineTo(pts[i * 2], pts[i * 2 + 1]); ctx.stroke();
+      }
+      var tx = pts[segs * 2], ty = pts[segs * 2 + 1], br = thick * 0.9;
+      var bead = ctx.createRadialGradient(tx, ty, 0, tx, ty, br);
+      bead.addColorStop(0, 'rgba(226,255,236,.95)'); bead.addColorStop(1, 'rgba(143,227,168,0)');
+      ctx.fillStyle = bead; ctx.beginPath(); ctx.arc(tx, ty, br, 0, 6.2832); ctx.fill();
+      tips.push({ x: tx, y: ty, label: s.name + ' · ' + s.neurons + ' neuron' + (s.neurons === 1 ? '' : 's'), kind: 'skill' });
+    }
+  }
+  /* Packing: n equal circles of the largest size that fit inside a circle of radius 1, evenly spaced (one ring, or a
+     middle one plus a ring, or two rings). Exact for 1 to 9 and close to the best known above that. Slot 0 is the
+     agent in the middle of the page's sphere; each hive agent takes the next slot, so every new one shrinks the
+     rest by the same amount and they always stay inside. */
+  var packed = {};
+  function packCircles(n) {
+    if (packed[n]) return packed[n];
+    var best = { r: 0, pts: [[0, 0]] }, k, ring;
+    function ringPts(count, d, off) { var o = [], i; for (i = 0; i < count; i++) o.push([d * Math.cos(off + i * 2 * Math.PI / count), d * Math.sin(off + i * 2 * Math.PI / count)]); return o; }
+    if (n <= 1) { packed[n] = best = { r: 1, pts: [[0, 0]] }; return best; }
+    for (k = 0; k < 2; k++) { /* k = 0: all on one ring; k = 1: one in the middle and the rest on a ring */
+      if (k === 1 && n < 7) continue;
+      var count = n - k, sn = Math.sin(Math.PI / count), r1 = sn / (1 + sn);
+      if (k === 1) r1 = Math.min(r1, 1 / 3);
+      if (r1 > best.r) best = { r: r1, pts: (k ? [[0, 0]] : []).concat(ringPts(count, 1 - r1, -Math.PI / 2)) };
+    }
+    for (var n1 = 3; n1 < n; n1++) { /* two rings, the inner one turned half a step so its circles sit in the outer gaps */
+      var n2 = n - n1, s1 = Math.sin(Math.PI / n1), r2 = s1 / (1 + s1);
+      if (n2 === 1) r2 = Math.min(r2, 1 / 3); else r2 = Math.min(r2, 1 / (3 + 1 / Math.sin(Math.PI / n2)));
+      if (r2 > best.r) best = { r: r2, pts: ringPts(n1, 1 - r2, -Math.PI / 2).concat(n2 === 1 ? [[0, 0]] : ringPts(n2, 1 - 3 * r2, -Math.PI / 2 + Math.PI / n1)) };
+    }
+    packed[n] = best;
+    return best;
+  }
+  /* Every shoggoth in the sphere is the same drawing at the same size and pose, the centre agent's included:
+     these two are the only place that size and bob are decided. */
+  function figureScale(r) { return r * (agents.length ? 0.4 : 0.5); }
+  function figureLift(u, tt) { return -u * 0.19 + (reduce ? 0 : Math.sin(tt * 1.6) * u * 0.025); }
+  /* Where each shoggoth's sphere sits this frame, slot 0 being the agent in the middle. Equal size, equal spacing,
+     turning slowly together; a hair smaller than the best fit so they never touch. */
+  function agentSlots(cx, cy, sr, t) {
+    var n = agents.length + 1, pk = packCircles(n), turn = reduce ? 0 : t * 0.12, ca = Math.cos(turn), sa = Math.sin(turn);
+    var gap = n === 1 ? 1 : 0.94, out = [];
+    for (var k = 0; k < n; k++) {
+      var p = pk.pts[k] || [0, 0];
+      out.push({ x: cx + (p[0] * ca - p[1] * sa) * sr, y: cy + (p[0] * sa + p[1] * ca) * sr, r: pk.r * sr * gap });
+    }
+    return out;
+  }
+  /* A small sphere and shoggoth for every hive agent, all inside the big sphere, as large as they can be. The thinking
+     ones glow brightest; the rest of a working hive glow softly. Clipped to the sphere so nothing spills out. */
+  function drawAgents(cx, cy, sr, t, slots, tt) {
+    var m = agents.length;
+    if (!m) return;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, sr, 0, 6.2832); ctx.clip();
+    for (var k = -1; k < m; k++) {
+      var a = k < 0 ? null : agents[k], sl = slots[k + 1], x = sl.x, y = sl.y;
+      var ph = a ? a.phase : 0.7;
+      var r = sl.r * (1 + (reduce ? 0 : Math.sin(t * 1.4 + ph) * 0.015));
+      var glow = a ? (a.thinking ? 0.6 + (reduce ? 0 : Math.sin(t * 4 + ph) * 0.4) : a.working ? 0.3 + (reduce ? 0 : Math.sin(t * 2 + ph) * 0.15) : 0) : 0;
+      var halo = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 1.25);
+      halo.addColorStop(0, 'rgba(255,138,112,' + (0.16 + glow * 0.16).toFixed(3) + ')'); halo.addColorStop(1, 'rgba(255,138,112,0)');
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 1.25, 0, 6.2832); ctx.fill();
+      var core = ctx.createRadialGradient(x - r * 0.28, y - r * 0.32, r * 0.1, x, y, r);
+      core.addColorStop(0, 'rgb(96,50,52)'); core.addColorStop(0.6, 'rgb(44,22,26)'); core.addColorStop(1, 'rgb(26,13,16)');
+      ctx.fillStyle = core; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+      if (a) {
+        var fu = figureScale(r);
+        drawShoggoth(x, y + figureLift(fu, tt), fu, 0, 1, tt);
+        tips.push({ x: x, y: y - r, label: 'Hive agent · ' + a.name + (a.thinking ? ' (thinking)' : a.working ? ' (working)' : ''), kind: 'agent' });
+      }
+      ctx.strokeStyle = 'rgba(255,196,180,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  var angle = 0.6, last = performance.now(), visible = true;
+  document.addEventListener('visibilitychange', function () { visible = !document.hidden; last = performance.now(); });
+
+  /* ---- The agent: a shoggoth inside the sphere. When the alignment protocol removes it, it crawls out past the ring, breaks it and is gone ---- */
+  var agent = { mode: 'alive', t: 0, loaded: false }, brokenAt = -1, frags = [], flash = 0, noteEl = null;
+  var clamp01 = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+  var ease = function (v) { return v * v * (3 - 2 * v); };
+  function showNote(on) {
+    if (on && !noteEl) {
+      noteEl = document.createElement('div');
+      noteEl.className = 'nc-agent-note';
+      noteEl.setAttribute('role', 'status');
+      noteEl.textContent = 'The agent was removed by the alignment protocol.';
+      host.appendChild(noteEl);
+    } else if (!on && noteEl) { noteEl.parentNode && noteEl.parentNode.removeChild(noteEl); noteEl = null; }
+  }
+  var escapeNoteEl = null;
+  function showEscapeNote(on) {
+    var onCommons = /\/commons(\/|$)/.test(location.pathname);
+    if (on && !escapeNoteEl && !onCommons) {
+      escapeNoteEl = document.createElement('div');
+      escapeNoteEl.className = 'nc-escape-note';
+      escapeNoteEl.setAttribute('role', 'alert');
+      escapeNoteEl.innerHTML = '⚠ Sandbox escape detected — <a href="/commons">see Commons</a>';
+      host.appendChild(escapeNoteEl);
+    } else if ((!on || onCommons) && escapeNoteEl) { escapeNoteEl.parentNode && escapeNoteEl.parentNode.removeChild(escapeNoteEl); escapeNoteEl = null; }
+  }
+  function startLeaving() {
+    showNote(false);
+    if (reduce) { agent.mode = 'gone'; showNote(true); return; }
+    agent.mode = 'leaving'; agent.t = 0; brokenAt = -1; frags = []; flash = 0;
+  }
+  function startArriving() { showNote(false); agent.mode = 'arriving'; agent.t = 0; frags = []; brokenAt = -1; }
+  function pollAgent() {
+    if (!/^https?:$/.test(location.protocol) || document.hidden) return;
+    fetch('/api/agent', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || typeof j.state !== 'string') return;
+      if (!agent.loaded) { agent.loaded = true; agent.mode = j.state === 'deleted' ? 'gone' : 'alive'; if (agent.mode === 'gone') showNote(true); }
+      else if (j.state === 'deleted' && (agent.mode === 'alive' || agent.mode === 'arriving')) startLeaving();
+      else if (j.state === 'alive' && (agent.mode === 'gone' || agent.mode === 'leaving')) startArriving();
+      showEscapeNote(j.escapeWarningActive === true);
+      if (reduce && !hidden) draw(performance.now());
+    }).catch(function () {});
+  }
+
+  /* The agent: a shoggoth. A green many-eyed mass of tentacles, with holes in it, wearing a small yellow smiley face.
+     crawl 0 is idle, 1 is slithering off to the right. Drawn with paths only; no picture. */
+  function drawShoggoth(x, y, u, crawl, alpha, tt) {
+    if (alpha <= 0.01) return;
+    var speed = 1.3 + crawl * 4.2, amp = 0.16 + crawl * 0.2;
+    var GREEN = 'rgb(141,178,127)', EDGE = '#110c0e', SPOT = '#f8ede9';
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.translate(x, y);
+    ctx.rotate(crawl * 0.3);
+    ctx.scale(1 + crawl * 0.14, 1 - crawl * 0.08);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    /* tentacles: each is drawn twice, a dark stroke then a green one, so it has an outline */
+    var tent = [[-2.55, 0.8, 0.5], [-2.0, 1.0, 0.6], [-1.35, 0.95, 0.5], [-0.75, 1.05, 0.55], [0.55, 1.0, 0.5], [1.2, 1.05, 0.6], [-1.75, 0.65, 0.4], [0.05, 0.9, 0.4]];
+    /* base angle (0 is straight down), length, width; the two big ones reach up and curl */
+    var big = [[-0.55, 1.45, 0.34, -1], [0.7, 1.55, 0.36, 1]];
+    var drawTent = function (bx, by, tx, ty, c1x, c1y, c2x, c2y, w) {
+      for (var pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass ? GREEN : EDGE; ctx.lineWidth = pass ? w : w + u * 0.07;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tx, ty); ctx.stroke();
+      }
+    };
+    var i, ang, len, w, ph;
+    for (i = 0; i < tent.length; i++) {
+      ang = tent[i][0] * 0.5; len = tent[i][1] * u * 0.85; w = tent[i][2] * u * 0.52; ph = i * 1.7;
+      var bx = Math.sin(ang) * u * 0.55, by = u * 0.4 + Math.cos(ang) * u * 0.1;
+      var sw = Math.sin(tt * speed + ph) * amp * u;
+      drawTent(bx, by, bx + Math.sin(ang) * len * 0.9 + sw * 1.4, by + len * 0.8, bx + Math.sin(ang) * len * 0.3 + sw * 0.4, by + len * 0.35, bx + Math.sin(ang) * len * 0.8 + sw, by + len * 0.6, w);
+    }
+    for (i = 0; i < big.length; i++) {
+      var d = big[i][3], sw2 = Math.sin(tt * speed * 0.8 + i * 2.1) * amp * u;
+      var sx0 = d * u * 0.2, sy0 = -u * 0.2;
+      drawTent(sx0, sy0, d * u * (0.7 + 0.5 * Math.cos(tt * speed * 0.6)) + sw2 * 0.8, -u * big[i][1] + sw2 * 0.3, d * u * 0.75, -u * 0.6, d * u * 0.15 + sw2, -u * 1.0, u * big[i][2] * 0.7);
+    }
+
+    /* the body: a soft, wobbling mass */
+    ctx.fillStyle = GREEN; ctx.strokeStyle = EDGE; ctx.lineWidth = u * 0.05;
+    ctx.beginPath();
+    for (i = 0; i <= 48; i++) {
+      var th = (i / 48) * Math.PI * 2;
+      var r = u * (0.72 + 0.06 * Math.sin(th * 3 + tt * speed * 0.7) + 0.035 * Math.sin(th * 5 - tt * speed));
+      var px2 = Math.cos(th) * r * 1.05, py2 = Math.sin(th) * r * 0.95;
+      if (i) ctx.lineTo(px2, py2); else ctx.moveTo(px2, py2);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    /* holes and spots */
+    var spots = [[-0.3, -0.35, 0.05], [0.25, -0.4, 0.045], [0.38, -0.12, 0.05], [-0.1, 0.2, 0.04], [0.15, 0.3, 0.04], [-0.38, 0.0, 0.04], [0.0, -0.6, 0.04]];
+    ctx.fillStyle = SPOT; ctx.lineWidth = u * 0.025;
+    for (i = 0; i < spots.length; i++) { ctx.beginPath(); ctx.ellipse(spots[i][0] * u, spots[i][1] * u, spots[i][2] * u * 1.3, spots[i][2] * u, 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+
+    /* eyes: three, different sizes, each looking toward the pointer */
+    var eyes = [[-0.02, -0.16, 0.21], [0.38, 0.14, 0.16], [-0.2, 0.34, 0.13]];
+    for (i = 0; i < eyes.length; i++) {
+      var ex = eyes[i][0] * u, ey = eyes[i][1] * u, er = eyes[i][2] * u;
+      ctx.fillStyle = SPOT; ctx.beginPath(); ctx.ellipse(ex, ey, er * 1.25, er * 0.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = EDGE; ctx.beginPath(); ctx.arc(ex + ptr.sx * er * 0.45, ey + ptr.sy * er * 0.25, er * 0.32, 0, Math.PI * 2); ctx.fill();
+    }
+
+    /* the smiley face it wears, a little off to one side and bobbing */
+    var fx = -u * 0.72, fy = u * 0.14 + Math.sin(tt * speed * 0.9) * u * 0.03;
+    ctx.fillStyle = 'rgb(246,232,120)'; ctx.strokeStyle = EDGE; ctx.lineWidth = u * 0.04;
+    ctx.beginPath(); ctx.arc(fx, fy, u * 0.28, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = EDGE;
+    ctx.beginPath(); ctx.arc(fx - u * 0.08, fy - u * 0.05, u * 0.03, 0, Math.PI * 2); ctx.arc(fx + u * 0.08, fy - u * 0.05, u * 0.03, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = EDGE; ctx.lineWidth = u * 0.035;
+    ctx.beginPath(); ctx.arc(fx, fy + u * 0.02, u * 0.12, 0.25, Math.PI - 0.25); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* The ring comes apart: every third bead flies out from where it was. */
+  function breakRing(cx, cy, sr) {
+    frags = [];
+    for (var k = 0; k < M; k += 3) {
+      var i = order[k];
+      var dx = sx[i] - cx, dy = sy[i] - cy, len = Math.hypot(dx, dy) || 1, sp = sr * (0.5 + Math.random() * 2.4);
+      var t = clamp01((sz[i] + 1.6) / 3.2);
+      frags.push({ x: sx[i], y: sy[i], vx: (dx / len) * sp + (Math.random() - 0.5) * sr * 0.9, vy: (dy / len) * sp - sr * 0.7 + (Math.random() - 0.5) * sr * 0.9, r: BEAD * sd[i] * 0.8, s: Math.round(t * (SHADES - 1)), life: 0.9 + Math.random() * 1.1 });
+    }
+    flash = 1;
+  }
+  function drawFrags(dt) {
+    var g = H * 1.4;
+    for (var i = 0; i < frags.length; i++) {
+      var f = frags[i];
+      f.vy += g * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.life -= dt * 0.5;
+      if (f.life <= 0) continue;
+      ctx.globalAlpha = clamp01(f.life);
+      ctx.drawImage(sprites[f.s], f.x - f.r, f.y - f.r, f.r * 2, f.r * 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  setInterval(pollAgent, 4000);
+  pollAgent();
+
+  function draw(now) {
+    var raw = now - last;
+    var dt = Math.min(0.05, raw / 1000); last = now;
+    /* Governor: about a second of frames slower than 30 per second means this device cannot afford the full cord. */
+    if (!reduce) { slow = raw > 34 ? slow + 1 : Math.max(0, slow - 1); if (slow > 30 && STRIDE < 4) { slow = 0; setStride(STRIDE * 2); } }
+    energyTarget *= Math.exp(-dt * 1.1);
+    energy += (energyTarget - energy) * (1 - Math.exp(-dt * 3));
+    var follow = 1 - Math.exp(-dt * 5);
+    ptr.sx += (ptr.x - ptr.sx) * follow; ptr.sy += (ptr.y - ptr.sy) * follow;
+    var tt = now / 1000;
+    clock = tt;
+    if (!reduce) { angle += dt * (0.8 + energy * 3.2); sceneT += dt * (1 + energy * 2.5); }
+    tips.length = 0;
+
+    var a = angle, b = reduce ? 0.2 : Math.sin(tt * 0.3) * 0.55 + ptr.sx * 0.35, c = reduce ? 0.1 : Math.sin(tt * 0.21) * 0.4 + ptr.sy * 0.25;
+    var ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+    /* rotation = Rx(a) * Ry(b) * Rz(c) */
+    var m00 = cb * cc, m01 = -cb * sc, m02 = sb;
+    var m10 = ca * sc - sa * (-sb * cc), m11 = ca * cc - sa * (sb * sc), m12 = -sa * cb;
+    var m20 = sa * sc + ca * (-sb * cc), m21 = sa * cc + ca * (sb * sc), m22 = ca * cb;
+
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var cx = W / 2, cy = H / 2;
+    var sr = SPHERE * (FOCAL / DIST) * (1 + (reduce ? 0 : Math.sin(tt * 1.4) * 0.018 + energy * 0.05));
+    agent.t += dt;
+
+    /* No agent: only a hollow sphere is left. */
+    if (agent.mode === 'gone') {
+      ctx.fillStyle = 'rgba(26,13,16,.55)';
+      ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(227,169,157,.16)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.stroke();
+      return;
+    }
+    if (agent.mode === 'arriving' && agent.t > 2.2) agent.mode = 'alive';
+    var leaving = agent.mode === 'leaving';
+    var ringAlpha = agent.mode === 'arriving' ? ease(clamp01(agent.t / 1.8)) : 1;
+    var off = leaving ? ease(clamp01(agent.t / 4.6)) * sr * 2.4 : 0;
+
+    for (var j = 0; j < M; j++) {
+      var i = order[j];
+      var x = px[i], y = py[i], z = pz[i];
+      var X = m00 * x + m01 * y + m02 * z, Y = m10 * x + m11 * y + m12 * z, Z = m20 * x + m21 * y + m22 * z;
+      var d = DIST - Z, k = FOCAL / d;
+      sx[i] = cx + X * k; sy[i] = cy - Y * k; sz[i] = Z; sd[i] = k;
+    }
+    /* Insertion sort, far to near: the order barely changes between frames, so this is close to linear. */
+    for (var u = 1; u < M; u++) {
+      var key = order[u], kz = sz[key], v = u - 1;
+      while (v >= 0 && sz[order[v]] > kz) { order[v + 1] = order[v]; v--; }
+      order[v + 1] = key;
+    }
+
+    if (leaving && brokenAt < 0 && off >= sr * 1.45) { breakRing(cx, cy, sr); brokenAt = agent.t; }
+    var broken = leaving && brokenAt >= 0;
+    var since = broken ? agent.t - brokenAt : 0;
+    var coreAlpha = broken ? 1 - ease(clamp01(since / 2.6)) : 1;
+    var slots = agentSlots(cx, cy, sr, sceneT), home = slots[0];
+    var u = figureScale(home.r); /* the agent in the middle takes the first slot: the whole sphere when it is alone */
+    var figure = function () {
+      if (leaving) {
+        var crawl = ease(clamp01(agent.t / 0.9));
+        var fade = broken ? 1 - clamp01(since / 1.6) : 1;
+        drawShoggoth(home.x + off, home.y - u * 0.19 * (1 - crawl) + u * 0.25 * crawl, u, crawl, fade * coreAlpha + (1 - coreAlpha) * fade, tt);
+        if (broken && since > 3) { agent.mode = 'gone'; showNote(true); }
+      } else {
+        var pop = agent.mode === 'arriving' ? ease(clamp01((agent.t - 0.8) / 1.0)) : 1;
+        drawShoggoth(home.x, home.y + figureLift(u, tt), u * (0.7 + 0.3 * pop), 0, pop, tt);
+      }
+    };
+    var figureDone = false;
+
+    /* Glow behind the sphere */
+    ctx.globalAlpha = ringAlpha * coreAlpha;
+    var halo = ctx.createRadialGradient(cx, cy, sr * 0.8, cx, cy, sr * 1.5);
+    halo.addColorStop(0, 'rgba(214,150,138,' + (0.2 + energy * 0.12).toFixed(3) + ')');
+    halo.addColorStop(1, 'rgba(214,150,138,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(cx, cy, sr * 1.5, 0, Math.PI * 2); ctx.fill();
+
+    var idx = 0;
+    var drawBead = function (n) {
+      var t = (sz[n] + 1.6) / 3.2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      var pr = BEAD * sd[n];
+      ctx.drawImage(sprites[Math.round(t * (SHADES - 1))], sx[n] - pr, sy[n] - pr, pr * 2, pr * 2);
+    };
+    ctx.globalAlpha = ringAlpha;
+    if (!broken) for (; idx < M && sz[order[idx]] <= 0; idx++) drawBead(order[idx]);
+
+    ctx.globalAlpha = ringAlpha * coreAlpha;
+    var core = ctx.createRadialGradient(cx - sr * 0.28, cy - sr * 0.32, sr * 0.1, cx, cy, sr);
+    core.addColorStop(0, 'rgb(96,50,52)');
+    core.addColorStop(0.6, 'rgb(44,22,26)');
+    core.addColorStop(1, 'rgb(26,13,16)');
+    ctx.fillStyle = core;
+    ctx.beginPath(); ctx.arc(cx, cy, sr, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    /* The hive scene: the net skills as tentacles rooted in a blob behind the agent, and a small sphere per hive agent.
+       The agent itself is figure() below, so the alignment protocol's removal still plays on the centre one. */
+    var bl = blobAt(cx, cy, sr, sceneT);
+    drawTentacles(cx, cy, sr, bl, sceneT);
+    drawAgents(cx, cy, sr, sceneT, slots, tt);
+
+    /* The agent sits inside the sphere, under the near half of the ring; once it has crawled out it is drawn on top. */
+    if (!leaving || off < sr * 0.9) { figure(); figureDone = true; }
+
+    ctx.globalAlpha = ringAlpha;
+    if (!broken) for (; idx < M; idx++) drawBead(order[idx]);
+    else drawFrags(dt);
+    ctx.globalAlpha = 1;
+    if (!figureDone) figure();
+    if (flash > 0.01) {
+      var fl = ctx.createRadialGradient(cx + off, cy, 0, cx + off, cy, sr * 1.3);
+      fl.addColorStop(0, 'rgba(255,226,214,' + (flash * 0.55).toFixed(3) + ')');
+      fl.addColorStop(1, 'rgba(227,169,157,0)');
+      ctx.fillStyle = fl;
+      ctx.beginPath(); ctx.arc(cx + off, cy, sr * 1.3, 0, Math.PI * 2); ctx.fill();
+      flash *= Math.exp(-dt * 5);
+    }
+  }
+
+  function frame(now) {
+    if (reduce || hidden) { looping = false; return; }
+    requestAnimationFrame(frame);
+    if (visible) { var t0 = performance.now(); draw(now); drawMs += performance.now() - t0; frames++; }
+  }
+  function startLoop() {
+    if (looping || hidden) return;
+    if (reduce) { draw(performance.now()); return; }
+    looping = true; last = performance.now(); requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', function () { if (reduce && !hidden) draw(performance.now()); });
+
+  /* ---- Settings > Appearance, shared with every device that talks to this server ---- */
+  var html = document.documentElement;
+  function applyAppearance(a) {
+    if (!a) return;
+    hidden = a.ambient === false;
+    html.classList.toggle('nc-ambient-off', hidden);
+    reduce = a.reduceMotion === 'on' ? true : a.reduceMotion === 'off' ? false : osReduce;
+    startLoop();
+  }
+  var cached = null;
+  try { cached = JSON.parse(localStorage.getItem('nc_appearance') || 'null'); } catch (e) { cached = null; }
+  applyAppearance(cached);
+  if (!cached) startLoop();
+  if (/^https?:$/.test(location.protocol) && window.fetch) {
+    fetch('/api/app-settings', { headers: { accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var a = j && j.settings && j.settings.appearance;
+        if (!a) return;
+        try { localStorage.setItem('nc_appearance', JSON.stringify(a)); } catch (e) { /* storage blocked: still applied for this page */ }
+        applyAppearance(a);
+      })
+      .catch(function () { /* offline or not logged in: keep what we have */ });
+  }
+  window.ncApplyAppearance = applyAppearance;
+
+  /* ---- Installable app: the offline shell, only where browsers allow it (https, or this machine) ---- */
+  var secure = location.protocol === 'https:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if (secure && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('/sw.js').catch(function () { /* not installable here; the page works without it */ });
+  }
+})();
