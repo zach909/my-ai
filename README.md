@@ -21,12 +21,12 @@ Downloads are attached to each GitHub release, with `release-manifest.json` and 
 
 | Platform | What you get | How |
 | --- | --- | --- |
+| **Debian / Linux (primary)** | `.deb` (Debian, Ubuntu, Chromebook Linux) or `.tar.gz` | Install the `.deb`, then open NeuroClaw from the application menu. It is a real app in its own window, not a browser tab. Debian is the first platform: it is built, tested and documented before the others. |
+| Android (standalone) | build from [`mobile/android-standalone`](mobile/android-standalone/README.md) | Runs OneBrain fully on the phone, no PC needed. Built from source for now. |
+| Android | `.apk` (debug-signed; Play Store later) | Sideload it, enter your PC's address. |
 | Windows | `neuroclaw-<version>-windows-x64.exe` (or the portable `.zip`) | Run it; it installs for your user only and adds a Start menu entry (and, if you say yes, a desktop shortcut). |
-| Linux | `.deb` (Debian, Ubuntu, Chromebook Linux) or `.tar.gz` | Install the `.deb`, then open NeuroClaw from the application menu. |
 | macOS | `NeuroClaw.app` in a `.dmg` (or `.zip`) | Drag it to Applications and open it. Until it is signed with a Developer ID, macOS asks you to confirm opening it the first time. |
 | Chromebook / Chrome | the Chrome extension | One click opens your NeuroClaw server. The engine cannot live inside an extension, so it needs a server: see `browser-extension/README.md`. |
-| Android | `.apk` (debug-signed; Play Store later) | Sideload it, enter your PC's address. |
-| Android (standalone) | build from [`mobile/android-standalone`](mobile/android-standalone/README.md) | Runs OneBrain fully on the phone, no PC needed. Built from source for now. |
 | iPhone / iPad | not yet distributable | CI proves the app compiles; a device build needs an Apple developer team. |
 
 Everything about the platforms, what is shared, what is limited and what is unfinished is in
