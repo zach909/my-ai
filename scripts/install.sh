@@ -238,14 +238,6 @@ install_model() {
         return 0
     fi
     local py="python3"
-    if ! "$py" -c "import numpy" &> /dev/null; then
-        echo -e "    ${GRAY}→ Installing numpy (needed by the quantizer)...${NC}"
-        "$py" -m pip install --quiet --disable-pip-version-check numpy || {
-            echo -e "    ${YELLOW}Could not install numpy; skipping quantization.${NC}"
-            echo ""
-            return 0
-        }
-    fi
     if "$py" -m quantize install --tier "${NEUROCLAW_QUANT_TIER:-auto}" --out-dir ".neuroclaw/model"; then
         echo -e "    ${GREEN}✓ Model installed in .neuroclaw/model${NC}"
     else
@@ -261,7 +253,7 @@ build_app() {
     echo -e "    ${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
-    run_step "npm run build failed" npm run build --silent
+    run_step "backend build failed" node scripts/build-backend.mjs
     echo -e "    ${GREEN}✓ Application built successfully${NC}"
     echo ""
 }
@@ -276,16 +268,18 @@ create_linux_shortcut() {
     INSTALL_DIR="$(pwd)"
     APP_NAME="Neuroclaw"
     DESKTOP_FILE="$HOME/.local/share/applications/neuroclaw.desktop"
-    ICON_FILE="$INSTALL_DIR/public/icon.png"
-    
-    # Create applications directory if it doesn't exist
+    # public/icon.png is a Git LFS pointer in a plain checkout (a 130-byte text
+    # file, not an image), so copying it gave the launcher a broken icon. Draw
+    # the real app icon from the code the app serves (dist/, built above) instead.
+    # The generic SVG below is only a last resort if that render fails.
     mkdir -p "$HOME/.local/share/applications"
     mkdir -p "$HOME/.local/share/icons"
-    
-    # Copy icon if it exists, otherwise create a modern SVG icon
-    if [ -f "$ICON_FILE" ]; then
-        cp "$ICON_FILE" "$HOME/.local/share/icons/neuroclaw.png"
+
+    if NEURO_ICON_OUT="$HOME/.local/share/icons/neuroclaw.png" NEURO_ROOT="$INSTALL_DIR" \
+        node --input-type=module -e "import { writeFileSync } from 'node:fs'; import { pathToFileURL } from 'node:url'; const { renderIconPng } = await import(pathToFileURL(process.env.NEURO_ROOT + '/dist/interface/platform/icon.js').href); writeFileSync(process.env.NEURO_ICON_OUT, renderIconPng(512));" &> /dev/null; then
+        ICON_PATH="$HOME/.local/share/icons/neuroclaw.png"
     else
+        ICON_PATH="$HOME/.local/share/icons/neuroclaw.svg"
         echo -e "    ${GRAY}→ Creating modern app icon...${NC}"
         # Create a modern gradient-style SVG icon
         cat > "$HOME/.local/share/icons/neuroclaw.svg" << 'SVG_ICON'
@@ -315,7 +309,7 @@ Type=Application
 Name=Neuroclaw AI
 Comment=NeuroClaw - Next-Gen Local AI Mesh
 Exec=bash -c "cd $INSTALL_DIR && ./start.sh"
-Icon=$HOME/.local/share/icons/neuroclaw.svg
+Icon=$ICON_PATH
 Terminal=false
 Categories=Utility;ArtificialIntelligence;Development;
 Keywords=AI;neural;mesh;local;machine learning;assistant;
@@ -343,7 +337,7 @@ Version=1.0
 Type=Link
 Name=Neuroclaw AI
 URL=$DESKTOP_FILE
-Icon=$HOME/.local/share/icons/neuroclaw.svg
+Icon=$ICON_PATH
 DESKTOP_LINK
         chmod +x "$HOME/Desktop/neuroclaw.desktop"
         # GNOME/Nautilus refuses to treat a new .desktop file dropped onto the
@@ -459,31 +453,15 @@ create_start_script() {
     
     cat > start.sh << 'START_SCRIPT'
 #!/bin/bash
-# NeuroClaw — OneBrain Launcher
-#
-# Opens the real desktop-app/ Electron shell (a native app window that owns
-# the backend + UI directly) rather than a browser tab -- clicking the
-# Neuroclaw icon should open a separate app, not add a tab to whatever
-# browser happens to be running.
-
-REPO_URL="${NEUROCLAW_REPO_URL:-https://github.com/zach909/.my-ai.git}"
-REPO_DIR="${NEUROCLAW_REPO_DIR:-.my-ai}"
+# NeuroClaw launcher: opens the app in its own native window (scripts/app.mjs).
+# This is what the application-menu / desktop icon runs, so nothing is typed.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/desktop-app"
-
-echo ""
-echo -e "    \033[0;34m╔═══════════════════════════════════════════╗\033[0m"
-echo -e "    \033[0;34m║\033[0m       \033[0;35m🧠 Neuroclaw AI\033[0m \033[0;34m║\033[0m"
-echo -e "    \033[0;34m╚═══════════════════════════════════════════╝\033[0m"
-echo ""
-
-if [ ! -d node_modules ]; then
-    echo -e "    \033[0;36m→ Installing desktop app dependencies (first run only)...\033[0m"
-    npm install --silent
-fi
-
-echo -e "    \033[0;36m→ Launching Neuroclaw...\033[0m"
-exec npm start --silent
+cd "$SCRIPT_DIR" || exit 1
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/neuroclaw"
+mkdir -p "$LOG_DIR"
+# Started from an icon there is no terminal, so keep the output in a log.
+if [ -t 1 ]; then exec node scripts/app.mjs "$@"; fi
+exec node scripts/app.mjs "$@" >> "$LOG_DIR/start.log" 2>&1
 START_SCRIPT
 
     chmod +x start.sh
@@ -501,8 +479,7 @@ show_completion() {
     echo -e "    ${CYAN}You can now start Neuroclaw AI:${NC}"
     echo ""
     echo -e "      ${BLUE}•${NC} Double-click the ${PURPLE}Neuroclaw${NC} icon in your applications"
-    echo -e "      ${BLUE}•${NC} Run ${CYAN}./start.sh${NC} from the terminal"
-    echo -e "      ${BLUE}•${NC} Use ${CYAN}npm run dev${NC} for development mode (opens in the browser instead)"
+    echo -e "      ${BLUE}•${NC} Run ${CYAN}./start.sh${NC} from the terminal (the icon runs the same thing)"
     echo ""
     echo -e "    ${GRAY}→ Opens as its own app window, not a browser tab${NC}"
     echo ""
