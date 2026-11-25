@@ -55,6 +55,17 @@ likely one), and we plot the mesh's own prediction error against that knob. What
 measurable now. Whether *people* like the middle needs real listeners, so the owner would have to rate some
 clips; the mesh cannot answer that for us.
 
+### Step 0: the echo (owner, 2026-11-25; built in `training/echo/`)
+
+Before any stage's real work the model has to **repeat exactly what it is shown**, so it has a better sense of what
+it is seeing. This is a gate on every stage and level below, not a separate rung: the echo tasks must be exact before
+the stage's other tasks count. After the echo, each stage teaches its rules by prediction: given the start of a tune,
+what comes next (any rule-legal symbol passes), which symbols are legal, and finish it. For music that is theory (scale
+degrees, steps and leaps, a leap answered by a step back, a cadence), with a randomizer that can visit **every**
+rule-legal tune once, in a seeded random order. The same machinery covers art, animal calls, human speech without
+words, text, chips, coding, simulation, research and NeuroLang. What is built and what is not (rhythm, chords, 2D
+art, prosody, research and NeuroLang content) is listed in `training/echo/README.md` under "Honest limits".
+
 ### The order, mapped onto the existing stages
 
 | # | Owner's step | What it is | Existing spec | Status |
