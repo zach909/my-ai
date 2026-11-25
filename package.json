@@ -19,6 +19,7 @@
     "test:install": "bash test/install-sh.test.sh",
     "test:training": "node --test \"test/training/*.test.mjs\"",
     "train:sim": "node training/simulation/run.mjs",
+    "train:echo": "node training/echo/run.mjs",
     "bench:math": "node benchmarks/math_exam.mjs",
     "test:model-change": "node scripts/model-change-test.mjs",
     "watch:model": "node scripts/model-change-test.mjs --watch",
