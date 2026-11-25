@@ -1,0 +1,104 @@
+{
+  "name": "atlas",
+  "version": "1.0",
+  "description": "A map of anything. Put data in space so redundant data collapses and good data is kept; ask it what it holds, where, when, and what goes with what. Use it when the user asks about something that was observed or saved earlier (who passed, where a smell came from, which files are about a subject, how a number has been moving), and to remember things as they come up.",
+  "command": ["python3", "-m", "atlas"],
+  "notes": [
+    "Every tool prints JSON because --json is added. Marks hold whole numbers only (millimetres, seconds, counts).",
+    "It does not recognise people: it records that something person-sized moved at a place and a time, never who.",
+    "Live cameras are off until the user runs `atlas capture on`. Never turn them on yourself.",
+    "Read-only tools: atlas_find, atlas_about, atlas_similar, atlas_near, atlas_stats, atlas_recent. Tools that change the map: atlas_put, atlas_reading, atlas_ingest, atlas_digest."
+  ],
+  "tools": [
+    {
+      "name": "atlas_find",
+      "description": "Ask the map. Every word must appear in a mark's kind, label, name or unit. Optionally only one kind (sight, smell, heat, data, file, event, region, routine, source, theme, trend, likes...) or time window.",
+      "mutates": false,
+      "argv": ["--json", "find", "{words...}", "[--kind {kind}]", "[--since {since}]", "[--until {until}]", "[--limit {limit}]"],
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "words": {"type": "array", "items": {"type": "string"}},
+          "kind": {"type": "string"},
+          "since": {"type": "integer", "description": "Unix seconds"},
+          "until": {"type": "integer", "description": "Unix seconds"},
+          "limit": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "name": "atlas_about",
+      "description": "Everything the map holds about one thing (a file path, a video id, a sensor name): how many marks of each kind and the newest value.",
+      "mutates": false,
+      "argv": ["--json", "about", "{ref}"],
+      "parameters": {"type": "object", "properties": {"ref": {"type": "string"}}, "required": ["ref"]}
+    },
+    {
+      "name": "atlas_similar",
+      "description": "Data in the map like this text (lexical similarity of words, not meaning). Closest first, with how many of 64 fingerprint bits differ (under about 16 is alike).",
+      "mutates": false,
+      "argv": ["--json", "similar", "{text...}"],
+      "parameters": {"type": "object", "properties": {"text": {"type": "array", "items": {"type": "string"}}}, "required": ["text"]}
+    },
+    {
+      "name": "atlas_near",
+      "description": "Marks within a radius of a place, in whole millimetres, in one space (default the physical world).",
+      "mutates": false,
+      "argv": ["--json", "near", "{x}", "{y}", "{z}", "{radius}", "[--space {space}]"],
+      "parameters": {
+        "type": "object",
+        "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"},
+                       "radius": {"type": "integer"}, "space": {"type": "string"}},
+        "required": ["x", "y", "z", "radius"]
+      }
+    },
+    {
+      "name": "atlas_stats",
+      "description": "What the map holds: counts by kind and space.",
+      "mutates": false,
+      "argv": ["--json", "stats"],
+      "parameters": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "atlas_recent",
+      "description": "The newest marks.",
+      "mutates": false,
+      "argv": ["--json", "recent", "[--limit {limit}]"],
+      "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}}}
+    },
+    {
+      "name": "atlas_put",
+      "description": "Remember a note: put text in the map under a short name. A near-duplicate of something already there folds into it and the count grows.",
+      "mutates": true,
+      "argv": ["--json", "put", "{name}", "{text...}"],
+      "parameters": {"type": "object", "properties": {"name": {"type": "string"}, "text": {"type": "array", "items": {"type": "string"}}},
+                     "required": ["name", "text"]}
+    },
+    {
+      "name": "atlas_reading",
+      "description": "Put a number about anything in the map: how many people liked a video (kind likes, ref video:cats), a temperature, a price. Whole numbers only.",
+      "mutates": true,
+      "argv": ["--json", "reading", "{kind}", "{value}", "[--ref {ref}]", "[--unit {unit}]", "[--at {at}]", "[--space {space}]"],
+      "parameters": {
+        "type": "object",
+        "properties": {"kind": {"type": "string"}, "value": {"type": "integer"}, "ref": {"type": "string"}, "unit": {"type": "string"},
+                       "at": {"type": "string", "description": "X,Y,Z in whole millimetres"}, "space": {"type": "string"}},
+        "required": ["kind", "value"]
+      }
+    },
+    {
+      "name": "atlas_ingest",
+      "description": "Put a file, or a whole folder, in the map. Any file works, text or not. Never follows symlinks and skips files whose name looks like a secret.",
+      "mutates": true,
+      "argv": ["--json", "ingest", "{paths...}"],
+      "parameters": {"type": "object", "properties": {"paths": {"type": "array", "items": {"type": "string"}}}, "required": ["paths"]}
+    },
+    {
+      "name": "atlas_digest",
+      "description": "Make the map smaller and smarter: fold duplicates, turn old raw depth cells into surfaces and objects, and work out routines, sources, themes, hubs and trends. Safe to run repeatedly.",
+      "mutates": true,
+      "argv": ["--json", "digest"],
+      "parameters": {"type": "object", "properties": {}}
+    }
+  ]
+}
