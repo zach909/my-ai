@@ -238,14 +238,6 @@ install_model() {
         return 0
     fi
     local py="python3"
-    if ! "$py" -c "import numpy" &> /dev/null; then
-        echo -e "    ${GRAY}→ Installing numpy (needed by the quantizer)...${NC}"
-        "$py" -m pip install --quiet --disable-pip-version-check numpy || {
-            echo -e "    ${YELLOW}Could not install numpy; skipping quantization.${NC}"
-            echo ""
-            return 0
-        }
-    fi
     if "$py" -m quantize install --tier "${NEUROCLAW_QUANT_TIER:-auto}" --out-dir ".neuroclaw/model"; then
         echo -e "    ${GREEN}✓ Model installed in .neuroclaw/model${NC}"
     else
@@ -276,15 +268,15 @@ create_linux_shortcut() {
     INSTALL_DIR="$(pwd)"
     APP_NAME="Neuroclaw"
     DESKTOP_FILE="$HOME/.local/share/applications/neuroclaw.desktop"
-    ICON_FILE="$INSTALL_DIR/public/icon.png"
-    
-    # Create applications directory if it doesn't exist
+    # public/icon.png is a Git LFS pointer in a plain checkout (a 130-byte text
+    # file, not an image), so copying it gave the launcher a broken icon. Draw
+    # the real app icon from the code the app serves (dist/, built above) instead.
+    # The generic SVG below is only a last resort if that render fails.
     mkdir -p "$HOME/.local/share/applications"
     mkdir -p "$HOME/.local/share/icons"
-    
-    # Copy icon if it exists, otherwise create a modern SVG icon
-    if [ -f "$ICON_FILE" ]; then
-        cp "$ICON_FILE" "$HOME/.local/share/icons/neuroclaw.png"
+
+    if NEURO_ICON_OUT="$HOME/.local/share/icons/neuroclaw.png" NEURO_ROOT="$INSTALL_DIR" \
+        node --input-type=module -e "import { writeFileSync } from 'node:fs'; import { pathToFileURL } from 'node:url'; const { renderIconPng } = await import(pathToFileURL(process.env.NEURO_ROOT + '/dist/interface/platform/icon.js').href); writeFileSync(process.env.NEURO_ICON_OUT, renderIconPng(512));" &> /dev/null; then
         ICON_PATH="$HOME/.local/share/icons/neuroclaw.png"
     else
         ICON_PATH="$HOME/.local/share/icons/neuroclaw.svg"
