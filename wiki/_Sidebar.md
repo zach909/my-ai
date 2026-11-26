@@ -34,6 +34,7 @@
 - [[Skills|Skills]]
 - [[Code-to-Net|Code-to-Net]]
 - [[Net Maker|Net-Maker]]
+- [[Map Maker|Map-Maker]]
 - [[Task Training|Task-Training]]
 - [[Net Search|Net-Search]]
 - [[Format Converter|Format-Converter]]

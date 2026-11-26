@@ -35,6 +35,7 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 - [[Skills|Skills]] - Expert modules added to MoE
 - [[Code-to-Net|Code-to-Net]] - Import binary code as neural networks
 - [[Net Maker|Net-Maker]] - Make a network or a skill from a program, edit its weights, compile code
+- [[Map Maker|Map-Maker]] - Always-on mapping (also called Compression Map and Sensory Integration); design only, not built
 - [[Task Training|Task-Training]] - Train AIs on tasks: alone, as a hive, separately, or silently together
 - [[Net Search|Net-Search]] - Deep learning-powered neuron search
 - [[Format Converter|Format-Converter]] - Any file format to any other (picture to text drawing, picture to code, table to data), and training pairs from it
