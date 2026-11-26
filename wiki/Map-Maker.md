@@ -1,26 +1,30 @@
 # Map Maker (also: Compression Map, Sensory Integration)
 
-> **Status: design only. Nothing in this page is built yet.** It records what the owner has said so far. No file in the repo
-> implements it; check `git grep -i "map maker"` before treating any of this as real.
+Map Maker is the always-on map of the whole system. It is the existing `ArchitectureMapper`
+(`models && skills/core/architecture-mapper.ts`), which keeps the components, how data flows between them, and the
+bottlenecks and waste found in them. The owner's other names for it are **Compression Map** and **Sensory Integration**.
 
-## What it is
+> **Open question:** the owner has not yet confirmed that Map Maker means the architecture mapper, and not
+> `context-compressor.ts` or something new. This page and the code below assume the architecture mapper.
 
-One component with three names: **Map Maker**, **Compression Map** and **Sensory Integration**. Map Maker is the name to use.
+## Always on
 
-## What the owner has decided
+- The map is built when the system starts and is kept current by `trackCall()`, which records every measured call
+  (latency, CPU, memory, errors) into the matching component.
+- `NeuroclawSystem.autoMapTick()` (`src/index.ts`) refreshes the bottleneck and waste analysis. It runs once at start and
+  then every 60 seconds in the background.
+- **Idle costs nothing.** A refresh does nothing when no call was measured since the last one, so a quiet app does no work.
+  The timer is `unref`'d, so it never keeps the process alive.
+- **No disk writes.** The map lives in memory only; nothing is logged or saved by the refresh.
+- `mapStatus()` returns when the map last refreshed and how many times.
+- Settings: `NEUROCLAW_AUTOMAP=0` turns the background refresh off; `NEUROCLAW_AUTOMAP_INTERVAL_MS` changes the 60-second
+  interval. The timer is not started under tests (`VITEST`), like the curiosity timer.
 
-- **Always on.** Mapping is not a switch the user turns on. It runs whenever the app runs.
-- **A new feature**, not a rename of existing code.
+## Not done
 
-## Not decided yet (needs the owner)
-
-- What it takes in (microphone, camera, files, the phone's sensors, or all of them) and what it produces.
-- Where its output goes: into the mesh through the Zip Loop doorway ports ([[Zip-IO]]), or somewhere else.
-
-## Rules it must follow once built
-
-These come from `CLAUDE.md` and `AGENTS.md`, not from a new decision:
-
-- **No third-party code and no tokenizer.** Raw bits enter the mesh through the Zip Loop; Node built-ins and the Python standard library only.
-- **Always on must still be cheap.** Event-driven rather than polled, bounded memory (a circular buffer like the Zip Loop's), and lower background work on battery. The phone matters most.
-- **One permission gate.** Microphone, camera and other sensors go through the existing access permissions with explicit grants.
+- The map covers the system's own components. It does not map the outside world through a microphone, camera or other
+  sensors; that would be a separate feature and needs the owner's design.
+- The refresh is not yet slower on battery. It already does no work when idle; a battery-aware interval needs a way to read
+  the battery state, which is not wired in.
+- No test covers `autoMapTick()` yet. The type check and test runner were not installed where this was written, so the change
+  was only parse-checked.
