@@ -29,6 +29,8 @@ import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
 import { handleSelfDebugRoutes, isSelfDebugRoute, selfDebugService } from './self-debug-routes.js';
 import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
 import { handleCommonsRoutes, type CommonsContext } from './commons-routes.js';
+import { handleWorkbenchRoutes, isSharePath, isWorkbenchRoute } from './workbench/routes.js';
+import { WorkbenchService } from './workbench/service.js';
 import { getAccounts, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { isComputerAdministrator } from '../models && skills/core/computer-admin.js';
 import { sharedToolGate } from '../models && skills/core/tool-safety.js';
@@ -281,6 +283,31 @@ const commons: Plugin = {
   start: () => undefined,
 };
 
+/** The workbench: coding-agent features (modes, hooks, checkpoints, sessions, tool servers) over HTTP. One instance, made on first use. */
+const workbenchService = new WorkbenchService();
+
+const workbench: Plugin = {
+  id: 'workbench-routes',
+  description: 'The workbench: agent modes, slash commands, hooks, checkpoints, sessions, sub-agents and tool servers.',
+  guarded: true,
+  order: 95,
+  routes: [{
+    match: (p) => isWorkbenchRoute(p) || isSharePath(p),
+    // A shared transcript opens with its link alone; the token is the key, expires and can be revoked.
+    isPublic: (p, m) => m === 'GET' && isSharePath(p),
+    handle: (c) => handleWorkbenchRoutes({
+      ...base(c),
+      url: c.url,
+      isAdmin: () => isOwnerOrAdmin(),
+      workbench: () => workbenchService.get(),
+      within: (fn) => workbenchService.within({ act: (m) => c.act(m), text: (m) => c.text(m) }, fn),
+    }),
+  }],
+  // The agent's own tools pass the workbench's rules and PreToolUse hooks as well, on top of the gate that was there.
+  start: () => { workbenchService.bridge(sharedToolGate()); },
+  stop: () => { workbenchService.close(); },
+};
+
 /** Who is asking, for the guard: a person at the owner's controls, or the agent on its own. */
 function actorOf(): PluginActor {
   return isAutonomous() ? 'agent' : 'owner';
@@ -344,6 +371,6 @@ export function fileEnabledStore(override?: string): PluginEnabledStore {
 /** The server's plugin host, with every route plugin registered and not yet started. */
 export function createServerHost(store: PluginEnabledStore = fileEnabledStore(), log?: (m: string) => void): PluginHost<ServerRouteContext> {
   const host = new PluginHost<ServerRouteContext>(store, log);
-  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons]) host.register(p);
+  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons, workbench]) host.register(p);
   return host;
 }

@@ -359,6 +359,17 @@ export class ToolGate implements ToolGateLike {
   }
 
   /**
+   * An extra check that can only refuse: the workbench's permission rules and PreToolUse hooks (interface/workbench).
+   * It runs after the danger protocol and the owner-only rule have already said yes, never before them and never
+   * instead of them, so it cannot loosen anything. It sees only tools that are about to act. If it throws, the gate
+   * behaves exactly as it did without it.
+   */
+  useExtraCheck(fn: ((pluginId: string, input: string) => Promise<string | null>) | null): void {
+    this.extra = fn;
+  }
+  private extra: ((pluginId: string, input: string) => Promise<string | null>) | null = null;
+
+  /**
    * check(), and if the call is held and a judge agent is on, let the judge
    * choose whether it runs. The judge decides the middle-risk tools (and the
    * high-risk ones only if you let it); it cannot override the sandbox or the
@@ -367,6 +378,12 @@ export class ToolGate implements ToolGateLike {
    */
   async checkAsync(pluginId: string, input: string, score: number, acts?: boolean): Promise<GateDecision> {
     const held = this.checkCore(pluginId, input, score, acts);
+    // Only a call the other checks would let through, and only one that is about to act, goes to the extra check.
+    if (held.allow === true && this.extra && (acts === undefined ? score >= HOLD_SCORE : acts)) {
+      let refusal: string | null = null;
+      try { refusal = await this.extra(pluginId, input); } catch { refusal = null; }
+      if (refusal) return { allow: false, approvalId: "", message: refusal };
+    }
     const approvalId = held.allow === false ? (held as { approvalId: string }).approvalId : "";
     if (held.allow === true || !approvalId) return held;
     const a = this.get(approvalId);

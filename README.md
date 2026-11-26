@@ -517,6 +517,7 @@ Pure-Python, stdlib-only implementation of the brain. Run the tests with `python
 | `docs/asi_architecture.md` | ASI architecture specification (v1). |
 | `docs/asi_architecture_v2.md` | ASI architecture specification (v2, incremental build-out). |
 | `docs/skill_agent_architecture.py` | Python prototype showing skills as dynamic plugins in an agent. |
+| `docs/WORKBENCH.md` | The coding-agent workbench (`interface/workbench/`): agent modes, hooks, checkpoints, sessions, tool servers, headless mode and the terminal interface; what it does and what it deliberately does not. |
 
 #### `extension-builder/`
 

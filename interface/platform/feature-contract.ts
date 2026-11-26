@@ -55,6 +55,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), v('test/core/voice-orb.test.ts'), v('test/core/response-prediction.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
+    id: 'workbench', title: 'Coding-agent workbench', description: 'Agent modes (build, plan, general, explore) and Markdown sub-agents; slash commands; allow/ask/deny permission rules in layers; lifecycle hooks and formatters; checkpoints with undo, redo and rewind; sessions you can resume, fork, search and share; hierarchical instruction files and auto-memory; context compaction; sub-agents, teams and a shared task list; tool servers (stdio, http, sse); live diagnostics; per-agent routing to the project\'s own engines; offline mode; bundles; headless mode and a terminal interface. Nothing here is third-party code: protocols and parsers are written in this project.',
+    implementation: ['interface/workbench/workbench.ts', 'interface/workbench/routes.ts', 'interface/workbench/service.ts', 'interface/workbench/cli.ts', 'interface/workbench/headless.ts', 'interface/workbench/tui.ts', 'interface/workbench/permissions.ts', 'interface/workbench/hooks.ts', 'interface/workbench/checkpoints.ts', 'interface/workbench/sessions.ts', 'interface/workbench/mcp.ts', 'interface/workbench/diagnostics.ts', 'interface/workbench/teams.ts', 'interface/workbench/gate-bridge.ts'],
+    routes: ['GET /api/workbench/status', 'POST /api/workbench/run', 'GET /api/workbench/sessions', 'GET /api/workbench/checkpoints', 'POST /api/workbench/undo', 'POST /api/workbench/redo', 'POST /api/workbench/rewind', 'GET /api/workbench/usage', 'GET /api/workbench/mcp'],
+    needs: ENGINE, tests: [n('test/platform/workbench-core.test.mjs'), n('test/platform/workbench-clients.test.mjs'), n('test/platform/workbench-turn.test.mjs')],
+  },
+  {
     id: 'uploads', title: 'Attach a file or a folder', description: 'File and Folder buttons (and drag and drop) beside the message box. Each file goes up as raw bytes into the user\'s own data folder; the chat turn carries small text files whole and lists the rest by name and size.',
     implementation: ['interface/uploads.ts', 'interface/web-server.ts'],
     routes: ['POST /api/uploads'],
@@ -386,7 +392,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/self-debug-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/self-debug-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts', 'interface/workbench/routes.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))
