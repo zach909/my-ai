@@ -37,3 +37,6 @@ __pycache__/
 .gradle/
 mobile/android-standalone/**/build/
 mobile/android-standalone/local.properties
+
+# Rating framework output (training/rating): ledgers rebuild on each run; never committed.
+training/rating/out/
