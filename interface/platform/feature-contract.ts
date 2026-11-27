@@ -187,6 +187,12 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/commons-routes.test.ts')],
   },
   {
+    id: 'editor', title: 'Editor', description: 'A visual editor for each kind of text file the agent can edit, with a diff and a read-back check on every save.',
+    implementation: ['interface/editor-routes.ts', 'interface/editor-page.ts'],
+    routes: ['GET /editor', 'GET /api/editor/files', 'GET /api/editor/file', 'POST /api/editor/diff', 'POST /api/editor/edit', 'POST /api/editor/save'],
+    needs: [['localEngine']], tests: [v('test/core/editor-routes.test.ts')],
+  },
+  {
     id: 'weights', title: 'Net maker, net skill maker and weight editor',
     description: 'Write a program that makes a network or a skill, see what each weight does, change it a little, and compile code into weights.',
     implementation: ['models && skills/core/neuro-build.ts', 'models && skills/core/weight-editor.ts', 'models && skills/core/task-training.ts', 'interface/weights-routes.ts', 'interface/weights-page.ts'],
