@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from atlas import atlas_core as core  # noqa: E402
-from atlas import cli, daemon, sensors, vision  # noqa: E402
+from atlas import cli, daemon, ledger, sensors, vision  # noqa: E402
 from atlas.store import DirBackend, open_store  # noqa: E402
 
 PKG = ROOT / "atlas"
@@ -459,7 +459,8 @@ class TestTheToolDescription(Home):
             cmd = [a for a in t["argv"] if not a.startswith(("--", "[", "{"))][0]
             self.assertIn(cmd, sub, t["name"])
         self.assertEqual({t["name"] for t in self.tools() if not t["mutates"]},
-                         {"atlas_find", "atlas_about", "atlas_similar", "atlas_near", "atlas_stats", "atlas_recent"})
+                         {"atlas_find", "atlas_about", "atlas_similar", "atlas_near", "atlas_stats", "atlas_recent",
+                          "atlas_timeline", "atlas_files"})
 
     def test_the_read_only_tools_really_change_nothing_and_every_tool_gives_json(self):
         self.ok("put", "recipe", "espresso", "machine", "descaling", "needs", "citric", "acid")
@@ -486,6 +487,201 @@ class TestTheToolDescription(Home):
                 self.assertEqual(after, before, f"{t['name']} claims to be read-only but wrote")
             else:
                 before = {n: (self.home / n).read_bytes() for n in self.files()}
+
+
+def build_tree(root: Path):
+    (root / "a").mkdir(parents=True)
+    (root / "b").mkdir()
+    (root / "a" / "x.txt").write_text("one")
+    (root / "a" / "y.txt").write_text("two")
+    os.symlink(root / "a" / "x.txt", root / "link.txt")
+    for f in ((root / "a" / "x.txt"), (root / "a" / "y.txt")):
+        os.utime(f, (NOW - 5000, NOW - 5000))
+
+
+class TestTheLedger(Home):
+    """The inventory of everything and the timeline of what changed: baseline first, then only changes."""
+
+    def setUp(self):
+        super().setUp()
+        self.root = Path(self.tmp.name) / "tree"
+        build_tree(self.root)
+        self.home.mkdir(parents=True)
+        self.lg = ledger.Ledger(self.home)
+        self.addCleanup(self.lg.close)
+
+    def scan(self, now, **kw):
+        return self.lg.scan_files([str(self.root)], now, **kw)
+
+    def test_the_first_pass_is_a_baseline_and_raises_no_events(self):
+        c = self.scan(NOW)
+        self.assertEqual((c["created"], c["modified"], c["deleted"]), (0, 0, 0))
+        self.assertEqual(self.lg.timeline(), [])
+        st = self.lg.stats()
+        self.assertEqual((st["files"], st["folders"]), (2, 2), "the symlink is not followed or counted")
+
+    def test_later_passes_record_created_modified_and_deleted_on_a_timeline(self):
+        self.scan(NOW)
+        (self.root / "a" / "x.txt").write_text("one, longer now")
+        os.utime(self.root / "a" / "x.txt", (NOW + 50, NOW + 50))
+        (self.root / "a" / "z.txt").write_text("new")
+        os.utime(self.root / "a" / "z.txt", (NOW + 60, NOW + 60))
+        (self.root / "a" / "y.txt").unlink()
+        c = self.scan(NOW + 100)
+        self.assertEqual((c["created"], c["modified"], c["deleted"]), (1, 1, 1))
+        ops = {(r["op"], Path(r["key"]).name): r["t"] for r in self.lg.timeline()}
+        self.assertEqual(set(ops), {("created", "z.txt"), ("modified", "x.txt"), ("deleted", "y.txt")})
+        self.assertEqual(ops[("modified", "x.txt")], NOW + 50, "a change is dated by the file's own modified time")
+        self.assertEqual(ops[("deleted", "y.txt")], NOW + 100, "a deletion is dated by the pass that noticed it")
+        self.assertEqual(self.scan(NOW + 200)["created"], 0, "nothing changed: nothing recorded")
+
+    def test_timeline_can_be_asked_by_time_kind_and_words(self):
+        self.scan(NOW)
+        (self.root / "a" / "report.txt").write_text("r")
+        (self.root / "b" / "photo.txt").write_text("p")
+        self.scan(NOW + 100)
+        self.assertEqual(len(self.lg.timeline(words=["report"])), 1)
+        self.assertEqual(len(self.lg.timeline(cat="files", op="created")), 2)
+        self.assertEqual(self.lg.timeline(cat="net"), [])
+        self.assertEqual(self.lg.timeline(since=NOW + 99999), [])
+        self.assertEqual(len(self.lg.timeline(until=NOW + 100000, limit=1)), 1)
+
+    def test_a_folder_that_cannot_be_read_is_not_treated_as_deleted(self):
+        self.scan(NOW)
+        real = os.scandir
+        def deny(p):
+            if str(p).endswith("/a"):
+                raise PermissionError(13, "denied")
+            return real(p)
+        with mock.patch.object(ledger.os, "scandir", deny):
+            c = self.scan(NOW + 100)
+        self.assertEqual(c["deleted"], 0)
+        self.assertEqual(self.lg.stats()["files"], 2, "what was in the unreadable folder is still on the books")
+        self.assertEqual(c["incomplete"], 1)
+
+    def test_skipped_places_are_not_recorded(self):
+        (self.root / "private").mkdir()
+        (self.root / "private" / "own.db").write_text("the ledger's own folder must not map itself")
+        self.scan(NOW, skip=[str(self.root / "private")])
+        self.assertEqual(self.lg.find_files(["own.db"]), [])
+        self.assertEqual(len(self.lg.find_files(["x.txt"])), 1)
+
+    def test_the_file_count_is_capped(self):
+        c = self.scan(NOW, max_files=2)
+        self.assertEqual(self.lg.stats()["files"] + self.lg.stats()["folders"], 2)
+        self.assertEqual(c["incomplete"], 1, "a capped walk never claims the rest was deleted")
+
+    def test_the_ledger_file_is_private_and_holds_metadata_only(self):
+        (self.root / "a" / "secret.txt").write_text("TOPSECRETCONTENT")
+        self.scan(NOW)
+        db = self.home / "ledger.sqlite"
+        self.assertEqual(db.stat().st_mode & 0o777, 0o600)
+        self.lg.db.commit()
+        self.assertNotIn(b"TOPSECRETCONTENT", db.read_bytes())
+
+    def test_old_timeline_rows_are_pruned(self):
+        self.scan(NOW)
+        (self.root / "a" / "q.txt").write_text("q")
+        self.scan(NOW + 10)
+        self.assertEqual(self.lg.prune(NOW + 10 + 91 * 86400, keep_days=90), 2, "the created row and the baseline marker")
+        self.assertEqual(self.lg.timeline(), [])
+
+    # -- running programs, connections, drives, devices
+    def fake_proc(self, procs, with_net=True):
+        proc = Path(self.tmp.name) / "p"
+        if proc.exists():
+            import shutil
+            shutil.rmtree(proc)
+        proc.mkdir()
+        for pid, (comm, start, flags) in procs.items():
+            d = proc / str(pid)
+            (d / "fd").mkdir(parents=True)
+            (d / "stat").write_text(f"{pid} ({comm}) S 1 1 1 0 -1 {flags} 0 0 0 0 0 0 0 0 20 0 1 0 {start} 0 0\n")
+            (d / "comm").write_text(comm + "\n")
+            (d / "cmdline").write_bytes(b"prog\x00--password=hunter2\x00")
+        return proc
+
+    def test_programs_starting_and_stopping_are_changes_after_a_baseline(self):
+        proc = self.fake_proc({10: ("bash", 100, 0), 11: ("kthreadd", 101, 0x200000)})
+        self.assertEqual(set(ledger.probe_processes(proc)), {"10:100"}, "kernel threads are left out")
+        self.lg.sync_live("process", ledger.probe_processes(proc), NOW)
+        self.assertEqual(self.lg.timeline(), [])
+        proc = self.fake_proc({10: ("bash", 100, 0), 12: ("firefox", 200, 0)})
+        self.lg.sync_live("process", ledger.probe_processes(proc), NOW + 30)
+        self.assertEqual(sorted((r["op"], r["info"]) for r in self.lg.timeline()), [("started", "firefox")])
+        proc = self.fake_proc({12: ("firefox", 200, 0)})
+        self.lg.sync_live("process", ledger.probe_processes(proc), NOW + 60)
+        self.assertIn("stopped", {r["op"] for r in self.lg.timeline()})
+        self.assertNotIn("hunter2", json.dumps(ledger.probe_processes(proc)), "command lines are never read")
+
+    def test_an_unreadable_probe_concludes_nothing(self):
+        self.lg.sync_live("usb", {"1-1": "abcd:0001 stick"}, NOW)
+        self.lg.sync_live("usb", None, NOW + 10)
+        self.assertEqual(self.lg.timeline(), [])
+        self.assertEqual(self.lg.stats()["live"], {"usb": 1})
+
+    def test_network_lines_become_listening_ports_and_remote_machines(self):
+        proc = Path(self.tmp.name) / "n"
+        (proc / "net").mkdir(parents=True)
+        (proc / "net" / "tcp").write_text(
+            "  sl  local_address rem_address   st\n"
+            "   0: 0100007F:1F90 00000000:0000 0A 0:0 00:0 0 0 0\n"
+            "   1: 0100007F:C350 0801A8C0:01BB 01 0:0 00:0 0 0 0\n")
+        (proc / "net" / "udp").write_text("  sl  local_address rem_address   st\n   0: 0100007F:0035 00000000:0000 07\n")
+        got = ledger.probe_net(proc)
+        self.assertEqual(got, {"tcp listen 127.0.0.1:8080": "listening on 127.0.0.1:8080",
+                               "tcp 192.168.1.8:443": "connected to 192.168.1.8:443",
+                               "udp listen 127.0.0.1:53": "listening on 127.0.0.1:53"})
+        self.assertIsNone(ledger.probe_net(Path(self.tmp.name) / "nothing"))
+
+    def test_which_program_has_the_camera_or_microphone_open_is_a_change(self):
+        proc = self.fake_proc({20: ("zoom", 1, 0), 21: ("cat", 2, 0)})
+        os.symlink("/dev/video0", proc / "20" / "fd" / "5")
+        os.symlink("/etc/hosts", proc / "21" / "fd" / "3")
+        self.assertEqual(ledger.probe_devices(proc), {"20:/dev/video0": "zoom has /dev/video0 open"})
+        self.lg.sync_live("device", {}, NOW)
+        self.lg.sync_live("device", ledger.probe_devices(proc), NOW + 5)
+        row = self.lg.timeline(cat="device")[0]
+        self.assertEqual((row["op"], row["info"]), ("opened", "zoom has /dev/video0 open"))
+
+    def test_mounts_list_real_disks_and_ignore_virtual_ones(self):
+        proc = Path(self.tmp.name) / "m"
+        proc.mkdir()
+        (proc / "mounts").write_text("/dev/sda1 / ext4 rw 0 0\nproc /proc proc rw 0 0\n/dev/sdb1 /mnt/my\\040usb vfat rw 0 0\ntmpfs /run tmpfs rw 0 0\n")
+        self.assertEqual(ledger.real_mounts(proc), ["/", "/mnt/my usb"])
+        self.assertEqual(set(ledger.probe_mounts(proc)), {"/", "/mnt/my usb", "/run"})
+
+    # -- the commands
+    def test_asking_the_timeline_never_creates_or_changes_the_ledger(self):
+        fresh = Path(self.tmp.name) / "fresh"
+        self.assertEqual(cli.main(["--home", str(fresh), "timeline"], out=lambda *_: None), 0)
+        self.assertFalse((fresh / "ledger.sqlite").exists())
+        self.scan(NOW)
+        (self.root / "a" / "n.txt").write_text("n")
+        self.scan(NOW + 100)
+        self.lg.db.commit()
+        before = (self.home / "ledger.sqlite").read_bytes()
+        out = self.ok("timeline", "n.txt")
+        self.assertIn("created", out)
+        self.assertIn("n.txt", self.ok("files", "n.txt"))
+        rows = json.loads(self.ok("timeline", json_out=True))
+        self.assertEqual(rows[0]["op"], "created")
+        self.assertEqual((self.home / "ledger.sqlite").read_bytes(), before)
+
+    def test_the_daemon_baselines_first_and_then_records_only_changes(self):
+        docs = self.root
+        (self.home / "config.json").write_text(json.dumps({"watch_roots": [str(docs)], "roots": []}))
+        (Path(self.tmp.name) / "sys1").mkdir()
+        fs = FakeSys(Path(self.tmp.name) / "sys1", battery=80, mains=True)
+        def go(t):
+            daemon.run(self.home, lambda *_: None, once=True, now=lambda: t, power=fs.power, proc=fs.proc)
+        go(NOW)
+        self.assertEqual(json.loads(self.ok("timeline", json_out=True)), [])
+        (self.root / "a" / "new.txt").write_text("fresh")
+        go(NOW + 7200)
+        ops = [(r["cat"], r["op"], Path(r["key"]).name) for r in json.loads(self.ok("timeline", json_out=True))]
+        self.assertIn(("files", "created", "new.txt"), ops)
+        self.assertFalse(any("ledger.sqlite" in r[2] for r in ops), "the map never records its own folder")
 
 
 class FakeSys:
@@ -519,6 +715,10 @@ class TestTheDaemon(Home):
         (self.docs / ".hidden" / "diary.txt").write_text("private diary entry")
         self.home.mkdir(parents=True)
         (self.home / "config.json").write_text(json.dumps({"roots": [str(self.docs)]}))
+        # Whatever a test's config says, the whole-disk pass must only ever walk the test folder, never this machine's disk.
+        p = mock.patch.object(daemon.led, "real_mounts", lambda proc=None: [str(self.docs)])
+        p.start()
+        self.addCleanup(p.stop)
 
     def once(self, **kw):
         lines = []

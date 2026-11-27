@@ -62,6 +62,29 @@ neuroclaw-atlas autostart off    # stop it and remove it
 neuroclaw-atlas daemon           # the same loop, in the foreground; --once does one round and stops
 ```
 
+**Everything the computer touches, then only what changes.** On its first pass the daemon records a baseline of every
+file and folder on every real disk, what is running, who is listening or connected on the network, what is mounted or
+plugged into USB, and which program has the camera or microphone open. It raises no events for that baseline. After
+it, only changes are recorded, each with a time:
+
+```bash
+neuroclaw-atlas timeline                     # what changed, newest first
+neuroclaw-atlas timeline report --cat files  # only files, only paths containing "report"
+neuroclaw-atlas timeline --cat device        # who had the camera or microphone open, and when
+neuroclaw-atlas timeline --since 1795819000 --until 1795819600
+neuroclaw-atlas files invoice                # find any file on the computer by part of its path
+```
+
+This lives in `ledger.sqlite` (standard-library `sqlite3`, mode 0600, in the atlas folder) beside the map, because the
+map is allowed to forget and a timeline must not. It stores **metadata only**: no file contents, no command lines (they
+can hold passwords), no pictures, no sound. A file change is dated by its own modified time; a creation or deletion by
+the pass that noticed it. It runs as **you**, so it sees what you can read, not other users' files or processes; a
+system-wide view would need a root service, which the installer will not set up for you. Cost: about 90 bytes per file
+(a 93,000-file test took 1.7 s the first time and 0.7 s after, 8 MB), so a whole disk is hundreds of megabytes:
+`ledger_max_files` (default 5,000,000) caps it and `timeline_keep_days` (default 90) prunes old rows. Set
+`"ledger": false`, or `"watch_roots": ["/home"]`, in `config.json` to narrow it. Hidden folders are included in the
+ledger (it records that they exist and change); only the content mapping above skips them.
+
 The installer turns `autostart on` for you (`NEUROCLAW_ATLAS_AUTOSTART=0` skips it). The loop maps, each on its own timer
 (set `sense_every`, `files_every`, `look_every`, `roots` in `~/.neuroclaw/atlas/config.json`): sensors and machine
 vitals (load, memory, battery) every minute; every folder in `roots` (default: your home folder) every hour, re-reading

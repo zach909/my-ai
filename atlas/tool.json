@@ -7,7 +7,7 @@
     "Every tool prints JSON because --json is added. Marks hold whole numbers only (millimetres, seconds, counts).",
     "It does not recognise people: it records that something person-sized moved at a place and a time, never who.",
     "Live cameras are off until the user runs `atlas capture on`. Never turn them on yourself.",
-    "Read-only tools: atlas_find, atlas_about, atlas_similar, atlas_near, atlas_stats, atlas_recent. Tools that change the map: atlas_put, atlas_reading, atlas_ingest, atlas_digest."
+    "Read-only tools: atlas_find, atlas_about, atlas_similar, atlas_near, atlas_stats, atlas_recent, atlas_timeline, atlas_files. Tools that change the map: atlas_put, atlas_reading, atlas_ingest, atlas_digest."
   ],
   "tools": [
     {
@@ -99,6 +99,20 @@
       "mutates": true,
       "argv": ["--json", "digest"],
       "parameters": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "atlas_timeline",
+      "description": "What changed on this computer and when, newest first, even while you were not running: files created/modified/deleted, programs started/stopped, network connections opened/closed, drives mounted, USB plugged in, and which program had the camera or microphone open. The first pass is only a baseline, so every row is a real change. Times are Unix seconds (UTC). Use it for what happened at 14:02, or what touched this file.",
+      "mutates": false,
+      "argv": ["--json", "timeline", "[{words...}]", "[--cat {cat}]", "[--op {op}]", "[--since {since}]", "[--until {until}]", "[--limit {limit}]"],
+      "parameters": {"type": "object", "properties": {"words": {"type": "array", "items": {"type": "string"}}, "cat": {"type": "string", "enum": ["files", "process", "net", "mount", "usb", "device"]}, "op": {"type": "string"}, "since": {"type": "integer", "description": "Unix seconds"}, "until": {"type": "integer", "description": "Unix seconds"}, "limit": {"type": "integer"}}}
+    },
+    {
+      "name": "atlas_files",
+      "description": "Find any file or folder on this computer by part of its path, with size and last-changed time. Metadata only, never contents.",
+      "mutates": false,
+      "argv": ["--json", "files", "{words...}", "[--limit {limit}]"],
+      "parameters": {"type": "object", "properties": {"words": {"type": "array", "items": {"type": "string"}}, "limit": {"type": "integer"}}, "required": ["words"]}
     }
   ]
 }
