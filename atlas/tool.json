@@ -1,7 +1,7 @@
 {
   "name": "atlas",
   "version": "1.0",
-  "description": "A map of anything. Put data in space so redundant data collapses and good data is kept; ask it what it holds, where, when, and what goes with what. Use it when the user asks about something that was observed or saved earlier (who passed, where a smell came from, which files are about a subject, how a number has been moving), and to remember things as they come up.",
+  "description": "A map of anything (NOT a picture tool: files, notes, sensors, machine state, numbers about anything; cameras only if the user switched them on). It runs on its own from boot, so it holds what happened while you were not running. Put data in space so redundant data collapses and good data is kept; ask it what it holds, where, when, and what goes with what. Use it when the user asks about something that was observed or saved earlier (who passed, where a smell came from, which files are about a subject, how a number has been moving), and to remember things as they come up.",
   "command": ["python3", "-m", "atlas"],
   "notes": [
     "Every tool prints JSON because --json is added. Marks hold whole numbers only (millimetres, seconds, counts).",
