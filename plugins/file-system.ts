@@ -6,6 +6,7 @@ import { BasePlugin } from "../plugin_manager/sdk.js";
 import { registerAttachment } from "../models && skills/core/chat-attachments.js";
 import { inSandboxScope } from "../models && skills/core/sandbox-scope.js";
 import { ensureSandbox } from "../models && skills/core/agent-profile.js";
+import { fileWillChange } from "../interface/workbench/observers.js";
 
 /**
  * The command that hands a file to whatever program the OS has registered
@@ -49,6 +50,7 @@ export class FileSystemPlugin extends BasePlugin {
   async writeFile(filePath: string, content: string | Buffer): Promise<void> {
     const fullPath = this.resolvePath(filePath);
     const dir = path.dirname(fullPath);
+    fileWillChange(fullPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -68,6 +70,7 @@ export class FileSystemPlugin extends BasePlugin {
     if (!fs.existsSync(fullPath)) {
       return false;
     }
+    fileWillChange(fullPath);
     fs.unlinkSync(fullPath);
     return true;
   }
