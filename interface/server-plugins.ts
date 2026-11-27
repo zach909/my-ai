@@ -29,6 +29,7 @@ import { handleWeightsRoutes, isWeightsRoute } from './weights-routes.js';
 import { handleSelfDebugRoutes, isSelfDebugRoute, selfDebugService } from './self-debug-routes.js';
 import { handleAgentRoutes, isAgentRoute } from './agent-routes.js';
 import { handleCommonsRoutes, type CommonsContext } from './commons-routes.js';
+import { handleEditorRoutes, isEditorRoute } from './editor-routes.js';
 import { getAccounts, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { isComputerAdministrator } from '../models && skills/core/computer-admin.js';
 import { sharedToolGate } from '../models && skills/core/tool-safety.js';
@@ -281,6 +282,18 @@ const commons: Plugin = {
   start: () => undefined,
 };
 
+const editor: Plugin = {
+  id: 'editor-routes',
+  description: 'The editor: open, change and double-check the text files the agent can edit, with a diff and a read-back after every save.',
+  guarded: true,
+  order: 95,
+  routes: [{
+    match: (p) => isEditorRoute(p),
+    handle: (c) => handleEditorRoutes({ ...base(c), chat: (m) => c.text(m) }),
+  }],
+  start: () => undefined,
+};
+
 /** Who is asking, for the guard: a person at the owner's controls, or the agent on its own. */
 function actorOf(): PluginActor {
   return isAutonomous() ? 'agent' : 'owner';
@@ -344,6 +357,6 @@ export function fileEnabledStore(override?: string): PluginEnabledStore {
 /** The server's plugin host, with every route plugin registered and not yet started. */
 export function createServerHost(store: PluginEnabledStore = fileEnabledStore(), log?: (m: string) => void): PluginHost<ServerRouteContext> {
   const host = new PluginHost<ServerRouteContext>(store, log);
-  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons]) host.register(p);
+  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons, editor]) host.register(p);
   return host;
 }
