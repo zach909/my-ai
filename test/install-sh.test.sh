@@ -284,10 +284,10 @@ case "$_bad_out" in *"rc=0") check 0 "a failed KOS download is not fatal" ;; *) 
 check $? "install_kos() never runs kos setup and never mentions a password step"
 rm -rf "$_kos_tmp"
 
-# --- install_atlas(): a launcher and a private folder, starts nothing, cameras stay off, a reinstall changes no choice ---
+# --- install_atlas(): a launcher and a private folder, cameras stay off, a reinstall changes no choice; autostart is isolated here ---
 _atlas_tmp="$(mktemp -d)"
 trap 'rm -rf "$_atlas_tmp"' EXIT
-_atlas_out="$(source scripts/install.sh; ATLAS_BIN_DIR="$_atlas_tmp/bin" NEUROCLAW_ATLAS_HOME="$_atlas_tmp/home" install_atlas 2>&1)"
+_atlas_out="$(source scripts/install.sh; NEUROCLAW_ATLAS_AUTOSTART=0 ATLAS_BIN_DIR="$_atlas_tmp/bin" NEUROCLAW_ATLAS_HOME="$_atlas_tmp/home" install_atlas 2>&1)"
 [ -x "$_atlas_tmp/bin/neuroclaw-atlas" ]
 check $? "install_atlas() installs an executable neuroclaw-atlas launcher (got: $_atlas_out)"
 [ "$(stat -c %a "$_atlas_tmp/home" 2>/dev/null || stat -f %Lp "$_atlas_tmp/home")" = "700" ]
@@ -300,7 +300,7 @@ case "$_stats" in "0 marks"*) check 0 "the installed launcher runs and the map s
 _found="$("$_atlas_tmp/bin/neuroclaw-atlas" find descaling 2>&1)"
 case "$_found" in *"hello"*) check 0 "a note put in through the launcher is found again" ;; *) check 1 "a note put in through the launcher is found again (got: $_found)" ;; esac
 "$_atlas_tmp/bin/neuroclaw-atlas" capture on >/dev/null 2>&1
-(source scripts/install.sh; ATLAS_BIN_DIR="$_atlas_tmp/bin" NEUROCLAW_ATLAS_HOME="$_atlas_tmp/home" install_atlas) >/dev/null 2>&1
+(source scripts/install.sh; NEUROCLAW_ATLAS_AUTOSTART=0 ATLAS_BIN_DIR="$_atlas_tmp/bin" NEUROCLAW_ATLAS_HOME="$_atlas_tmp/home" install_atlas) >/dev/null 2>&1
 grep -q '"capture": true' "$_atlas_tmp/home/config.json"
 check $? "reinstalling does not switch live cameras back off (the user's choice is kept)"
 "$_atlas_tmp/bin/neuroclaw-atlas" find descaling 2>&1 | grep -q hello
@@ -308,8 +308,14 @@ check $? "reinstalling keeps the map"
 _skip="$(source scripts/install.sh; NEUROCLAW_SKIP_ATLAS=1 ATLAS_BIN_DIR="$_atlas_tmp/none" NEUROCLAW_ATLAS_HOME="$_atlas_tmp/nonehome" install_atlas 2>&1)"
 [ ! -e "$_atlas_tmp/none" ] && [ ! -e "$_atlas_tmp/nonehome" ] && ! echo "$_skip" | grep -qi "atlas"
 check $? "NEUROCLAW_SKIP_ATLAS=1 installs nothing"
-! sed -n '/^install_atlas()/,/^}/p' scripts/install.sh | grep -Eq 'systemctl|crontab|launchctl|autostart|@reboot|\.bashrc|\.profile|nohup|sudo|&$'
-check $? "install_atlas() starts nothing: no service, schedule, autostart, background job or sudo"
+! sed -n '/^install_atlas()/,/^}/p' scripts/install.sh | grep -Eq 'crontab|launchctl|@reboot|\.bashrc|\.profile|nohup|sudo|systemctl|&$'
+check $? "install_atlas() uses no sudo, cron, shell-profile edit or background job itself (autostart goes only through the launcher)"
+sed -n '/^install_atlas()/,/^}/p' scripts/install.sh | grep -q 'neuroclaw-atlas" autostart on'
+check $? "install_atlas() turns autostart on through the launcher (the map must run when the AI does not)"
+sed -n '/^install_atlas()/,/^}/p' scripts/install.sh | grep -q 'NEUROCLAW_ATLAS_AUTOSTART'
+check $? "NEUROCLAW_ATLAS_AUTOSTART=0 can skip the boot start"
+! grep -q '"capture": true' <(sed -n '/^install_atlas()/,/^}/p' scripts/install.sh)
+check $? "install_atlas() never switches live cameras on"
 grep -q 'install_atlas' <(sed -n '/^main()/,/^}/p' scripts/install.sh)
 check $? "main() runs install_atlas"
 rm -rf "$_atlas_tmp"

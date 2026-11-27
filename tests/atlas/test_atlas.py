@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from atlas import atlas_core as core  # noqa: E402
-from atlas import cli, sensors, vision  # noqa: E402
+from atlas import cli, daemon, sensors, vision  # noqa: E402
 from atlas.store import DirBackend, open_store  # noqa: E402
 
 PKG = ROOT / "atlas"
@@ -488,6 +488,136 @@ class TestTheToolDescription(Home):
                 before = {n: (self.home / n).read_bytes() for n in self.files()}
 
 
+class FakeSys:
+    """A fake /proc and /sys/class/power_supply, so the daemon is tested without a real machine."""
+
+    def __init__(self, root, battery=None, mains=None):
+        self.proc, self.power = Path(root) / "proc", Path(root) / "power"
+        self.proc.mkdir(); self.power.mkdir()
+        (self.proc / "loadavg").write_text("1.50 1.00 0.50 1/100 123\n")
+        (self.proc / "meminfo").write_text("MemTotal: 1000 kB\nMemAvailable: 250 kB\n")
+        if battery is not None:
+            (self.power / "BAT0").mkdir()
+            (self.power / "BAT0" / "type").write_text("Battery\n")
+            (self.power / "BAT0" / "capacity").write_text(f"{battery}\n")
+        if mains is not None:
+            (self.power / "AC").mkdir()
+            (self.power / "AC" / "type").write_text("Mains\n")
+            (self.power / "AC" / "online").write_text("1\n" if mains else "0\n")
+
+
+class TestTheDaemon(Home):
+    """The always-on mapper: what it maps, what it never does by itself, and how it starts at boot."""
+
+    def setUp(self):
+        super().setUp()
+        self.fs = FakeSys(self.tmp.name, battery=80, mains=True)
+        self.docs = Path(self.tmp.name) / "docs"
+        (self.docs / ".hidden").mkdir(parents=True)
+        (self.docs / "notes.txt").write_text("espresso descaling needs citric acid")
+        (self.docs / "api_token.txt").write_text("hunter2-secret-value")
+        (self.docs / ".hidden" / "diary.txt").write_text("private diary entry")
+        self.home.mkdir(parents=True)
+        (self.home / "config.json").write_text(json.dumps({"roots": [str(self.docs)]}))
+
+    def once(self, **kw):
+        lines = []
+        daemon.run(self.home, lines.append, once=True, power=self.fs.power, proc=self.fs.proc, **kw)
+        return lines
+
+    def test_one_round_maps_files_and_machine_state_with_no_camera(self):
+        lines = self.once()
+        self.assertIn("espresso", self.ok("find", "espresso"))
+        self.assertNotIn("hunter2", self.ok("recent", "--limit", 500) + self.ok("find", "hunter2"))
+        self.assertNotIn("diary", self.ok("find", "diary"), "hidden folders are skipped")
+        self.assertIn("battery", self.ok("stats"))
+        self.assertIn("load", self.ok("stats"))
+        self.assertTrue(any("files:" in l for l in lines))
+
+    def test_cameras_are_never_used_unless_capture_is_on_and_cams_are_named(self):
+        calls = []
+        def grab(cams, w, h, count=1, every_ms=0):
+            calls.append(cams)
+            return {"w": W, "h": H, "sets": [{"t": NOW, "frames": list(pair(4, 4))} for _ in range(4)]}
+        cfg = {"roots": [str(self.docs)], "cams": "0,1"}
+        for capture, expect in ((False, 0), (True, 1)):
+            cfg["capture"] = capture
+            (self.home / "config.json").write_text(json.dumps(cfg))
+            calls.clear()
+            with mock.patch.object(cli, "GRAB", grab):
+                self.once()
+            self.assertEqual(len(calls), expect, f"capture={capture}")
+        (self.home / "config.json").write_text(json.dumps({"roots": [str(self.docs)], "capture": True}))
+        calls.clear()
+        with mock.patch.object(cli, "GRAB", grab):
+            self.once()
+        self.assertEqual(calls, [], "capture on but no cams named: still no camera")
+
+    def test_a_camera_error_is_said_once_not_every_look(self):
+        (self.home / "config.json").write_text(json.dumps({"roots": [str(self.docs)], "capture": True, "cams": "0,1"}))
+        def grab(*a, **k):
+            raise RuntimeError("no camera")
+        t = [NOW]
+        sleeps = []
+        def sleep(s):
+            sleeps.append(s)
+            t[0] += 400
+            if len(sleeps) >= 3:
+                raise KeyboardInterrupt
+        lines = []
+        with mock.patch.object(cli, "GRAB", grab), mock.patch.object(daemon.signal, "signal"), mock.patch.object(daemon.os, "nice"):
+            daemon.run(self.home, lines.append, now=lambda: t[0], sleep=sleep, power=self.fs.power, proc=self.fs.proc)
+        self.assertEqual(sum("cameras: no camera" in l for l in lines), 1)
+        self.assertIn("atlas daemon: stopped", lines)
+
+    def test_it_waits_longer_on_battery_and_says_so(self):
+        (Path(self.tmp.name) / "b").mkdir()
+        on_bat = FakeSys(Path(self.tmp.name) / "b", battery=50, mains=False)
+        lines = []
+        daemon.run(self.home, lines.append, once=True, power=on_bat.power, proc=on_bat.proc)
+        self.assertTrue(any("(on battery)" in l for l in lines))
+        self.assertEqual(daemon.power_state(on_bat.power), (True, 50))
+        self.assertEqual(daemon.power_state(self.fs.power), (False, 80))
+        self.assertEqual(daemon.power_state(Path(self.tmp.name) / "nothing"), (False, None))
+
+    def test_timers_cannot_be_set_so_low_they_spin_the_cpu(self):
+        (self.home / "config.json").write_text(json.dumps({"sense_every": 1, "files_every": "x", "look_every": 0}))
+        s = daemon.settings(self.home)
+        self.assertEqual(s["sense_every"], daemon.MINIMUM["sense_every"])
+        self.assertEqual(s["files_every"], daemon.DEFAULTS["files_every"])
+        self.assertEqual(s["look_every"], daemon.MINIMUM["look_every"])
+        self.assertFalse(s["capture"])
+
+    def test_autostart_without_systemd_writes_one_login_entry_and_off_removes_it(self):
+        cfg = Path(self.tmp.name) / "xdg"
+        lines = []
+        daemon.autostart(self.home, "on", lines.append, config_dir=cfg, use_systemd=False)
+        entry = cfg / "autostart" / daemon.DESKTOP
+        self.assertIn("-m atlas daemon", entry.read_text())
+        self.assertTrue(json.loads((self.home / "config.json").read_text())["autostart"])
+        daemon.autostart(self.home, "off", lines.append, config_dir=cfg, use_systemd=False)
+        self.assertFalse(entry.exists())
+        self.assertFalse(json.loads((self.home / "config.json").read_text())["autostart"])
+
+    def test_autostart_with_systemd_writes_a_locked_down_user_unit(self):
+        cfg = Path(self.tmp.name) / "xdg"
+        ran = []
+        with mock.patch.object(daemon, "_systemctl", lambda *a: ran.append(a) or True), \
+                mock.patch.object(daemon.subprocess, "run", lambda *a, **k: types.SimpleNamespace(returncode=0)):
+            daemon.autostart(self.home, "on", lambda *_: None, config_dir=cfg, use_systemd=True)
+        text = (cfg / "systemd" / "user" / daemon.UNIT).read_text()
+        for needle in ("ExecStart=", "-m atlas daemon", "NoNewPrivileges=true", "ProtectSystem=strict",
+                       "IOSchedulingClass=idle", "MemoryMax=", f"ReadWritePaths={self.home}", "WantedBy=default.target"):
+            self.assertIn(needle, text)
+        self.assertIn(("enable", "--now", daemon.UNIT), ran)
+
+    def test_autostart_status_and_capture_stay_independent(self):
+        self.assertIn("autostart: off", self.ok("autostart"))
+        self.assertIn("cameras off", self.ok("autostart"))
+        cfg = json.loads((self.home / "config.json").read_text())
+        self.assertNotIn("capture", cfg, "nothing here turns cameras on")
+
+
 class TestPrivacy(unittest.TestCase):
     def test_nothing_in_the_package_touches_the_network_or_starts_programs(self):
         banned = {"socket", "ssl", "urllib", "http", "requests", "subprocess", "ftplib", "smtplib", "asyncio", "multiprocessing",
@@ -497,7 +627,14 @@ class TestPrivacy(unittest.TestCase):
                 mods = ([n.module] if isinstance(n, ast.ImportFrom) and n.module else
                         [a.name for a in n.names] if isinstance(n, ast.Import) else [])
                 for m in mods:
+                    # daemon.py alone may run `systemctl --user` / `loginctl enable-linger` (fixed arguments) for autostart
+                    if p.name == "daemon.py" and m.split(".")[0] == "subprocess":
+                        continue
                     self.assertNotIn(m.split(".")[0], banned, f"{p.name} imports {m}")
+
+    def test_the_only_program_the_daemon_runs_is_systemctl_and_loginctl(self):
+        src = (PKG / "daemon.py").read_text()
+        self.assertEqual(sorted(set(__import__("re").findall(r'\[\s*"([a-z]+)"\s*,', src))), ["loginctl", "systemctl"])
 
     def test_the_only_things_written_are_chunks_index_and_two_small_settings(self):
         text = "".join(p.read_text() for p in (PKG / "cli.py", PKG / "store.py", PKG / "vision.py"))
