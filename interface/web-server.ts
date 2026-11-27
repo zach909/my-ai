@@ -65,6 +65,7 @@ import { SHARING_PAGE } from './sharing-page.js';
 import { HIVE_PAGE } from './hive-page.js';
 import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
+import { EDITOR_PAGE } from './editor-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
 import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
@@ -3324,6 +3325,12 @@ export class WebServer {
     // Points, the leaderboard, projects and the hive: one page, same gate.
     if (pathname === '/commons' && method === 'GET') {
       this.sendHtml(res, COMMONS_PAGE);
+      return;
+    }
+
+    // The editor for every text file the agent can edit: same gate.
+    if (pathname === '/editor' && method === 'GET') {
+      this.sendHtml(res, EDITOR_PAGE);
       return;
     }
 
