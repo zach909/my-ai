@@ -45,6 +45,12 @@ export interface LearnOptions {
   extensionThreshold?: number;
   /** One below extensionThreshold -> recommend-skill. */
   skillThreshold?: number;
+  /**
+   * Reliability decided by something independent of the claim's own wording (the Referee).
+   * When set it replaces the hedge/confidence-word guess, which a confidently worded
+   * falsehood passes and a carefully hedged truth fails.
+   */
+  reliability?: number;
 }
 
 const HEDGE_WORDS = ["maybe", "perhaps", "possibly", "rumor", "rumour", "unconfirmed", "i think", "i heard", "not sure", "allegedly", "supposedly"];
@@ -74,7 +80,9 @@ export class AutonomousLearner {
     const extensionThreshold = opts.extensionThreshold ?? 3;
     const skillThreshold = opts.skillThreshold ?? 2;
 
-    const reliability = estimateReliability(information);
+    const reliability = typeof opts.reliability === "number" && Number.isFinite(opts.reliability)
+      ? Math.max(0, Math.min(1, opts.reliability))
+      : estimateReliability(information);
 
     if (reliability < minReliability) {
       return { decision: "ignored-unreliable", reliability, reason: "Reliability below threshold (hedged/unsupported claim)" };
@@ -215,7 +223,7 @@ function isProcedural(text: string): boolean {
 }
 
 /** Very small (subject, relation, object) extractor for simple declarative sentences. */
-function extractTriple(text: string): { subject: string; relation: string; object: string } | null {
+export function extractTriple(text: string): { subject: string; relation: string; object: string } | null {
   const cleaned = text.trim().replace(/[.!?]+$/, "");
   const m = cleaned.match(/^(.+?)\s+(is not|isn't|cannot|can't|is|can|causes|prevents|requires|excludes|increases|decreases)\s+(.+)$/i);
   if (!m) return null;
