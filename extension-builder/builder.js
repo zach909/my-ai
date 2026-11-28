@@ -5,6 +5,17 @@ import { NetSearchEngine } from '../models && skills/core/net-search.js';
 import { HyperDimensionalEngine, ValueRangeAllocator } from '../models && skills/core/onebrain.js';
 
 /**
+ * The trained engine of each project, kept so a trained project can be RUN (answer(), trace()) and not only saved.
+ * A WeakMap keyed by the project object: it never appears in saved JSON and is dropped with the project.
+ */
+const TRAINED = new WeakMap();
+const cosine = (a, b) => {
+    let d = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return na && nb ? d / Math.sqrt(na * nb) : 0;
+};
+
+/**
  * Cooperative yield: hands control back to the event loop. Defined locally
  * (mirroring, not importing, neuro-lang.ts's own helper) because this file
  * is imported directly by src/features/builder/use-builder.ts and run in
@@ -795,7 +806,40 @@ export class ExtensionBuilder {
             trainedNeurons: Array.from(project.neurons.values()).filter(n => n.trained).map(n => n.name),
         };
         project.lastTraining = trainingResult;
+        TRAINED.set(project, { engine, nameToId: result.nameToId, dims });
         return trainingResult;
+    }
+    /**
+     * Run a trained project. Clamp the question's embedding on the drive neuron, let the mesh settle, then read every
+     * neuron that has scripts and return the trained response its readout is closest to (cosine). This is the missing
+     * half of train(): without it a trained project could be fitted but never asked anything.
+     *
+     * Honest limit: the answer is always one of the responses the project was trained with. The builder's readouts are
+     * embeddings, not text, so this ranks known answers; it cannot write a new one. `margin` (best minus runner-up) is
+     * returned so a caller can refuse to trust a close call. Returns null if the project was never trained here.
+     */
+    answer(projectId, question) {
+        const t = this.trace(projectId, question);
+        if (!t || t.ranked.length === 0) return null;
+        const [best, next] = t.ranked;
+        return { answer: best.response, neuron: best.neuron, score: best.score, margin: best.score - (next?.score ?? -1) };
+    }
+    /** Every candidate (neuron, trained response) ranked by how close the neuron's readout is to it. For debugging and for answer(). */
+    trace(projectId, question) {
+        const project = this.projects.get(projectId);
+        const t = project && TRAINED.get(project);
+        if (!t) return null;
+        t.engine.settle(embedText(question, t.dims), new Set([0]));
+        const ranked = [];
+        for (const n of project.neurons.values()) {
+            const id = t.nameToId.get(n.name);
+            const readout = id === undefined ? null : t.engine.neurons.find(x => x.id === id);
+            if (!readout || n.scripts.length === 0) continue;
+            const out = Array.from({ length: t.dims }, (_, d) => readout.state[d + 1]);
+            for (const s of n.scripts) ranked.push({ neuron: n.name, response: s.response, score: cosine(out, embedText(s.response, t.dims)) });
+        }
+        ranked.sort((a, b) => b.score - a.score);
+        return { question, ranked };
     }
     saveWithoutQuantization(projectId) {
         const project = this.projects.get(projectId);
