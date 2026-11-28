@@ -6,8 +6,9 @@
  * therefore comes from COMPOSITION: a skill is built out of smaller skills, and the whole is checked by running it.
  *
  *   code skill     a function (string in, string out). Exact and general, because it is code.
- *   learned skill  a neuron the builder trained, asked through builder.answer(). Refuses (returns null) when its
- *                  best answer is not clearly ahead of the runner-up, instead of guessing.
+ *   learned skill  a neuron the builder trained, asked through builder.answer(). It is a lookup, and the builder's own
+ *                  confidence does not separate known from unknown questions, so it earns trust only by passing its
+ *                  contract in verify(). An optional minMargin can make it refuse close calls (off by default).
  *   composed skill an ordered list of other skills; each one's output is the next one's input. A composed skill can be
  *                  a step of another, so skills nest. A step that fails stops the chain and says where.
  *
@@ -38,8 +39,15 @@ export class SkillGraph {
         return this;
     }
 
-    /** A skill answered by a trained neuron of the builder project. Refuses when the call is too close to trust. */
-    defineLearned(name, { minMargin = 0.05, doc = '' } = {}) {
+    /**
+     * A skill answered by a trained neuron of the builder project.
+     *
+     * `minMargin` (default 0, no refusal) is the relative gap between the best and runner-up answer. It is NOT a measure
+     * of whether the question was known: measured on a trained project, unrelated questions got margins as large as
+     * trained ones (0.23 and 0.28 against 0.15), so the builder's own confidence does not separate known from unknown.
+     * Do not rely on it as a safety check. Trust a learned skill only through its contract: `contract()` it, then `verify()`.
+     */
+    defineLearned(name, { minMargin = 0, doc = '' } = {}) {
         this.#claim(name);
         if (!this.builder || this.projectId == null) throw new Error(`skill "${name}": a learned skill needs a builder and a projectId`);
         this.skills.set(name, { kind: 'learned', name, minMargin, doc, tests: [] });

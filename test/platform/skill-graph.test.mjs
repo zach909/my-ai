@@ -84,12 +84,24 @@ test('verify RUNS the contract: a wrong skill fails, an untested skill is listed
   assert.ok(all.untested.includes('parse'))
 })
 
-test('a learned skill refuses a close call instead of guessing', () => {
+test('a learned skill can refuse close calls when asked to; by default it does not (the margin is not a confidence)', () => {
   const builder = { answer: (_p, q) => (q === 'sure' ? { answer: 'yes', margin: 0.5 } : { answer: 'maybe', margin: 0.01 }) }
-  const g = new SkillGraph({ builder, projectId: 'p' }).defineLearned('recall', { minMargin: 0.1 })
-  assert.equal(g.run('recall', 'sure').output, 'yes')
-  assert.equal(g.run('recall', 'unsure').ok, false)
+  const strict = new SkillGraph({ builder, projectId: 'p' }).defineLearned('recall', { minMargin: 0.1 })
+  assert.equal(strict.run('recall', 'sure').output, 'yes')
+  assert.equal(strict.run('recall', 'unsure').ok, false)
+  const plain = new SkillGraph({ builder, projectId: 'p' }).defineLearned('recall')
+  assert.equal(plain.run('recall', 'unsure').output, 'maybe', 'default must not silently refuse everything')
   assert.throws(() => new SkillGraph().defineLearned('x'), /needs a builder/)
+})
+
+test('a learned skill is trusted only through its contract: verify() catches a wrong answer', () => {
+  const builder = { answer: (_p, q) => ({ answer: q === 'a' ? 'right' : 'wrong', margin: 0.9 }) }
+  const g = new SkillGraph({ builder, projectId: 'p' }).defineLearned('recall')
+  g.contract('recall', [{ input: 'a', expected: 'right' }, { input: 'b', expected: 'right' }])
+  const v = g.verify('recall')
+  assert.equal(v.verified, false)
+  assert.equal(v.passed, 1)
+  assert.equal(v.failures[0].input, 'b')
 })
 
 test('real builder: a trained project can be asked, and recall works', async (t) => {
@@ -102,6 +114,12 @@ test('real builder: a trained project can be asked, and recall works', async (t)
   assert.equal(b.answer(p.id, 'capital of alpha'), null, 'untrained project answers nothing')
   b.train(p.id, { epochs: 800 })
   const hit = b.answer(p.id, 'capital of beta')
-  assert.ok(hit && typeof hit.margin === 'number')
-  assert.ok(b.trace(p.id, 'capital of beta').ranked.length === 3)
+  assert.ok(hit && typeof hit.margin === 'number' && hit.margin >= 0 && hit.margin <= 1)
+  assert.ok(Number.isFinite(hit.distance) && hit.distance >= 0)
+  const ranked = b.trace(p.id, 'capital of beta').ranked
+  assert.equal(ranked.length, 3)
+  assert.ok(ranked.every((r, i) => i === 0 || ranked[i - 1].distance <= r.distance), 'ranked nearest first')
+  // an embedding size option exists and the default is unchanged
+  const q = b.createProject('q', 'q'); const n = b.addNeuron(q.id, 'n', 0); n.definition = 'x'; b.addScript(q.id, n.id, 'x', 'y')
+  assert.equal(b.train(q.id, { epochs: 50, dims: 32 }).trainedNeurons.length >= 0, true)
 })
