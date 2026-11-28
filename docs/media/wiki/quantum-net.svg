@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 270" width="480" height="270" role="img" aria-labelledby="t-quantum-net">
+<title id="t-quantum-net">Quantum Neural Net: Phase-aligned neurons reinforce each other</title>
+<defs><linearGradient id="bg-quantum-net" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient></defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.ttl{font-size:15px;font-weight:600;fill:#efd0c8}
+.cap{font-size:12px;fill:rgba(248,237,233,.62)}
+.lbl{font-size:13px;text-anchor:middle;dominant-baseline:central}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;fill:#efd0c8}
+.pill{fill:rgba(255,240,232,.08);stroke:rgba(255,228,218,.22);stroke-width:1.5}
+.ln{fill:none;stroke:rgba(255,228,218,.22);stroke-width:1.5}
+.draw{fill:none;stroke:rgba(255,228,218,.34);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 6s ease-in-out 0s infinite both}
+.dot{fill:#efd0c8;opacity:0}
+.node{fill:#c98476}
+.stage{fill:rgba(255,240,232,.08);stroke:rgba(255,228,218,.3);stroke-width:1.5}
+.bar{fill:rgba(227,169,157,.55);transform-box:fill-box;transform-origin:50% 100%}
+.prog{fill:#e3a99d;transform-box:fill-box;transform-origin:0 50%}
+.pieceA{fill:#c98476}
+.pieceB{fill:#efd0c8}
+.fb{transform-box:fill-box;transform-origin:center}
+@keyframes go{0%{opacity:0;transform:translate(0,0)}12%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
+@keyframes block{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}70%{opacity:1;transform:translate(var(--dx),0)}85%,100%{opacity:0;transform:translate(var(--dx),0)}}
+@keyframes lit{0%,100%{fill:rgba(255,240,232,.08)}12%,30%{fill:rgba(227,169,157,.26)}55%{fill:rgba(255,240,232,.08)}}
+@keyframes pulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes draw{0%{stroke-dashoffset:1}40%,75%{stroke-dashoffset:0}100%{stroke-dashoffset:1}}
+@keyframes appear{0%{opacity:0}20%,80%{opacity:1}100%{opacity:0}}
+@keyframes pop{0%{opacity:0;transform:scale(.2)}15%,80%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
+@keyframes drift{to{transform:translateX(-120px)}}
+@keyframes prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes sweep{0%{transform:rotate(-70deg)}50%{transform:rotate(70deg)}100%{transform:rotate(-70deg)}}
+@keyframes reveal{0%{width:0}15%,85%{width:380px}100%{width:0}}
+@keyframes flip{0%,45%{opacity:1}50%,100%{opacity:0}}
+@keyframes flipB{0%,45%{opacity:0}50%,100%{opacity:1}}
+@keyframes quant{0%,30%{transform:scaleY(1)}60%,100%{transform:scaleY(var(--q))}}
+@keyframes shrink{0%,20%{transform:scale(1)}55%,100%{transform:scale(.45)}}
+@keyframes gather{0%{transform:translate(var(--dx),var(--dy))}40%,60%{transform:translate(0,0)}100%{transform:translate(var(--dx),var(--dy))}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<rect width="480" height="270" rx="32" fill="url(#bg-quantum-net)"/>
+<rect x=".75" y=".75" width="478.5" height="268.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<text class="ttl" x="26" y="38">Quantum Neural Net</text>
+<text class="cap" x="240" y="62" text-anchor="middle">wave 1  ·  wave 2  ·  interference</text><g style="animation:drift 3.6s linear 0s infinite both"><path d="M0 110 L6 115.6 L12 120.6 L18 124.6 L24 127.1 L30 128 L36 127.1 L42 124.6 L48 120.6 L54 115.6 L60 110 L66 104.4 L72 99.4 L78 95.4 L84 92.9 L90 92 L96 92.9 L102 95.4 L108 99.4 L114 104.4 L120 110 L126 115.6 L132 120.6 L138 124.6 L144 127.1 L150 128 L156 127.1 L162 124.6 L168 120.6 L174 115.6 L180 110 L186 104.4 L192 99.4 L198 95.4 L204 92.9 L210 92 L216 92.9 L222 95.4 L228 99.4 L234 104.4 L240 110 L246 115.6 L252 120.6 L258 124.6 L264 127.1 L270 128 L276 127.1 L282 124.6 L288 120.6 L294 115.6 L300 110 L306 104.4 L312 99.4 L318 95.4 L324 92.9 L330 92 L336 92.9 L342 95.4 L348 99.4 L354 104.4 L360 110 L366 115.6 L372 120.6 L378 124.6 L384 127.1 L390 128 L396 127.1 L402 124.6 L408 120.6 L414 115.6 L420 110 L426 104.4 L432 99.4 L438 95.4 L444 92.9 L450 92 L456 92.9 L462 95.4 L468 99.4 L474 104.4 L480 110 L486 115.6 L492 120.6 L498 124.6 L504 127.1 L510 128 L516 127.1 L522 124.6 L528 120.6 L534 115.6 L540 110 L546 104.4 L552 99.4 L558 95.4 L564 92.9 L570 92 L576 92.9 L582 95.4 L588 99.4 L594 104.4 L600 110" fill="none" stroke="#e3a99d" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></g><g style="animation:drift 4.6s linear 0s infinite both"><path d="M0 168.8 L6 166.7 L12 162.4 L18 156.5 L24 149.4 L30 141.9 L36 134.7 L42 128.5 L48 123.9 L54 121.4 L60 121.2 L66 123.3 L72 127.6 L78 133.5 L84 140.6 L90 148.1 L96 155.3 L102 161.5 L108 166.1 L114 168.6 L120 168.8 L126 166.7 L132 162.4 L138 156.5 L144 149.4 L150 141.9 L156 134.7 L162 128.5 L168 123.9 L174 121.4 L180 121.2 L186 123.3 L192 127.6 L198 133.5 L204 140.6 L210 148.1 L216 155.3 L222 161.5 L228 166.1 L234 168.6 L240 168.8 L246 166.7 L252 162.4 L258 156.5 L264 149.4 L270 141.9 L276 134.7 L282 128.5 L288 123.9 L294 121.4 L300 121.2 L306 123.3 L312 127.6 L318 133.5 L324 140.6 L330 148.1 L336 155.3 L342 161.5 L348 166.1 L354 168.6 L360 168.8 L366 166.7 L372 162.4 L378 156.5 L384 149.4 L390 141.9 L396 134.7 L402 128.5 L408 123.9 L414 121.4 L420 121.2 L426 123.3 L432 127.6 L438 133.5 L444 140.6 L450 148.1 L456 155.3 L462 161.5 L468 166.1 L474 168.6 L480 168.8 L486 166.7 L492 162.4 L498 156.5 L504 149.4 L510 141.9 L516 134.7 L522 128.5 L528 123.9 L534 121.4 L540 121.2 L546 123.3 L552 127.6 L558 133.5 L564 140.6 L570 148.1 L576 155.3 L582 161.5 L588 166.1 L594 168.6 L600 168.8" fill="none" stroke="#efd0c8" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></g><g style="animation:drift 5.8s linear 0s infinite both"><path d="M0 180.6 L6 176.2 L12 172.2 L18 169 L24 166.9 L30 166 L36 166.5 L42 168.3 L48 171.3 L54 175.1 L60 179.4 L66 183.8 L72 187.8 L78 191 L84 193.1 L90 194 L96 193.5 L102 191.7 L108 188.7 L114 184.9 L120 180.6 L126 176.2 L132 172.2 L138 169 L144 166.9 L150 166 L156 166.5 L162 168.3 L168 171.3 L174 175.1 L180 179.4 L186 183.8 L192 187.8 L198 191 L204 193.1 L210 194 L216 193.5 L222 191.7 L228 188.7 L234 184.9 L240 180.6 L246 176.2 L252 172.2 L258 169 L264 166.9 L270 166 L276 166.5 L282 168.3 L288 171.3 L294 175.1 L300 179.4 L306 183.8 L312 187.8 L318 191 L324 193.1 L330 194 L336 193.5 L342 191.7 L348 188.7 L354 184.9 L360 180.6 L366 176.2 L372 172.2 L378 169 L384 166.9 L390 166 L396 166.5 L402 168.3 L408 171.3 L414 175.1 L420 179.4 L426 183.8 L432 187.8 L438 191 L444 193.1 L450 194 L456 193.5 L462 191.7 L468 188.7 L474 184.9 L480 180.6 L486 176.2 L492 172.2 L498 169 L504 166.9 L510 166 L516 166.5 L522 168.3 L528 171.3 L534 175.1 L540 179.4 L546 183.8 L552 187.8 L558 191 L564 193.1 L570 194 L576 193.5 L582 191.7 L588 188.7 L594 184.9 L600 180.6" fill="none" stroke="#c98476" stroke-width="2.5" stroke-linecap="round" opacity=".85"/></g>
+<text class="cap" x="240" y="257" text-anchor="middle">Phase-aligned neurons reinforce each other</text>
+</svg>

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 270" width="480" height="270" role="img" aria-labelledby="t-plugins">
+<title id="t-plugins">Plugins: API connections that drop in without rewiring the mesh</title>
+<defs><linearGradient id="bg-plugins" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient></defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.ttl{font-size:15px;font-weight:600;fill:#efd0c8}
+.cap{font-size:12px;fill:rgba(248,237,233,.62)}
+.lbl{font-size:13px;text-anchor:middle;dominant-baseline:central}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;fill:#efd0c8}
+.pill{fill:rgba(255,240,232,.08);stroke:rgba(255,228,218,.22);stroke-width:1.5}
+.ln{fill:none;stroke:rgba(255,228,218,.22);stroke-width:1.5}
+.draw{fill:none;stroke:rgba(255,228,218,.34);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 6s ease-in-out 0s infinite both}
+.dot{fill:#efd0c8;opacity:0}
+.node{fill:#c98476}
+.stage{fill:rgba(255,240,232,.08);stroke:rgba(255,228,218,.3);stroke-width:1.5}
+.bar{fill:rgba(227,169,157,.55);transform-box:fill-box;transform-origin:50% 100%}
+.prog{fill:#e3a99d;transform-box:fill-box;transform-origin:0 50%}
+.pieceA{fill:#c98476}
+.pieceB{fill:#efd0c8}
+.fb{transform-box:fill-box;transform-origin:center}
+@keyframes go{0%{opacity:0;transform:translate(0,0)}12%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
+@keyframes block{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}70%{opacity:1;transform:translate(var(--dx),0)}85%,100%{opacity:0;transform:translate(var(--dx),0)}}
+@keyframes lit{0%,100%{fill:rgba(255,240,232,.08)}12%,30%{fill:rgba(227,169,157,.26)}55%{fill:rgba(255,240,232,.08)}}
+@keyframes pulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes draw{0%{stroke-dashoffset:1}40%,75%{stroke-dashoffset:0}100%{stroke-dashoffset:1}}
+@keyframes appear{0%{opacity:0}20%,80%{opacity:1}100%{opacity:0}}
+@keyframes pop{0%{opacity:0;transform:scale(.2)}15%,80%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1)}}
+@keyframes drift{to{transform:translateX(-120px)}}
+@keyframes prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes sweep{0%{transform:rotate(-70deg)}50%{transform:rotate(70deg)}100%{transform:rotate(-70deg)}}
+@keyframes reveal{0%{width:0}15%,85%{width:380px}100%{width:0}}
+@keyframes flip{0%,45%{opacity:1}50%,100%{opacity:0}}
+@keyframes flipB{0%,45%{opacity:0}50%,100%{opacity:1}}
+@keyframes quant{0%,30%{transform:scaleY(1)}60%,100%{transform:scaleY(var(--q))}}
+@keyframes shrink{0%,20%{transform:scale(1)}55%,100%{transform:scale(.45)}}
+@keyframes gather{0%{transform:translate(var(--dx),var(--dy))}40%,60%{transform:translate(0,0)}100%{transform:translate(var(--dx),var(--dy))}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<rect width="480" height="270" rx="32" fill="url(#bg-plugins)"/>
+<rect x=".75" y=".75" width="478.5" height="268.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<text class="ttl" x="26" y="38">Plugins</text>
+<path class="draw" pathLength="1" d="M240 145 L240 73" style="animation-delay:0s"/><circle class="dot" cx="240" cy="145" r="4.5" style="--dx:0px;--dy:-72px;animation:go 2.4s linear 0s infinite both"/><rect x="196" y="58" width="88" height="30" rx="15" fill="#1a1215"/><rect class="pill" x="196" y="58" width="88" height="30" rx="15" style="animation:lit 4.8s ease-in-out 0s infinite both"/><text class="lbl" style="font-size:13px" x="240" y="73">Hardware</text><path class="draw" pathLength="1" d="M240 145 L405 145" style="animation-delay:0.4s"/><circle class="dot" cx="240" cy="145" r="4.5" style="--dx:165px;--dy:0px;animation:go 2.4s linear 0.6s infinite both"/><rect x="375" y="130" width="60" height="30" rx="15" fill="#1a1215"/><rect class="pill" x="375" y="130" width="60" height="30" rx="15" style="animation:lit 4.8s ease-in-out 0.6s infinite both"/><text class="lbl" style="font-size:13px" x="405" y="145">Apps</text><path class="draw" pathLength="1" d="M240 145 L240 217" style="animation-delay:0.8s"/><circle class="dot" cx="240" cy="145" r="4.5" style="--dx:0px;--dy:72px;animation:go 2.4s linear 1.2s infinite both"/><rect x="210" y="202" width="60" height="30" rx="15" fill="#1a1215"/><rect class="pill" x="210" y="202" width="60" height="30" rx="15" style="animation:lit 4.8s ease-in-out 1.2s infinite both"/><text class="lbl" style="font-size:13px" x="240" y="217">Data</text><path class="draw" pathLength="1" d="M240 145 L75 145" style="animation-delay:1.2s"/><circle class="dot" cx="240" cy="145" r="4.5" style="--dx:-165px;--dy:0px;animation:go 2.4s linear 1.8s infinite both"/><rect x="31" y="130" width="88" height="30" rx="15" fill="#1a1215"/><rect class="pill" x="31" y="130" width="88" height="30" rx="15" style="animation:lit 4.8s ease-in-out 1.8s infinite both"/><text class="lbl" style="font-size:13px" x="75" y="145">Services</text><rect x="191.5" y="127" width="97" height="36" rx="18" fill="#1a1215"/><rect class="pill" x="191.5" y="127" width="97" height="36" rx="18" style="fill:rgba(227,169,157,.2)"/><text class="lbl" style="font-size:13px" x="240" y="145">Plugins</text>
+<text class="cap" x="240" y="257" text-anchor="middle">API connections that drop in without rewiring the mesh</text>
+</svg>
