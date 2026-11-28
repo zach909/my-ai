@@ -13,6 +13,17 @@ The owner has said this many times and it must never need saying again. The full
 
 See `AGENTS.md` for the visual style rules and the dev environment notes.
 
+# TARGET PLATFORM: LINUX, PARTICULARLY DEBIAN, AND KOS (standing rule from the owner)
+
+This whole repository is meant for **Linux, particularly Debian**, and for **KOS** (kernal-os, the operating system it runs in). Written down so other AIs know.
+
+- **Do not focus on Android, iOS, Windows or macOS.** Do not spend work, tests, fixes, features or optimization passes on `mobile/`, `desktop-app/` or the Windows and macOS paths. New work targets Linux first and only.
+- **The existing non-Linux code stays until the owner says to remove it.** Do not delete it on your own and do not extend it. The owner chose "write it down", not "delete it".
+- **When a task or a check points at those parts** (for example third-party findings in `mobile/android-standalone/`), say so and ask; do not treat them as the priority.
+- Linux specifics are fine and expected: systemd user services, `/proc`, `/sys`, Debian packaging and paths.
+
+See `AGENTS.md` for the same rule next to the platform notes.
+
 # WHAT "OPTIMIZED" MEANS (standing rule from the owner)
 
 When the owner says "optimized" or "optimize", it means **everything**, not whichever part is nearest.

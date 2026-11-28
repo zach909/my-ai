@@ -73,6 +73,10 @@ reasoning. This is a standing rule, not a one-time answer to one request.
   not disabled) and it must stay that way: text is raw bits through
   the Zip Loop everywhere, always.
 
+# TARGET PLATFORM: LINUX, PARTICULARLY DEBIAN, AND KOS (standing rule from the owner; overrides the section below)
+
+This whole repository is meant for **Linux, particularly Debian**, and for **KOS** (kernal-os). **Do not focus on Android, iOS, Windows or macOS**: no new work, fixes, tests or optimization there. The code and docs for them below stay in the repo until the owner says to remove them; do not delete or extend them on your own, and ask if a task points at them. The section below describes what exists, not what to work on.
+
 # PLATFORMS AND RELEASES (one app, many builds; map in `docs/PLATFORMS.md`)
 
 - **One shared UI.** The home chat (`HTML_TEMPLATE` in `interface/web-server.ts`) and Settings (`interface/platform/settings-page.ts`) are served by the engine and shown by every platform (desktop app window, Chrome extension, phone web views). Change them once. Never add a per-platform copy of a page or a feature.
