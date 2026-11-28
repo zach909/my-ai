@@ -89,3 +89,88 @@ describe('model rating', () => {
     expect(() => rateModel({ ...base, power: -0.1 })).toThrow(RangeError);
   });
 });
+
+import { rateFromMetrics, ratingJudge, RATING_KEYS } from '../../models && skills/core/model-rating';
+import { ImprovementLoop } from '../../models && skills/core/improvement-loop';
+
+const seed = (over: Record<string, number>) => ({
+  [RATING_KEYS.complexityBits]: 1000,
+  [RATING_KEYS.power]: 0.8,
+  [RATING_KEYS.inspectableUnits]: 10,
+  [RATING_KEYS.totalUnits]: 10,
+  [RATING_KEYS.decisionsWithProvenance]: 5,
+  [RATING_KEYS.totalDecisions]: 5,
+  ...over,
+});
+
+describe('rating from reported metrics', () => {
+  it('reads complexity bits and power back exactly', () => {
+    const r = rateFromMetrics(seed({}));
+    expect(r.complexityBits).toBeCloseTo(1000, 10);
+    expect(r.power).toBe(0.8);
+    expect(r.complexityOverPower).toBeCloseTo(1250, 10);
+  });
+
+  it('treats missing transparency keys as no evidence, not as full transparency', () => {
+    const r = rateFromMetrics({ power: 0.5, complexityBits: 10 });
+    expect(r.transparency).toBeNull();
+  });
+});
+
+describe('ratingJudge', () => {
+  const judge = ratingJudge({ minTransparencyDelta: 0 });
+
+  it('passes a candidate with the same transparency', () => {
+    expect(judge([seed({})], [seed({})])).toEqual([]);
+  });
+
+  it('rejects a candidate that loses transparency on average', () => {
+    const reasons = judge(
+      [seed({ [RATING_KEYS.inspectableUnits]: 2 })],
+      [seed({})],
+    );
+    expect(reasons.length).toBe(1);
+    expect(reasons[0]).toMatch(/transparency changed/);
+  });
+
+  it('rejects a candidate with no transparency evidence at all', () => {
+    const reasons = judge([{ power: 0.9 }], [seed({})]);
+    expect(reasons[0]).toMatch(/no transparency evidence/);
+  });
+
+  it('enforces an explicit complexity cap only when one is set', () => {
+    expect(judge([seed({ [RATING_KEYS.complexityBits]: 5000 })], [seed({})])).toEqual([]);
+    const capped = ratingJudge({ minTransparencyDelta: 0, maxComplexityBits: 2000 });
+    expect(capped([seed({ [RATING_KEYS.complexityBits]: 5000 })], [seed({})])[0]).toMatch(/exceeds the cap/);
+  });
+});
+
+describe('ImprovementLoop with the rating judge', () => {
+  const evaluator = {
+    fingerprint: () => 'rating-test',
+    primary: 'score',
+    guards: [],
+    seeds: [1, 2],
+    evaluate: (config: Record<string, unknown>) => {
+      const k = Number(config.k ?? 1);
+      return seed({
+        score: k === 2 ? 0.9 : 0.5,
+        [RATING_KEYS.power]: k === 2 ? 0.9 : 0.5,
+        [RATING_KEYS.inspectableUnits]: k === 3 ? 1 : 10,
+      });
+    },
+  };
+
+  it('promotes a gain that keeps transparency, and rejects one that loses it', () => {
+    const loop = new ImprovementLoop({
+      evaluator,
+      baseline: { k: 1 },
+      minGain: 0.01,
+      judge: ratingJudge({ minTransparencyDelta: 0 }),
+    });
+    expect(loop.consider({ id: 'gain', description: '', changes: { k: 2 } }).verdict).toBe('accepted');
+    const opaque = loop.consider({ id: 'opaque', description: '', changes: { k: 3 } });
+    expect(opaque.verdict).toBe('rejected');
+    expect(opaque.reasons.join(' ')).toMatch(/transparency/);
+  });
+});

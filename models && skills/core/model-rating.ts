@@ -132,3 +132,70 @@ export function rateModel(input: ModelRatingInput): ModelRating {
     breakdown,
   };
 }
+
+/** Metric keys a component reports so the loop can rate it. Missing keys mean no evidence. */
+export const RATING_KEYS = {
+  complexityBits: "complexityBits",
+  power: "power",
+  inspectableUnits: "inspectableUnits",
+  totalUnits: "totalUnits",
+  decisionsWithProvenance: "decisionsWithProvenance",
+  totalDecisions: "totalDecisions",
+} as const;
+
+/** Builds a rating from one seed's metrics. Missing or invalid keys fall back to "no evidence" (null transparency). */
+export function rateFromMetrics(metrics: Record<string, number>): ModelRating {
+  const g = (k: string): number => (typeof metrics[k] === "number" ? metrics[k] : 0);
+  const power = Math.min(1, Math.max(0, g(RATING_KEYS.power)));
+  // The component reports its complexity already in bits: one binary group of that many units gives exactly those bits.
+  const bits = Math.max(0, g(RATING_KEYS.complexityBits));
+  return rateModel({
+    groups: [{ name: "reported", count: bits, statesEach: 2 }],
+    power,
+    transparency: {
+      inspectableUnits: g(RATING_KEYS.inspectableUnits),
+      totalUnits: g(RATING_KEYS.totalUnits),
+      decisionsWithProvenance: g(RATING_KEYS.decisionsWithProvenance),
+      totalDecisions: g(RATING_KEYS.totalDecisions),
+    },
+  });
+}
+
+export interface RatingJudgeOptions {
+  /** Smallest mean change in transparency allowed. 0 means "no loss". */
+  minTransparencyDelta: number;
+  /** Optional cap on the candidate's complexity in bits. Omit to record complexity without gating it. */
+  maxComplexityBits?: number;
+}
+
+/**
+ * A judge for ImprovementLoop: rejects a candidate that makes the model less transparent
+ * (per seed, on average), that reports no transparency evidence at all, or that exceeds an
+ * explicit complexity cap. Returns reasons; an empty list means the rating passes.
+ */
+export function ratingJudge(opts: RatingJudgeOptions): (candidate: Record<string, number>[], baseline: Record<string, number>[]) => string[] {
+  return (candidate, baseline) => {
+    const reasons: string[] = [];
+    if (candidate.length === 0 || candidate.length !== baseline.length) {
+      return ["rating: candidate and baseline have no matching seeds to compare"];
+    }
+    const cRatings = candidate.map(rateFromMetrics);
+    const bRatings = baseline.map(rateFromMetrics);
+    if (cRatings.some((r) => r.transparency === null)) {
+      reasons.push("rating: no transparency evidence from the candidate, so it cannot be judged transparent");
+      return reasons;
+    }
+    const deltas = cRatings.map((r, i) => (r.transparency as number) - (bRatings[i].transparency ?? 0));
+    const meanDelta = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    if (meanDelta < opts.minTransparencyDelta) {
+      reasons.push(`rating: transparency changed by ${meanDelta.toFixed(4)} (minimum ${opts.minTransparencyDelta})`);
+    }
+    if (opts.maxComplexityBits !== undefined) {
+      const worst = Math.max(...cRatings.map((r) => r.complexityBits));
+      if (worst > opts.maxComplexityBits) {
+        reasons.push(`rating: complexity ${worst.toFixed(1)} bits exceeds the cap of ${opts.maxComplexityBits}`);
+      }
+    }
+    return reasons;
+  };
+}
