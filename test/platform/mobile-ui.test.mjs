@@ -235,7 +235,7 @@ test('settings: the update status shows available, current and failed, each in p
     await pg.waitFor('/Check failed/.test(document.getElementById("update-result").textContent)', 12000);
     assert.match(await pg.eval('document.getElementById("update-result").textContent'), /answered 500/);
     assert.deepEqual(pg.errors.filter((e) => !/Failed to load resource/.test(e)), []);
-  } finally { await pg.close(); ms.close(); await api(srv.url, '/api/app-settings', { method: 'POST', body: { updates: { manifestUrl: 'https://github.com/zach909/.my-ai/releases/latest/download/release-manifest.json' } } }); }
+  } finally { await pg.close(); ms.close(); await api(srv.url, '/api/app-settings', { method: 'POST', body: { updates: { manifestUrl: 'https://github.com/zach909/my-ai/releases/latest/download/release-manifest.json' } } }); }
 });
 
 test('installable app: a valid manifest, real PNG icons at the sizes they claim, and a service worker that registers', { skip, timeout: 120_000 }, async () => {

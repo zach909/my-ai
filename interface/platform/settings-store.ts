@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   appearance: { ambient: true, reduceMotion: 'system' },
   chat: { keepLocalHistory: true },
   sources: { show: true, focus: true },
-  updates: { channel: 'stable', checkAutomatically: false, manifestUrl: 'https://github.com/zach909/.my-ai/releases/latest/download/release-manifest.json' },
+  updates: { channel: 'stable', checkAutomatically: false, manifestUrl: 'https://github.com/zach909/my-ai/releases/latest/download/release-manifest.json' },
 };
 
 /** What each field is, for the settings page and for the effects test. */

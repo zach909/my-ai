@@ -20,6 +20,7 @@ Welcome to the comprehensive wiki for NeuroClaw. NeuroClaw is the agent; it's po
 - [[Self-Built Extensions|Extensions]] - AI-created modules for memory and logic
 - [[RLM Training|RLM]] - Reinforcement Learning Module for reasoning
 - [[Empathy Engine|Empathy-Engine]] - User alignment and emotional understanding
+- [[Imagination|Imagination]] - Recall rebuilds a memory from different neurons each time; imagining puts random memories together
 
 ### Foreground Systems (Processing & Reasoning)
 - [[Mixture of Experts|MoE]] - Efficient routing to specialized processing units

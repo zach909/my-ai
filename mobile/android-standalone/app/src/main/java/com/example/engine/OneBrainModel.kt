@@ -149,6 +149,25 @@ class OneBrainModel {
         return obj.toString(2)
     }
 
+    /** Islands that have been through a dream (their held-out recall was measured), so there is something worth sharing. */
+    fun dreamedIslands(): List<Island> = mesh.learned().filter { it.dreamRecall >= 0f }
+
+    /**
+     * A shareable dream: the same mesh-delta format, carrying only dreamed islands (no ledger, no regions, no chat
+     * history). Another OneBrain imports it with [mergeDelta], which only adds islands it lacks, so a fresh install
+     * starts from what this one learned and an existing one never has anything overwritten. The island text is
+     * what the memory was built from, so the caller must show the user what is in it before it leaves the device.
+     */
+    fun exportDreams(): String {
+        val obj = JSONObject()
+        obj.put("format", DELTA_FORMAT)
+        obj.put("oneBrainVersion", version)
+        obj.put("kind", "dreams")
+        obj.put("sleeps", mesh.sleeps)
+        obj.put("islands", islandsToJson { it.dreamRecall >= 0f })
+        return obj.toString(2)
+    }
+
     /**
      * Merges either a full OneBrain `model.json` (replaces the byte graph) or a mesh delta
      * (applies the vale ledger and merges its regions) into this model.
@@ -191,9 +210,10 @@ class OneBrainModel {
     // ------------------------------------------------------------ island persistence
 
     /** The learned islands (skills and memories) with their trained neurons, so growth survives a restart. */
-    fun islandsToJson(): JSONArray {
+    fun islandsToJson(only: ((Island) -> Boolean)? = null): JSONArray {
         val arr = JSONArray()
         for (island in mesh.learned()) {
+            if (only != null && !only(island)) continue
             arr.put(
                 JSONObject()
                     .put("id", island.id)

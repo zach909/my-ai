@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" width="480" height="300" role="img" aria-labelledby="t-priv">
+<title id="t-priv">Local first: the app runs in its own window on this computer and nothing leaves it</title>
+<defs>
+<linearGradient id="bg-priv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient>
+<radialGradient id="glow-priv"><stop offset="0" stop-color="#e3a99d" stop-opacity=".35"/><stop offset="1" stop-color="#e3a99d" stop-opacity="0"/></radialGradient>
+
+</defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.dim{fill:rgba(248,237,233,.62)}
+.line{fill:none;stroke:rgba(255,228,218,.2);stroke-width:1.5}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@keyframes slide{0%,8%{opacity:0;transform:translateY(14px)}18%,86%{opacity:1;transform:translateY(0)}96%,100%{opacity:0}}
+@keyframes lock{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@keyframes fade{0%,100%{opacity:.25}50%{opacity:.4}}
+.b{animation:slide 7s ease-in-out infinite}
+.lock{transform-box:fill-box;transform-origin:center;animation:lock 2.4s ease-in-out infinite}
+.cloud{animation:fade 4s ease-in-out infinite}
+</style>
+<rect width="480" height="300" rx="32" fill="url(#bg-priv)"/>
+<rect x=".75" y=".75" width="478.5" height="298.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<rect x="36" y="34" width="270" height="206" rx="28" fill="rgba(255,240,232,.07)" stroke="rgba(255,228,218,.2)" stroke-width="1.5"/>
+<circle cx="64" cy="58" r="6" fill="#e3a99d"/><circle cx="84" cy="58" r="6" fill="#c98476" opacity=".7"/><circle cx="104" cy="58" r="6" fill="rgba(255,228,218,.2)"/>
+<rect class="b" x="56" y="84" width="150" height="34" rx="17" fill="rgba(227,169,157,.18)" style="animation-delay:0s"/><text class="b" x="131" y="106" text-anchor="middle" font-size="14" style="animation-delay:0s">what can you do?</text>
+<rect class="b" x="110" y="130" width="176" height="34" rx="17" fill="rgba(143,227,168,.16)" style="animation-delay:.7s"/><text class="b" x="198" y="152" text-anchor="middle" font-size="14" style="animation-delay:.7s">everything, right here</text>
+<rect class="b" x="56" y="176" width="120" height="34" rx="17" fill="rgba(227,169,157,.18)" style="animation-delay:1.4s"/><text class="b" x="116" y="198" text-anchor="middle" font-size="14" style="animation-delay:1.4s">offline?</text>
+<g class="cloud"><path d="M356 120a26 26 0 0 1 50-8a22 22 0 0 1 8 42H364a20 20 0 0 1-8-34z" fill="none" stroke="rgba(248,237,233,.62)" stroke-width="3" style="stroke:rgba(248,237,233,.5)"/><path d="M350 170L424 96" stroke="#ff9aa8" stroke-width="5" stroke-linecap="round"/></g>
+<text x="388" y="196" text-anchor="middle" font-size="14" class="dim">no cloud</text>
+<g class="lock"><rect x="368" y="216" width="40" height="28" rx="10" fill="rgba(227,169,157,.2)" stroke="#e3a99d" stroke-width="2"/><path d="M376 216v-8a12 12 0 0 1 24 0v8" fill="none" stroke="#e3a99d" stroke-width="3" stroke-linecap="round"/></g>
+<text x="240" y="276" text-anchor="middle" font-size="15" class="dim">Local-first: your own window, no cloud, no account</text>
+</svg>
