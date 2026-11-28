@@ -164,10 +164,10 @@ export async function handleEditorRoutes(ctx: EditorContext): Promise<boolean> {
 
     if (pathname === '/api/editor/file' && method === 'GET') {
       const r = resolveEditable(root, url.searchParams.get('path'));
-      if (!r.ok) return json({ error: r.reason }, 400);
+      if (r.ok === false) return json({ error: r.reason }, 400);
       if (!existsSync(r.abs)) return json({ error: 'No such file.' }, 404);
       const t = readText(r.abs);
-      if (!t.ok) return json({ error: t.reason }, 400);
+      if (t.ok === false) return json({ error: t.reason }, 400);
       return json({ path: r.rel, kind: kindOf(r.rel), content: t.text, hash: hashOf(t.text), readOnly: isReadOnly(r.rel) });
     }
 
@@ -175,9 +175,9 @@ export async function handleEditorRoutes(ctx: EditorContext): Promise<boolean> {
     const b = await ctx.parseBody(req, MAX_EDIT_BYTES * 2 + 4096);
     const body = (b && typeof b === 'object' ? b : {}) as Record<string, unknown>;
     const r = resolveEditable(root, body.path);
-    if (!r.ok) return json({ error: r.reason }, 400);
+    if (r.ok === false) return json({ error: r.reason }, 400);
     const current = existsSync(r.abs) ? readText(r.abs) : { ok: true as const, text: '' };
-    if (!current.ok) return json({ error: current.reason }, 400);
+    if (current.ok === false) return json({ error: current.reason }, 400);
 
     if (pathname === '/api/editor/diff') {
       if (typeof body.content !== 'string') return json({ error: 'Give the new content.' }, 400);

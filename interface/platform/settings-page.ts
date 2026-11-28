@@ -234,7 +234,7 @@ export const SETTINGS_PAGE = String.raw`<!DOCTYPE html>
           h('p', { class: 'help', text: Math.round(u.artifact.size / 1024 / 1024 * 10) / 10 + ' MB, ' + (u.artifact.signing === 'signed' ? 'code-signed' : 'not code-signed') }),
           h('p', { class: 'help mono', text: 'SHA-256 ' + u.artifact.sha256 }),
           h('p', { class: 'help', text: 'Download it from the releases page, compare the SHA-256 with the line above, then open it. NeuroClaw never installs an update by itself.' })
-        ), h('a', { class: 'nc-btn primary', href: 'https://github.com/zach909/.my-ai/releases', target: '_blank', rel: 'noopener', text: 'Open releases' })));
+        ), h('a', { class: 'nc-btn primary', href: 'https://github.com/zach909/my-ai/releases', target: '_blank', rel: 'noopener', text: 'Open releases' })));
       }
       if (u.checkedAt) kids.push(h('p', { class: 'help nc-dim', text: 'Checked ' + new Date(u.checkedAt).toLocaleString() }));
       result.replaceChildren.apply(result, kids);

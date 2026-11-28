@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeuroClaw</title>
+<meta name="description" content="A local-first AI agent on your own computer. Download it for Linux, Windows, macOS, Android or Chrome.">
+<style>
+:root{--bg0:#110c0e;--bg1:#1b1216;--text:#f8ede9;--dim:rgba(248,237,233,.62);--coral:#e3a99d;--soft:#efd0c8;--deep:#c98476;--line:rgba(255,228,218,.2);--green:#8fe3a8;--spring:cubic-bezier(.34,1.56,.64,1)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;color:var(--text);background:radial-gradient(1200px 700px at 50% -10%,var(--bg1),var(--bg0));font:16px/1.55 ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif}
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;background:radial-gradient(500px 400px at 20% 30%,rgba(227,169,157,.14),transparent 70%),radial-gradient(600px 500px at 80% 70%,rgba(201,132,118,.12),transparent 70%);animation:drift 24s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate(4%,3%) scale(1.08)}}
+main{max-width:1080px;margin:0 auto;padding:0 20px 72px}
+h1,h2,h3{line-height:1.15;margin:0}
+h2{font-size:clamp(1.5rem,3.4vw,2rem);margin:64px 0 20px;text-align:center}
+.dim{color:var(--dim)}
+.hero{display:grid;justify-items:center;text-align:center;padding:40px 0 8px}
+.hero img{width:min(420px,86vw);height:auto;filter:drop-shadow(0 20px 50px rgba(227,169,157,.2))}
+.hero h1{font-size:clamp(2.2rem,6vw,3.4rem);margin-top:4px}
+.hero p{max-width:640px;margin:14px 0 0}
+.card{background:rgba(255,240,232,.07);border:1px solid var(--line);border-radius:32px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 60px rgba(0,0,0,.35),0 0 40px rgba(227,169,157,.06);backdrop-filter:blur(26px) saturate(1.5);-webkit-backdrop-filter:blur(26px) saturate(1.5)}
+.downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px}
+.dl{padding:20px 16px;display:grid;gap:6px;align-content:start}
+.dl h3{font-size:1.25rem}.dl p{margin:0 0 10px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-block;white-space:nowrap;font-size:.92rem;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(255,238,230,.07);color:var(--text);text-decoration:none;font-weight:600;transition:transform .35s var(--spring),background .2s}
+.btn:hover{transform:translateY(-2px) scale(1.03);background:rgba(255,238,230,.16)}
+.btn:active{transform:scale(.95)}
+.btn.primary{background:rgba(227,169,157,.16);border-color:rgba(227,169,157,.5);color:var(--soft)}
+.btn.primary:hover{background:rgba(227,169,157,.28)}
+.btn:focus-visible{outline:2px solid var(--coral);outline-offset:3px}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px}
+.feat{padding:14px 14px 22px;overflow:hidden}
+.feat img{width:100%;height:auto;display:block;border-radius:22px;margin-bottom:14px}
+.feat h3,.feat p{padding:0 10px}.feat p{margin:6px 0 0}
+.reveal{opacity:0;transform:translateY(26px) scale(.98);transition:opacity .7s ease,transform .7s var(--spring)}
+.reveal.in{opacity:1;transform:none}
+.note{max-width:760px;margin:40px auto 0;padding:22px 26px;text-align:center}
+.links{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+footer{margin-top:48px;text-align:center}
+a{color:var(--soft)}
+a:visited{color:var(--soft)}
+code{background:rgba(255,238,230,.09);border-radius:999px;padding:2px 10px}
+@media (prefers-reduced-motion:reduce){body::before{animation:none}.reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<main>
+<section class="hero">
+<img src="media/hero.svg" alt="A coral cord turning around a glowing sphere with a small green agent inside" width="480" height="360">
+<h1>NeuroClaw</h1>
+<p class="dim">A local-first AI agent on your own computer, powered by OneBrain, a neural mesh engine. No account, no cloud, no tokenizer.</p>
+</section>
+
+<h2>Download</h2>
+<section class="downloads" aria-label="Downloads">
+<div class="card dl"><h3>Linux</h3><p class="dim">Debian, Ubuntu, Chromebook Linux</p><div class="row"><a class="btn primary" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-linux-x64.deb" download>Download .deb</a><a class="btn" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-linux-x64.tar.gz" download>Download .tar.gz</a></div></div>
+<div class="card dl"><h3>Windows</h3><p class="dim">Installs for your user only</p><div class="row"><a class="btn primary" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-windows-x64.exe" download>Download .exe</a><a class="btn" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-windows-x64.zip" download>Download .zip</a></div></div>
+<div class="card dl"><h3>macOS</h3><p class="dim">Apple silicon</p><div class="row"><a class="btn primary" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-macos-arm64.dmg" download>Download .dmg</a><a class="btn" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-macos-arm64.zip" download>Download .zip</a></div></div>
+<div class="card dl"><h3>Android</h3><p class="dim">Sideload the .apk</p><div class="row"><a class="btn primary" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-android-any.apk" download>Download .apk</a></div></div>
+<div class="card dl"><h3>Chrome</h3><p class="dim">Chrome extension</p><div class="row"><a class="btn primary" href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-chrome-extension.zip" download>Download .zip</a></div></div>
+</section>
+<p class="dim" style="text-align:center;margin-top:14px">Each button takes the newest published release. On iPhone and iPad it is not available yet.</p>
+
+<h2>What it does</h2>
+<section class="features">
+<article class="card feat reveal"><img src="media/mesh.svg" alt="Neural mesh" width="480" height="300" loading="lazy"><h3>Neural mesh</h3><p class="dim">Fully connected neurons that talk to each other, with signals you can watch travel.</p></article>
+<article class="card feat reveal"><img src="media/experts.svg" alt="Mixture of experts" width="480" height="300" loading="lazy"><h3>Mixture of experts</h3><p class="dim">A router wakes only the specialist that fits the request, so it stays fast and small.</p></article>
+<article class="card feat reveal"><img src="media/bits.svg" alt="Raw bits, no tokenizer" width="480" height="300" loading="lazy"><h3>Raw bits, no tokenizer</h3><p class="dim">Text, audio and images all enter the mesh as the bits they already are.</p></article>
+<article class="card feat reveal"><img src="media/learning.svg" alt="Self-improving" width="480" height="300" loading="lazy"><h3>Self-improving</h3><p class="dim">Patterns that keep repeating are promoted to permanent skills; repeated mistakes are penalised.</p></article>
+<article class="card feat reveal"><img src="media/private.svg" alt="Local-first and private" width="480" height="300" loading="lazy"><h3>Local-first and private</h3><p class="dim">One engine on your computer in its own window. No account, no cloud, no open network port.</p></article>
+<article class="card feat reveal"><img src="media/extensions.svg" alt="Extensions and skills" width="480" height="300" loading="lazy"><h3>Extensions and skills</h3><p class="dim">Plug a skill in, change it or combine it without touching the core.</p></article>
+</section>
+
+<section class="card note">
+<p><strong>Run it from source:</strong> <code>npm run app</code> opens it in its own window. <code>npm run package</code> builds the installer for your system.</p>
+<p class="dim">This is an educational project and it is in beta. We are not responsible for your actions or what the code does. By continuing you agree with this statement and the <a href="../PRIVACY.md">privacy policy</a> and <a href="../TERMS.md">terms and conditions</a>. Please spread the word.</p>
+</section>
+
+<footer>
+<div class="links">
+<a class="btn" href="FILE_GUIDE.md">What every file does</a>
+<a class="btn" href="DEEP_DIVES.md">Engine deep-dives</a>
+<a class="btn" href="PLATFORMS.md">Platforms</a>
+<a class="btn" href="https://github.com/zach909/my-ai">Source on GitHub</a>
+</div>
+</footer>
+</main>
+<script>
+(function(){var els=[].slice.call(document.querySelectorAll('.reveal'));
+if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('in')});return}
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.15});
+els.forEach(function(e){io.observe(e)})})();
+</script>
+</body>
+</html>

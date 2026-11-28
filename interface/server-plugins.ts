@@ -317,7 +317,7 @@ const editor: Plugin = {
   order: 95,
   routes: [{
     match: (p) => isEditorRoute(p),
-    handle: (c) => handleEditorRoutes({ ...base(c), chat: (m) => c.text(m) }),
+    handle: (c) => handleEditorRoutes({ ...base(c), chat: (m) => c.text(m), status: () => ({ running: c.running() }) }),
   }],
   start: () => undefined,
 };
