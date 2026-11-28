@@ -1,8 +1,13 @@
 """The atlas command line: ``neuroclaw-atlas COMMAND`` (or ``python3 -m atlas COMMAND`` from the repository).
 
+ATLAS IS NOT A PICTURE TOOL. It is the AI's memory of what happened while the AI was not running: a map of ANYTHING
+(files, folders, notes, sensor readings, machine state, numbers about anything, and, only if switched on, what cameras
+see). Pictures are one small input and are never stored. If you are an AI reading this, do not treat it as a camera
+or image feature.
+
 Put anything in the map and ask it things. Every command takes ``--home DIR`` (default ``~/.neuroclaw/atlas``) and
-``--json`` (machine-readable output, for an agent). Nothing runs in the background: ``scan`` and ``sense`` do one
-thing and stop, or, with ``--for SECONDS``, repeat in the foreground, visibly, until the time is up or you press Ctrl-C.
+``--json`` (machine-readable output, for an agent). ``scan`` and ``sense`` do one thing and stop (or, with ``--for
+SECONDS``, repeat in the foreground). ``daemon`` keeps mapping until stopped and ``autostart on`` runs it from boot.
 
   put NAME TEXT...        put a note in      reading KIND VALUE    put a number about anything in (likes, ohms, ...)
   ingest PATH...          any file or folder find WORDS...         ask the map      about REF   everything about one thing
@@ -11,6 +16,7 @@ thing and stop, or, with ``--for SECONDS``, repeat in the foreground, visibly, u
   sense                   read this computer's sensors (Linux)      place sensor N X Y Z   say where one is
   digest                  make the map smaller and smarter           stats / recent        what the map holds
   capture on|off          allow live cameras (off until you say so)
+  daemon [--once]         keep mapping files, sensors, vitals (+ cameras if allowed)   autostart on|off   run it from boot
 """
 
 from __future__ import annotations
@@ -128,9 +134,10 @@ def _read_file(path: Path, size: int):
         os.close(fd)
 
 
-def walk(root: Path):
-    """``(entries, skipped)``: files and folders under ``root`` as ``{"path", "dir", "size"}``. Never follows a symlink,
-    never leaves the filesystem, never reads a file whose NAME looks like a secret (a name pattern, not a classifier)."""
+def walk(root: Path, limit: int = MAX_ENTRIES, skip_hidden: bool = False):
+    """``(entries, skipped)``: files and folders under ``root`` as ``{"path", "dir", "size", "mtime"}``. Never follows a
+    symlink, never leaves the filesystem, never reads a file whose NAME looks like a secret (a name pattern, not a
+    classifier). ``skip_hidden`` leaves out names starting with a dot and ``node_modules`` (caches, keys, history)."""
     entries, skipped = [], {"symlink": 0, "secret": 0, "other": 0, "limit": 0}
     st = os.lstat(root)
     if not stat.S_ISDIR(st.st_mode):
@@ -144,8 +151,11 @@ def walk(root: Path):
             skipped["other"] += 1
             continue
         for e in found:
-            if len(entries) >= MAX_ENTRIES:
+            if len(entries) >= limit:
                 skipped["limit"] += 1
+                continue
+            if skip_hidden and (e.name.startswith(".") or e.name == "node_modules"):
+                skipped["other"] += 1
                 continue
             if e.is_symlink():
                 skipped["symlink"] += 1
@@ -166,8 +176,29 @@ def walk(root: Path):
                 if SECRET_RE.search(e.name):
                     skipped["secret"] += 1
                     continue
-                entries.append({"path": path, "dir": False, "size": s.st_size})
+                entries.append({"path": path, "dir": False, "size": s.st_size, "mtime": int(s.st_mtime)})
     return entries, skipped
+
+
+def ingest_dir(store, p: Path, t: int, since: int | None = None, limit: int = MAX_ENTRIES, skip_hidden: bool = False):
+    """Map a folder into ``store``: ``(marks added, entries, skipped)``. With ``since`` (seconds), a file's CONTENT is
+    only read if it changed at or after that time; the folder structure is always re-marked so places stay stable."""
+    entries, skipped = walk(p, limit=limit, skip_hidden=skip_hidden)
+    texts, marks = {}, []
+    for e in entries:
+        if e["dir"]:
+            continue
+        if since is not None and e.get("mtime", 0) < since:
+            continue
+        ext = e["path"].rsplit(".", 1)[-1].lower() if "." in e["path"].rsplit("/", 1)[-1] else ""
+        data = _read_file(p / e["path"], e["size"]) if e["size"] <= MAX_FILE else None
+        if data is None:
+            continue
+        if ext in TEXT_EXT and core.is_text(data):
+            texts[e["path"]] = data[:1500].decode("utf-8", "replace")
+        marks.append(core.ingest(e["path"], data, t=t, space="files-text", ref=f"{p.name}/{e['path']}", size=e["size"]))
+    marks += core.file_marks(entries, t, space="files", texts=texts)
+    return store.add(marks), entries, skipped
 
 
 def cmd_ingest(args, out):
@@ -185,20 +216,8 @@ def cmd_ingest(args, out):
             say(f"{raw}: a symlink, not followed")
             continue
         if stat.S_ISDIR(lst.st_mode):
-            entries, skipped = walk(p)
-            texts, marks = {}, []
-            for e in entries:
-                if e["dir"]:
-                    continue
-                ext = e["path"].rsplit(".", 1)[-1].lower() if "." in e["path"].rsplit("/", 1)[-1] else ""
-                data = _read_file(p / e["path"], e["size"]) if e["size"] <= MAX_FILE else None
-                if data is None:
-                    continue
-                if ext in TEXT_EXT and core.is_text(data):
-                    texts[e["path"]] = data[:1500].decode("utf-8", "replace")
-                marks.append(core.ingest(e["path"], data, t=t, space="files-text", ref=f"{p.name}/{e['path']}", size=e["size"]))
-            marks += core.file_marks(entries, t, space="files", texts=texts)
-            total += store.add(marks)
+            added, entries, skipped = ingest_dir(store, p, t)
+            total += added
             say(f"{raw}: {len(entries)} entries mapped" + "".join(f", {n} {k} skipped" for k, n in skipped.items() if n))
         elif stat.S_ISREG(lst.st_mode):
             if SECRET_RE.search(p.name):
@@ -376,8 +395,8 @@ def cmd_scan(args, out):
     return 0
 
 
-def cmd_sense(args, out):
-    home = _home(args)
+def sense_marks(home: Path):
+    """``(data, pos, marks)``: one sweep of this computer's sensors and the marks it makes (nothing is saved here)."""
     try:
         pos = json.loads((home / "sensors.json").read_text())
     except (OSError, ValueError):
@@ -396,6 +415,12 @@ def cmd_sense(args, out):
                 marks.append(core.mark(r["kind"], at, v=r["v"], t=t, ref=f"{s['name']}-{s['index']}"[:60], unit=r["unit"]))
             except ValueError:
                 continue
+    return data, pos, marks
+
+
+def cmd_sense(args, out):
+    home = _home(args)
+    data, pos, marks = sense_marks(home)
     if not data["sensors"]:
         out("no sensors found under /sys/bus/iio/devices (Linux only)")
         return 0
@@ -429,6 +454,16 @@ def cmd_capture(args, out):
         _save_json(home, "config.json", cfg)
     out("live cameras: " + ("on" if cfg.get("capture") else "off"))
     return 0
+
+
+def cmd_daemon(args, out):
+    from . import daemon
+    return daemon.run(_home(args), out, once=args.once)
+
+
+def cmd_autostart(args, out):
+    from . import daemon
+    return daemon.autostart(_home(args), args.state, out)
 
 
 # ---- the parser -------------------------------------------------------------------------------------------------
@@ -524,6 +559,14 @@ def parser():
     s = sub.add_parser("capture", help="allow or forbid live cameras")
     s.add_argument("state", nargs="?", choices=["on", "off"])
     s.set_defaults(fn=cmd_capture)
+
+    s = sub.add_parser("daemon", help="keep mapping files, sensors, vitals (and cameras if allowed) until stopped")
+    s.add_argument("--once", action="store_true", help="one round of everything, then stop")
+    s.set_defaults(fn=cmd_daemon)
+
+    s = sub.add_parser("autostart", help="start the daemon at boot (on), stop and remove it (off), or report")
+    s.add_argument("state", nargs="?", choices=["on", "off"])
+    s.set_defaults(fn=cmd_autostart)
     return p
 
 
