@@ -136,14 +136,15 @@ export declare class ExtensionBuilder {
      * training pass; see the method's own doc comment in builder.js.
      */
     /** method: 'delta' (default) is the analytic tanh-derivative delta rule; 'random' is genuine random-search/evolution-strategy updates -- see HyperDimensionalEngine.trainDefinitionsRandomSearch(). */
-    train(projectId: string, opts?: { epochs?: number; method?: 'delta' | 'random' }): TrainingResult | null;
+    train(projectId: string, opts?: { epochs?: number; method?: 'delta' | 'random'; dims?: number }): TrainingResult | null;
     /**
-     * Run a trained project: the trained response closest to the neuron readouts for `question`. Always one of the responses it
-     * was trained with (a lookup, not generation). `margin` is best minus runner-up; refuse a small one. null if never trained.
+     * Run a trained project: the trained response whose embedding the neuron readouts are nearest to (Euclidean distance).
+     * Always one of the responses it was trained with (a lookup, not generation). `margin` is the relative gap to the runner-up
+     * in [0, 1]. It is NOT a confidence: unrelated questions score margins as large as trained ones. null if never trained.
      */
-    answer(projectId: string, question: string): { answer: string; neuron: string; score: number; margin: number } | null;
-    /** Every (neuron, trained response) ranked by closeness for `question`, for debugging and for answer(). null if never trained. */
-    trace(projectId: string, question: string): { question: string; ranked: Array<{ neuron: string; response: string; score: number }> } | null;
+    answer(projectId: string, question: string): { answer: string; neuron: string; score: number; distance: number; margin: number } | null;
+    /** Every (neuron, trained response) ranked nearest first, for debugging and for answer(). `score` is minus the distance. null if never trained. */
+    trace(projectId: string, question: string): { question: string; ranked: Array<{ neuron: string; response: string; score: number; distance: number; cosine: number }> } | null;
     moveNeuron(projectId: string, neuronId: string, x: number, y: number): boolean;
     searchNeurons(projectId: string, query: string): NeuronData[];
     typeModelOutput(projectId: string, neuronId: string, inputValue: number): string;

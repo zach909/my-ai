@@ -699,7 +699,8 @@ export class ExtensionBuilder {
         const project = this.projects.get(projectId);
         if (!project)
             return null;
-        const dims = 16;
+        // Embedding size. 16 is the long-standing default and stays so; more dimensions keep similar-looking answers apart.
+        const dims = Number.isInteger(opts.dims) && opts.dims >= 4 ? opts.dims : 16;
         // method: 'delta' (default) is the analytic tanh-derivative delta
         // rule; 'random' is genuine random-search/evolution-strategy
         // updates -- "each variable randomly changed; keep the change if
@@ -811,20 +812,24 @@ export class ExtensionBuilder {
     }
     /**
      * Run a trained project. Clamp the question's embedding on the drive neuron, let the mesh settle, then read every
-     * neuron that has scripts and return the trained response its readout is closest to (cosine). This is the missing
-     * half of train(): without it a trained project could be fitted but never asked anything.
+     * neuron that has scripts and return the trained response whose embedding its readout is nearest to (Euclidean
+     * distance: the same quantity the training loss shrinks). This is the missing half of train(): without it a
+     * trained project could be fitted but never asked anything.
      *
-     * Honest limit: the answer is always one of the responses the project was trained with. The builder's readouts are
-     * embeddings, not text, so this ranks known answers; it cannot write a new one. `margin` (best minus runner-up) is
-     * returned so a caller can refuse to trust a close call. Returns null if the project was never trained here.
+     * Honest limits: the answer is always one of the responses the project was trained with. The builder's readouts are
+     * embeddings, not text, so this ranks known answers; it cannot write a new one. Cosine similarity was tried first and
+     * is useless here: every readout is nearly parallel to every target (all scores about 0.999), so it cannot rank or
+     * give a usable confidence. `margin` is (runner-up distance - best distance) / runner-up distance, in [0, 1]: near 0 is a
+     * close call a caller should refuse. Returns null if the project was never trained here.
      */
     answer(projectId, question) {
         const t = this.trace(projectId, question);
         if (!t || t.ranked.length === 0) return null;
         const [best, next] = t.ranked;
-        return { answer: best.response, neuron: best.neuron, score: best.score, margin: best.score - (next?.score ?? -1) };
+        const margin = next && next.distance > 0 ? (next.distance - best.distance) / next.distance : 1;
+        return { answer: best.response, neuron: best.neuron, score: best.score, distance: best.distance, margin };
     }
-    /** Every candidate (neuron, trained response) ranked by how close the neuron's readout is to it. For debugging and for answer(). */
+    /** Every candidate (neuron, trained response) ranked nearest first. `score` is minus the distance, so higher is better; `cosine` is kept for debugging. */
     trace(projectId, question) {
         const project = this.projects.get(projectId);
         const t = project && TRAINED.get(project);
@@ -836,7 +841,13 @@ export class ExtensionBuilder {
             const readout = id === undefined ? null : t.engine.neurons.find(x => x.id === id);
             if (!readout || n.scripts.length === 0) continue;
             const out = Array.from({ length: t.dims }, (_, d) => readout.state[d + 1]);
-            for (const s of n.scripts) ranked.push({ neuron: n.name, response: s.response, score: cosine(out, embedText(s.response, t.dims)) });
+            for (const s of n.scripts) {
+                const target = embedText(s.response, t.dims);
+                let sq = 0;
+                for (let d = 0; d < t.dims; d++) sq += (out[d] - target[d]) ** 2;
+                const distance = Math.sqrt(sq);
+                ranked.push({ neuron: n.name, response: s.response, score: -distance, distance, cosine: cosine(out, target) });
+            }
         }
         ranked.sort((a, b) => b.score - a.score);
         return { question, ranked };
