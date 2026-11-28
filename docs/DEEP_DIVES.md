@@ -168,10 +168,10 @@ train on; this doesn't retroactively rewrite past replies.
 ## Quick Start
 
 ```bash
-git clone https://github.com/zach909/.my-ai.git
+git clone https://github.com/zach909/my-ai.git
 
-cd .my-ai
-
+cd my-ai
+sudo chown -R zach:zach /home/you/my-ai
 # Installation
 ./scripts/install.sh
 
