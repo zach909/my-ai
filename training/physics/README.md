@@ -98,7 +98,21 @@ never trained on, goals in every direction).
 
 ## Results
 
-RESULTS_PLACEHOLDER
+One training run (500 generations, 80 rollouts each, 468 s on 4 cores, seed 1), judged on 6 episodes it
+never trained on (seeds 9001-9006, 20 s each, goals in every direction):
+
+| | Untrained network | After training |
+|---|---|---|
+| Falls | 0 of 6 (it just stands) | 0 of 6 |
+| Metres gained toward goals | 0 | 8.1, 12.7, 17.7, 19.7, 16.4, 18.4 (mean 15.5, about 0.78 m/s) |
+| Goals reached in 20 s | 0 | 2, 4, 5, 5, 5, 6 (mean 4.5) |
+| Bones stretched at most | 1.5% | 5.8% to 10.2% |
+| All feet off the ground | under 3% | 13.5% to 17.0% of the time |
+| Foot slide while planted | 0 | 0.58 to 0.74 m/s |
+
+The footfall chart (`play.mjs --gait`) shows real stance and swing phases lasting several frames each,
+with some flicker, and one foot is lifted most of the time. A different seed gives a different gait; the
+numbers above are one run, not an average over runs.
 
 ## Putting a different brain in
 
@@ -123,7 +137,7 @@ observation-in, action-out loop against it. Until that exists, the walker is the
 
 - **The gait is functional, not elegant.** The audit in `play.mjs` is there so this stays visible: it
   walks and turns and does not fall, but it often favours three legs, lifts a foot while another skates a
-  little, and stretches a bone by a few percent under load (the sanity limit that ends an episode is 25%).
+  little, and stretches a bone by up to about 10% under load (the sanity limit that ends an episode is 25%).
 - **The first version found a trick, and this is how it was fixed.** With instant muscles the learner
   settled on buzzing one hip back and forth every control step (15 Hz, the fastest possible). The
   footfall chart showed it as `#.#.#.#.`; a spectrum of the commands confirmed it. The fix was physical:
