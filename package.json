@@ -26,6 +26,7 @@
     "watch:model": "node scripts/model-change-test.mjs --watch",
     "test:platform": "node scripts/build-backend.mjs && node --test --test-concurrency=2 \"test/platform/*.test.mjs\"",
     "test": "npm run check:third-party && npm run test:smoke && npm run test:platform && npm run test:training && npm run test:model-change && npm run test:integration && npm run test:install",
+    "package": "node scripts/release/package-app.mjs",
     "release:version": "node scripts/release/version.mjs",
     "release:extension": "node scripts/release/build-extension.mjs",
     "build:phone-brain": "node scripts/release/build-mobile-brain.mjs",
