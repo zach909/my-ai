@@ -206,6 +206,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts'), v('test/core/task-training.test.ts')],
   },
   {
+    id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',
+    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'interface/self-improvement-data.ts', 'interface/platform/self-improvement-page.ts'],
+    routes: ['GET /api/self-improvement', 'GET /api/self-improvement/history', 'GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],
+    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts'), n('test/platform/self-improvement-page.test.mjs')],
     id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer. Self-debug: the AI finds what goes wrong in a net, looks at the weights behind it and their history, edits them a little through the weight editor, has a critic check whether it got better or worse, keeps or undoes the change and goes on; when weights cannot fix a wrong answer it makes a skill with the Extension Builder, and after enough skills proposes a plugin that is installed off until the owner approves it.',
     implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'models && skills/core/self-debug.ts', 'interface/self-debug-routes.ts', 'interface/platform/self-improvement-page.ts'],
     routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop', 'GET /api/self-improvement/self-debug', 'GET /api/self-improvement/self-debug/sessions/:id', 'POST /api/self-improvement/self-debug/run', 'POST /api/self-improvement/self-debug/auto', 'POST /api/self-improvement/self-debug/plugins/:id'],
