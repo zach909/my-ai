@@ -257,6 +257,9 @@ private fun NeuroClawApp(viewModel: NeuroViewModel) {
                                 onRestoreCheckpoint = viewModel::restoreCheckpoint,
                                 onImportWeightsUri = viewModel::importMeshDeltaFromUri,
                                 onExportDelta = viewModel::exportMeshDeltaPreview,
+                                onSleepNow = viewModel::sleepNow,
+                                dreamLabels = viewModel::dreamLabels,
+                                onSaveDreamsUri = viewModel::saveDreamsToUri,
                                 onTeachYesNo = viewModel::teachYesNo,
                                 onAskYesNo = viewModel::askYesNo
                             )

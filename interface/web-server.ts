@@ -59,6 +59,7 @@ import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
 import { builderPage } from './platform/builder-page.js';
 import { selfImprovementPage } from './platform/self-improvement-page.js';
+import { isSelfImprovementTab, selfImprovementTab, type Ledgers } from './self-improvement-data.js';
 import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
 import { SHARING_PAGE } from './sharing-page.js';
@@ -2434,6 +2435,25 @@ export class WebServer {
    * the right thing for a 500 and the wrong thing for a body it will never
    * fix, and monitoring counts it against this server's error rate.
    */
+  /** The three local ledgers behind the Self-improvement page. A missing or unreadable one is empty, not an error. */
+  private async readSelfImprovementLedgers(): Promise<Ledgers> {
+    const readJson = (relPath: string, fallback: unknown) => {
+      try {
+        const full = path.join(process.cwd(), relPath);
+        if (!existsSync(full)) return fallback;
+        return JSON.parse(readFileSync(full, 'utf8'));
+      } catch {
+        return fallback;
+      }
+    };
+    const { readRecentSkillMeshAttempts } = await import('../src/lib/skill-mesh-metrics.js');
+    return {
+      scoreboard: readJson('extension-builder/self-improvement-scoreboard.json', { targets: {} }) as Ledgers['scoreboard'],
+      drills: readJson('extension-builder/skill-quality-history.json', { skills: {} }) as Ledgers['drills'],
+      attempts: readRecentSkillMeshAttempts(),
+    };
+  }
+
   private sendError(res: http.ServerResponse, err: unknown): void {
     const msg = err instanceof Error ? err.message : String(err);
     const status = statusForError(err);
@@ -4713,27 +4733,25 @@ export class WebServer {
     // install, or the relevant agent disabled) degrades to an
     // empty-but-valid response, not an error.
     if (pathname === '/api/self-improvement/history' && method === 'GET') {
-      const readJson = (relPath: string, fallback: unknown) => {
-        try {
-          const full = path.join(process.cwd(), relPath);
-          if (!existsSync(full)) return fallback;
-          return JSON.parse(readFileSync(full, 'utf8'));
-        } catch {
-          return fallback;
-        }
-      };
-      const scoreboard = readJson('extension-builder/self-improvement-scoreboard.json', { targets: {} }) as {
-        targets?: Record<string, { history?: unknown[] }>;
-      };
-      const drillHistory = readJson('extension-builder/skill-quality-history.json', { skills: {} }) as {
-        skills?: Record<string, { history?: unknown[] }>;
-      };
-      const { readRecentSkillMeshAttempts } = await import('../src/lib/skill-mesh-metrics.js');
+      const ledgers = await this.readSelfImprovementLedgers();
       this.sendJson(res, {
-        selfImprovement: scoreboard.targets ?? {},
-        skillDrills: drillHistory.skills ?? {},
-        skillMeshAttempts: readRecentSkillMeshAttempts(),
+        selfImprovement: ledgers.scoreboard.targets ?? {},
+        skillDrills: ledgers.drills.skills ?? {},
+        skillMeshAttempts: ledgers.attempts,
       });
+      return;
+    }
+
+    // GET /api/self-improvement?tab=overview|skills|reasoning|history -- what the Self-improvement page
+    // (interface/platform/self-improvement-page.ts) shows, worked out from the same three ledgers
+    // (interface/self-improvement-data.ts). Nothing is made up: no ledger yet gives zeros and empty lists.
+    if (pathname === '/api/self-improvement' && method === 'GET') {
+      const tab = parsedUrl.searchParams.get('tab') ?? 'overview';
+      if (!isSelfImprovementTab(tab)) {
+        this.sendJson(res, { error: 'tab must be overview, skills, reasoning or history' }, 400);
+        return;
+      }
+      this.sendJson(res, selfImprovementTab(tab, await this.readSelfImprovementLedgers()));
       return;
     }
 

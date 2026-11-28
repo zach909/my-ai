@@ -32,6 +32,7 @@ import { handleCommonsRoutes, type CommonsContext } from './commons-routes.js';
 import { handleWorkbenchRoutes, isSharePath, isWorkbenchRoute } from './workbench/routes.js';
 import { WorkbenchService } from './workbench/service.js';
 import { handleEditorRoutes, isEditorRoute } from './editor-routes.js';
+import { handleLabRoutes, isLabRoute } from './lab-routes.js';
 import { getAccounts, USER_COOKIE } from '../models && skills/core/accounts.js';
 import { isComputerAdministrator } from '../models && skills/core/computer-admin.js';
 import { sharedToolGate } from '../models && skills/core/tool-safety.js';
@@ -316,7 +317,18 @@ const editor: Plugin = {
   order: 95,
   routes: [{
     match: (p) => isEditorRoute(p),
-    handle: (c) => handleEditorRoutes({ ...base(c), chat: (m) => c.text(m) }),
+    handle: (c) => handleEditorRoutes({ ...base(c), chat: (m) => c.text(m), status: () => ({ running: c.running() }) }),
+  }],
+  start: () => undefined,
+};
+
+const lab: Plugin = {
+  id: 'lab-routes',
+  description: 'The virtual laboratory: a sealed, simulated bench where an AI investigates a world with hidden constants. Desktop only.',
+  order: 96,
+  routes: [{
+    match: (p) => isLabRoute(p),
+    handle: (c) => handleLabRoutes(base(c)),
   }],
   start: () => undefined,
 };
@@ -384,6 +396,6 @@ export function fileEnabledStore(override?: string): PluginEnabledStore {
 /** The server's plugin host, with every route plugin registered and not yet started. */
 export function createServerHost(store: PluginEnabledStore = fileEnabledStore(), log?: (m: string) => void): PluginHost<ServerRouteContext> {
   const host = new PluginHost<ServerRouteContext>(store, log);
-  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons, workbench, editor]) host.register(p);
+  for (const p of [listPlugin(host), platform, accounts, hosted, corona, memoryTopics, promptMemory, safety, weights, selfDebug, agent, commons, workbench, editor, lab]) host.register(p);
   return host;
 }

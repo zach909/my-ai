@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 52" width="224" height="52" role="img" aria-label="Source code .zip">
+<title>Source code .zip</title>
+<defs><linearGradient id="f-source-zip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#efd0c8"/><stop offset="1" stop-color="#e3a99d"/></linearGradient></defs>
+<rect x="1" y="1" width="222" height="50" rx="25" fill="#1b1216" stroke="#e3a99d" stroke-width="2"/>
+<path d="M32 17v14m-7-6l7 7l7-7M24 38h16" fill="none" stroke="#efd0c8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,-5) scale(1)"/>
+<text x="130" y="32" text-anchor="middle" font-size="18" font-weight="700" style="fill:#efd0c8;font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif">Source code .zip</text>
+</svg>

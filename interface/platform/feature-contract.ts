@@ -206,6 +206,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts'), v('test/core/task-training.test.ts')],
   },
   {
+    id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',
+    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'interface/self-improvement-data.ts', 'interface/platform/self-improvement-page.ts'],
+    routes: ['GET /api/self-improvement', 'GET /api/self-improvement/history', 'GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],
+    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts'), n('test/platform/self-improvement-page.test.mjs')],
     id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer. Self-debug: the AI finds what goes wrong in a net, looks at the weights behind it and their history, edits them a little through the weight editor, has a critic check whether it got better or worse, keeps or undoes the change and goes on; when weights cannot fix a wrong answer it makes a skill with the Extension Builder, and after enough skills proposes a plugin that is installed off until the owner approves it.',
     implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'models && skills/core/self-debug.ts', 'interface/self-debug-routes.ts', 'interface/platform/self-improvement-page.ts'],
     routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop', 'GET /api/self-improvement/self-debug', 'GET /api/self-improvement/self-debug/sessions/:id', 'POST /api/self-improvement/self-debug/run', 'POST /api/self-improvement/self-debug/auto', 'POST /api/self-improvement/self-debug/plugins/:id'],
@@ -354,6 +358,13 @@ export const FEATURES: Feature[] = [
     implementation: ['models && skills/core/danger-protocol.ts', 'models && skills/core/alignment-veto.ts', 'interface/agent-routes.ts', 'interface/commons-page.ts'],
     routes: ['GET /api/agent', 'POST /api/agent/alignment', 'POST /api/agent/delete', 'POST /api/agent/create'],
     needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-judge.test.ts')],
+  },
+  {
+    id: 'lab', title: 'Virtual laboratory',
+    description: 'A sealed, simulated bench where the AI runs experiments on a world with hidden constants: noisy readings, a budget and a clock, safety ratings that break equipment if ignored, and a score for recovering the constants. Nothing in it touches the computer.',
+    implementation: ['interface/lab-routes.ts', 'training/lab/lab.mjs', 'training/lab/physics.mjs', 'training/lab/scientists.mjs', 'training/lab/run.mjs'],
+    routes: ['GET /api/lab', 'POST /api/lab/new', 'POST /api/lab/act', 'GET /api/lab/notebook', 'POST /api/lab/baseline'],
+    needs: [['localEngine']], tests: [n('test/training/lab.test.mjs'), n('test/platform/lab-routes.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
   },
   {
     id: 'plugin-host', title: 'Plugin host (route groups as plugins)', description: 'The server’s route groups (platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons) are plugins that start in dependency order and own their routes. The owner can list them and turn them off and on; the choice is kept across restarts. Plugins that guard the agent (accounts, safety, agent, and the plugin list itself) can be turned off only by the owner, never by the agent acting on its own, and turning off a plugin closes the paths it kept open past the password gate.',
