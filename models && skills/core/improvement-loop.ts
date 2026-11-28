@@ -82,6 +82,11 @@ export interface LoopOptions {
   minGain: number;
   /** Patterns for anything the loop may never promote by itself. */
   protectedPatterns?: RegExp[];
+  /**
+   * Extra checks on the candidate's measured numbers, e.g. a model rating. Returns reasons to reject;
+   * an empty list passes. Called with the per-seed metrics of both sides after the guards.
+   */
+  judge?: (candidate: Metrics[], baseline: Metrics[]) => string[];
   /** Where the ledger goes (JSON lines). Omit to keep it in memory only. */
   ledgerPath?: string;
   /** Recorded in every entry: the git revision of the code under test. */
@@ -193,6 +198,8 @@ export class ImprovementLoop {
       const mean = worsen.reduce((a, b) => a + b, 0) / worsen.length;
       if (mean > g.maxWorsening) reasons.push(`guard ${g.metric} worsened by ${mean.toFixed(4)} (limit ${g.maxWorsening})`);
     }
+
+    if (this.opts.judge) reasons.push(...this.opts.judge(candidate, baseline));
 
     if (reasons.length > 0) return this.record(p, { proposalId: p.id, verdict: "rejected", reasons, baseline, candidate, primaryDeltas, meanPrimaryDelta, promoted: false });
     this.approved = candidateConfig;

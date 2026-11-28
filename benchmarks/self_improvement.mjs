@@ -29,8 +29,9 @@ const dist = resolve(opt('dist', 'dist'));
 const LEDGER = resolve(opt('ledger', 'benchmarks/results/self-improvement.jsonl'));
 const REVISION = opt('revision', 'unknown');
 const base = pathToFileURL(`${dist}/models && skills/core/`).href;
-const { LearnedToolSelector } = await import(base + 'tool-selector.js');
+const { LearnedToolSelector, NO_TOOL } = await import(base + 'tool-selector.js');
 const { ImprovementLoop } = await import(base + 'improvement-loop.js');
+const { ratingJudge, RATING_KEYS } = await import(base + 'model-rating.js');
 
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const shuffled = (arr, seed) => { const r = rng(seed), a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -62,12 +63,29 @@ const evaluator = {
       if (ok) right++;
       if (s.kind === 'tool' && s.tool !== t.gold) wrongAct++;
     }
-    return { score: right / test.length, falseActivationRate: wrongAct / test.length };
+    // Rating inputs. Parameters: one coefficient per class per training example (alpha), one intercept per class,
+    // and the mean vector. All are stored as float32 in a real deployment, so each counts as 32 bits.
+    // Every coefficient and the mean are readable, so all units count as inspectable. Every selection returns a
+    // typed reason (tool, none or a named abstention), so every decision carries provenance.
+    const classes = new Set(train.map((t) => t.tool ?? NO_TOOL)).size;
+    const units = classes * train.length + classes + Number(config.dims ?? 1024);
+    return {
+      score: right / test.length,
+      falseActivationRate: wrongAct / test.length,
+      [RATING_KEYS.complexityBits]: units * 32,
+      [RATING_KEYS.power]: right / test.length,
+      [RATING_KEYS.inspectableUnits]: units,
+      [RATING_KEYS.totalUnits]: units,
+      [RATING_KEYS.decisionsWithProvenance]: test.length,
+      [RATING_KEYS.totalDecisions]: test.length,
+    };
   },
 };
 
 if (existsSync(LEDGER)) rmSync(LEDGER);
-const loop = new ImprovementLoop({ evaluator, baseline: { ridge: 1e-3, dims: 1024 }, minGain: 0.01, ledgerPath: LEDGER, revision: REVISION });
+// The model rating is a second gate: a candidate may not make the selector less transparent. Complexity is recorded in
+// every ledger entry but not capped, because the owner has not yet said which direction complexity should go.
+const loop = new ImprovementLoop({ evaluator, baseline: { ridge: 1e-3, dims: 1024 }, minGain: 0.01, ledgerPath: LEDGER, revision: REVISION, judge: ratingJudge({ minTransparencyDelta: 0 }) });
 
 const proposals = [];
 for (const dims of [256, 512, 2048, 4096]) for (const ridge of [1e-4, 1e-2, 1e-1, 1, 10]) proposals.push({ id: `grid:dims=${dims},ridge=${ridge}`, description: `embedding ${dims}, ridge ${ridge}`, changes: { dims, ridge }, source: 'grid' });
