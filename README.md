@@ -35,10 +35,10 @@ Everything about the platforms, what is shared, what is limited and what is unfi
 ## Quick Start
 
 ```bash
-git clone https://github.com/zach909/.my-ai.git
+git clone https://github.com/zach909/my-ai.git
 
 cd .my-ai
-
+sudo chown -R zach:zach /home/you/my-ai
 # Installation
 ./scripts/install.sh
 
