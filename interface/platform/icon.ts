@@ -126,7 +126,7 @@ export function renderIconPng(size: number, maskable = false): Buffer {
   }
 
   // The cord: a closed wave, six rises and six dips, tips tucked in and the middle eased out, tilted toward the viewer.
-  const N = 360;
+  const N = size >= 96 ? 1100 : 540;   // dense enough that the cord reads as one smooth tube, not stacked beads
   const R = W * 0.36 * fit;
   const tilt = 1.02;                          // radians about the x axis
   const ct = Math.cos(tilt), st = Math.sin(tilt);
@@ -157,11 +157,38 @@ export function renderIconPng(size: number, maskable = false): Buffer {
   };
   drawBeads(false);
 
-  // The sphere in the centre.
+  // The sphere in the centre: a dark glass ball with a coral rim light, and the agent inside it, the small green
+  // many-eyed shoggoth with its yellow smiley (the same mark the page draws, simplified to read at icon size).
   disc(cx, cy, sphereR, (nx, ny, nz) => {
     const lam = Math.max(0, nx * light[0] + ny * light[1] + nz * light[2]);
-    return [(26 + 70 * lam) / 255, (13 + 38 * lam) / 255, (16 + 38 * lam) / 255];
+    const rim = Math.pow(1 - nz, 3) * 0.55;
+    return [(30 + 60 * lam) / 255 + rim * 0.89, (14 + 30 * lam) / 255 + rim * 0.5, (18 + 32 * lam) / 255 + rim * 0.44];
   }, 1.6);
+  const green = (nx: number, ny: number, nz: number): [number, number, number] => {
+    const lam = Math.max(0, nx * light[0] + ny * light[1] + nz * light[2]);
+    const k = 0.55 + 0.6 * lam;
+    return [Math.min(1, 0.56 * k), Math.min(1, 0.89 * k), Math.min(1, 0.66 * k)];
+  };
+  const flat = (r: number, g: number, b: number) => () => [r, g, b] as [number, number, number];
+  const body = sphereR * 0.6;
+  for (let t = 0; t < 7; t++) {                    // tentacles: small lobes round the body, drooping a little
+    const a = Math.PI * 0.12 + (t / 7) * Math.PI * 2;
+    const reach = body * (1.0 + 0.1 * Math.sin(t * 2.3));
+    disc(cx + Math.cos(a) * reach, cy + Math.sin(a) * reach * 0.95 + body * 0.06, body * 0.36, green, 1.2);
+  }
+  disc(cx, cy + body * 0.04, body, green, 1.4);
+  for (const [ex, ey, er] of [[-0.62, -0.5, 0.17], [0.66, -0.36, 0.14], [-0.74, 0.12, 0.11], [0.7, 0.28, 0.12]]) {  // eyes
+    disc(cx + ex * body, cy + ey * body, er * body, flat(0.97, 0.95, 0.9), 0.9);
+    disc(cx + ex * body, cy + ey * body, er * body * 0.5, flat(0.1, 0.07, 0.08), 0.8);
+  }
+  const fx = cx, fy = cy + body * 0.1, fr = body * 0.5;   // the yellow smiley
+  disc(fx, fy, fr, (nx, ny, nz) => { const k = 0.8 + 0.25 * Math.max(0, nx * light[0] + ny * light[1] + nz * light[2]); return [Math.min(1, 0.98 * k), Math.min(1, 0.84 * k), Math.min(1, 0.36 * k)]; }, 1.2);
+  disc(fx - fr * 0.36, fy - fr * 0.22, fr * 0.11, flat(0.2, 0.12, 0.08), 0.8);
+  disc(fx + fr * 0.36, fy - fr * 0.22, fr * 0.11, flat(0.2, 0.12, 0.08), 0.8);
+  for (let i = 0; i <= 10; i++) {
+    const a = Math.PI * (0.18 + 0.64 * (i / 10));
+    disc(fx + Math.cos(a) * fr * 0.55, fy + Math.sin(a) * fr * 0.5 - fr * 0.05, Math.max(0.9, fr * 0.07), flat(0.2, 0.12, 0.08), 0.7);
+  }
 
   drawBeads(true);
 

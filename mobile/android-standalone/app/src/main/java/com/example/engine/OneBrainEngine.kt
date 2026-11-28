@@ -742,6 +742,15 @@ class OneBrainEngine(private val context: Context) {
         brain.exportDelta()
     }
 
+    /** Labels of the islands a shared dream would contain, for the confirmation shown before sharing. */
+    fun dreamLabels(): List<String> = synchronized(lock) {
+        brain.dreamedIslands().map { it.label }
+    }
+
+    fun exportDreamsJson(): String = synchronized(lock) {
+        brain.exportDreams()
+    }
+
     fun importMeshDeltaJson(raw: String): Pair<Boolean, String> = synchronized(lock) {
         brain.mergeDelta(raw)
     }
