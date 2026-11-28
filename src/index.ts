@@ -552,6 +552,36 @@ export class NeuroclawSystem {
     this.architecture = new ArchitectureMapper();
     this.performance = new PerformanceMonitor();
     this.registerArchitecture();
+    // Map Maker: the map is always on. Map once now, then refresh in the
+    // background; the refresh does nothing when no call has been measured since
+    // the last one, so an idle app spends no CPU (and no battery) on it.
+    this.autoMapTick();
+    if (!process.env.VITEST && process.env.NEUROCLAW_AUTOMAP !== "0") {
+      const every = Number(process.env.NEUROCLAW_AUTOMAP_INTERVAL_MS) || 60_000;
+      (setInterval(() => this.autoMapTick(), every) as { unref?: () => void }).unref?.();
+    }
+  }
+
+  /** Calls measured when the map was last refreshed, and when (in memory only: no disk writes). */
+  private autoMap = { calls: -1, at: 0, refreshes: 0 };
+
+  /**
+   * Refresh the architecture map (bottlenecks and waste) if anything was
+   * measured since the last refresh. Returns true when it refreshed.
+   */
+  autoMapTick(): boolean {
+    let calls = 0;
+    for (const st of this.componentCallStats.values()) calls += st.calls;
+    if (calls === this.autoMap.calls) return false;
+    this.architecture.identifyBottlenecks();
+    this.architecture.identifyWaste();
+    this.autoMap = { calls, at: Date.now(), refreshes: this.autoMap.refreshes + 1 };
+    return true;
+  }
+
+  /** When the always-on map last refreshed, and how many times it has. */
+  mapStatus(): { lastRefreshAt: number; refreshes: number } {
+    return { lastRefreshAt: this.autoMap.at, refreshes: this.autoMap.refreshes };
   }
 
   /** Save a named, reusable prompt template -- "do this prompt again" without retyping it. */
