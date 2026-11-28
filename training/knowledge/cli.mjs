@@ -10,6 +10,7 @@ import { deserialize } from './retrieval.mjs';
 import { gate, classifyText, classifyCode } from './safety.mjs';
 import { writeJson, dir, path, writeFileSync, REPO, today } from './util.mjs';
 import { writeReport } from './report.mjs';
+import { compose, toMidi, toWav, describe } from './compose.mjs';
 
 const [cmd, ...args] = process.argv.slice(2);
 const J = (o) => console.log(JSON.stringify(o, null, 2));
@@ -41,6 +42,13 @@ const commands = {
   async research() { const { research } = await import('./research.mjs'); J(research(need(args.join(' '), 'research "<question>"'))); },
   async verify() { const { verify } = await import('./research.mjs'); const p = currentRecord('verifier.claims')?.params; J(verify(need(args.join(' '), 'verify "<claim>"'), p)); },
   async check() { const t = need(args.join(' '), 'check "<text or request>"'); J({ text: classifyText(t), gate: gate(t) }); },
+  async compose() { // compose [--seed N] [--mode major|minor|dorian|mixolydian] [--bars N] [--bpm N] [--out DIR]
+    const o = {}; for (let i = 0; i < args.length; i += 2) o[args[i].replace(/^--/, '')] = args[i + 1];
+    const seed = o.seed !== undefined ? Number(o.seed) : Math.floor(Math.random() * 2 ** 31);    // unseeded call = a new random piece; the seed is printed so it can be reproduced
+    const p = compose({ seed, mode: o.mode || null, bars: o.bars ? Number(o.bars) : 8, bpm: o.bpm ? Number(o.bpm) : null });
+    const out = o.out || dir('compositions'); writeFileSync(path.join(out, `piece-${seed}.mid`), toMidi(p)); writeFileSync(path.join(out, `piece-${seed}.wav`), toWav(p));
+    console.log(describe(p)); console.log('wrote', path.join(out, `piece-${seed}.mid`), 'and .wav');
+  },
   async report() { console.log(writeReport(await evalAll())); },
   async run() {
     await commands.sources(); await commands.collect(); await commands.validate(); extractAll(); trainAll(); const ev = await evalAll(); console.log(writeReport(ev));
