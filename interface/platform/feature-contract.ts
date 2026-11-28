@@ -356,6 +356,13 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-judge.test.ts')],
   },
   {
+    id: 'lab', title: 'Virtual laboratory',
+    description: 'A sealed, simulated bench where the AI runs experiments on a world with hidden constants: noisy readings, a budget and a clock, safety ratings that break equipment if ignored, and a score for recovering the constants. Nothing in it touches the computer.',
+    implementation: ['interface/lab-routes.ts', 'training/lab/lab.mjs', 'training/lab/physics.mjs', 'training/lab/scientists.mjs', 'training/lab/run.mjs'],
+    routes: ['GET /api/lab', 'POST /api/lab/new', 'POST /api/lab/act', 'GET /api/lab/notebook', 'POST /api/lab/baseline'],
+    needs: [['localEngine']], tests: [n('test/training/lab.test.mjs'), n('test/platform/lab-routes.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+  },
+  {
     id: 'plugin-host', title: 'Plugin host (route groups as plugins)', description: 'The server’s route groups (platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons) are plugins that start in dependency order and own their routes. The owner can list them and turn them off and on; the choice is kept across restarts. Plugins that guard the agent (accounts, safety, agent, and the plugin list itself) can be turned off only by the owner, never by the agent acting on its own, and turning off a plugin closes the paths it kept open past the password gate.',
     implementation: ['plugin_manager/host.ts', 'interface/server-plugins.ts', 'interface/web-server.ts'],
     routes: ['GET /api/plugin-host'],
