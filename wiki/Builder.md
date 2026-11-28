@@ -69,6 +69,33 @@ node extension-builder/build-corpus-extension.mjs --verify extension-builder/ext
   only tested against a stand-in builder (`test/platform/corpus-extension.test.mjs`); run it against the real
   engine once the backend is built.
 
+## Running a trained project, and composing skills (`extension-builder/compose.js`)
+
+The builder defines each neuron and trains it. Two pieces make that useful for more complex behaviour:
+
+- **`builder.answer(projectId, question)` and `builder.trace(...)`** run a trained project. They return the trained response
+  the neuron readouts are closest to, with a `margin` (best minus runner-up) so a caller can refuse a close call. A trained
+  neuron is a **lookup**: measured at 27 of 30 recalled and 1 of 40 on new questions, so it does not generalise on its own.
+- **`SkillGraph` (`compose.js`)** is where complexity comes from. A skill is a **code skill** (a function, exact and general),
+  a **learned skill** (a trained neuron, which refuses a low-margin answer) or a **composed skill** (other skills run in order,
+  each output feeding the next). Composed skills nest, and a skill must exist before it is used, so a cycle cannot be written.
+  Every skill can carry tests; `verify()` / `verifyAll()` **run** them and list skills with none instead of trusting them.
+
+```js
+const g = new SkillGraph({ builder, projectId })
+g.defineCode('parse', parseQuestion).defineCode('lookup', scaleLookup).defineCode('say', (n) => `MIDI ${n}`)
+g.compose('noteOf', ['parse', 'lookup', 'say'])
+g.contract('noteOf', [{ input: 'Which note is degree 2 of major starting on 60?', expected: 'MIDI 64' }])
+g.verify('noteOf')          // { verified: true, passed: 1, total: 1 }
+g.run('noteOf', question)   // { ok, output, trace: [every step's input and output], failedAt }
+```
+
+Tests: `test/platform/skill-graph.test.mjs` (8; the real-builder one needs the compiled backend and skips without it). In the
+tests a composed music skill answers every one of 275 key, mode and degree combinations exactly, none of them trained, because
+the steps are code. Limits: the code steps are written by hand, so this adds structure and checking, not a model that learns
+to compose; a learned step is still only a lookup. Not built from the spec: the visual editor panels, the `.extpkg`
+format and the installer.
+
 ## Verifying it
 
 - `python main.py demo` (`test_integration.py`, §3) saves a project un-quantized, installs it quantized, confirms the installed file is smaller, and reloads the installed extension into a **fresh** model object to prove the behaviour genuinely persisted rather than surviving in memory.
