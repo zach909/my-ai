@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, readdirSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { APP_ID, APP_NAME, APP_SUMMARY, DEB_ARCH, artifactName, copyTree, desktopEntry, normalizeModes, writeFile } from './packaging.mjs';
+import { APP_ID, APP_NAME, APP_SUMMARY, APP_URL, DEB_ARCH, artifactName, copyTree, desktopEntry, metainfo, normalizeModes, writeFile } from './packaging.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ICON_SIZES = [48, 128, 256, 512];
@@ -61,12 +61,13 @@ export async function packageLinux({ stageDir, outDir }) {
     writeFile(path.join(root, 'usr', 'bin', APP_ID), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/desktop-launcher.mjs "$@"\n`, 0o755);
     writeFile(path.join(root, 'usr', 'bin', 'osai'), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/osai.mjs "$@"\n`, 0o755);
     writeFile(path.join(root, 'usr', 'share', 'applications', `${APP_ID}.desktop`), desktopEntry({ exec: APP_ID }));
+    writeFile(path.join(root, 'usr', 'share', 'metainfo', `${APP_ID}.metainfo.xml`), metainfo({ version: info.version, date: String(info.builtAt || new Date().toISOString()).slice(0, 10) }));
     for (const { size, png } of pngs) {
       const f = path.join(root, 'usr', 'share', 'icons', 'hicolor', `${size}x${size}`, 'apps', `${APP_ID}.png`);
       mkdirSync(path.dirname(f), { recursive: true });
       writeFile(f, png);
     }
-    writeFile(path.join(root, 'usr', 'share', 'doc', APP_ID, 'copyright'), `${APP_NAME}: source and licence at https://github.com/zach909/.my-ai\n`);
+    writeFile(path.join(root, 'usr', 'share', 'doc', APP_ID, 'copyright'), `${APP_NAME}: source and licence at ${APP_URL}\n`);
     const control = [
       `Package: ${APP_ID}`,
       `Version: ${info.version}`,
@@ -76,7 +77,7 @@ export async function packageLinux({ stageDir, outDir }) {
       `Installed-Size: ${dirSizeKb(root)}`,
       'Maintainer: zach909 <zach909@users.noreply.github.com>',
       'Depends: libgtk-3-0 | libgtk-3-0t64, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37',
-      'Homepage: https://github.com/zach909/.my-ai',
+      `Homepage: ${APP_URL}`,
       `Description: ${APP_SUMMARY}`,
       ` Runs the NeuroClaw engine on this computer and opens it in its own window, like any`,
       ` other application: no browser and no network port. The window uses the system's`,
@@ -85,8 +86,9 @@ export async function packageLinux({ stageDir, outDir }) {
       '',
     ].join('\n');
     writeFile(path.join(root, 'DEBIAN', 'control'), control);
+    const postinst = `#!/bin/sh\nset -e\nif [ "$1" = configure ] && [ -f /opt/${APP_ID}/app/scripts/install.sh ]; then\n  sh /opt/${APP_ID}/app/scripts/install.sh --system || true\nfi\nexit 0\n`;
     const post = '#!/bin/sh\nset -e\ncommand -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true\ncommand -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true\nexit 0\n';
-    writeFile(path.join(root, 'DEBIAN', 'postinst'), post, 0o755);
+    writeFile(path.join(root, 'DEBIAN', 'postinst'), postinst, 0o755);
     writeFile(path.join(root, 'DEBIAN', 'postrm'), post, 0o755);
     for (const d of ['DEBIAN', 'usr', 'usr/bin', 'usr/share', 'opt']) chmodSync(path.join(root, d), 0o755);
     const out = path.join(outDir, artifactName({ version: info.version, platform: 'linux', arch, ext: 'deb' }));
@@ -106,7 +108,7 @@ export async function packageLinux({ stageDir, outDir }) {
     writeFile(path.join(root, APP_ID), '#!/bin/sh\nhere=$(dirname "$(readlink -f "$0")")\nexec "$here/runtime/node" "$here/app/scripts/desktop-launcher.mjs" "$@"\n', 0o755);
     writeFile(path.join(root, 'osai'), '#!/bin/sh\nhere=$(dirname "$(readlink -f "$0")")\nexec "$here/runtime/node" "$here/app/scripts/osai.mjs" "$@"\n', 0o755);
     writeFile(path.join(root, `${APP_ID}.desktop`), desktopEntry({ exec: '/path/to/neuroclaw' }));
-    writeFile(path.join(root, 'README.txt'), `${APP_NAME} ${info.version}\n\nRun ./neuroclaw (double-click it in your file manager). To add it to your application menu, copy\nneuroclaw.desktop to ~/.local/share/applications/, then change the Exec= line to the full path of ./neuroclaw.\nIt opens its own window using your system's WebKitGTK (package libwebkit2gtk-4.1-0 on Debian and Ubuntu); no browser is needed.\nIt installs nothing and needs no root. Remove it by deleting this folder (your data stays in ~/.neuroclaw).\n`);
+    writeFile(path.join(root, 'README.txt'), `${APP_NAME} ${info.version}\n\nRun ./neuroclaw (double-click it in your file manager). To install it for your user (command, menu entry and icon under ~/.local, no root), run: sh app/scripts/install.sh --user   (undo with --remove). To add it by hand to your application menu, copy\nneuroclaw.desktop to ~/.local/share/applications/, then change the Exec= line to the full path of ./neuroclaw.\nIt opens its own window using your system's WebKitGTK (package libwebkit2gtk-4.1-0 on Debian and Ubuntu); no browser is needed.\nIt installs nothing and needs no root. Remove it by deleting this folder (your data stays in ~/.neuroclaw).\n`);
     for (const { size, png } of pngs.filter((p) => p.size === 256)) writeFile(path.join(root, `${APP_ID}.png`), png);
     const out = path.join(outDir, artifactName({ version: info.version, platform: 'linux', arch, ext: 'tar.gz' }));
     const epoch = process.env.SOURCE_DATE_EPOCH ? `@${process.env.SOURCE_DATE_EPOCH}` : '1980-01-01';

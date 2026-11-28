@@ -605,8 +605,10 @@ install_osai() {
 
 # Atlas: a map of anything (atlas/). Put data in space so redundant data collapses and good data is kept; ask it what it
 # holds, where and when. This installs a launcher (`neuroclaw-atlas`), a private data folder and the agent tool
-# description. It starts NOTHING: no daemon, no schedule, no autostart, nothing at boot. Live cameras stay OFF until
-# the user runs `neuroclaw-atlas capture on`. NEUROCLAW_SKIP_ATLAS=1 skips it.
+# description, then turns on `neuroclaw-atlas autostart` (owner's decision: the map must keep running when the AI is
+# not, or the AI cannot know what happened meanwhile). That is the user's own systemd service or XDG autostart entry:
+# no sudo, no crontab, no shell-profile edit. Live cameras stay OFF until the user runs `neuroclaw-atlas capture on`.
+# NEUROCLAW_SKIP_ATLAS=1 skips all of it; NEUROCLAW_ATLAS_AUTOSTART=0 installs but does not start it at boot.
 ATLAS_BIN_DIR="${ATLAS_BIN_DIR:-$HOME/.local/bin}"
 
 install_atlas() {
@@ -642,6 +644,11 @@ install_atlas() {
     chmod +x "$ATLAS_BIN_DIR/neuroclaw-atlas" 2>/dev/null || true
     echo -e "    ${GREEN}✓ Atlas (a map of anything) installed as $ATLAS_BIN_DIR/neuroclaw-atlas${NC}"
     echo -e "    ${GRAY}Your map lives in $home (private to you). Live cameras are off.${NC}"
+    if [ "${NEUROCLAW_ATLAS_AUTOSTART:-1}" != "0" ]; then
+        "$ATLAS_BIN_DIR/neuroclaw-atlas" autostart on 2>&1 | sed 's/^/    /' || true
+    else
+        echo -e "    ${GRAY}Not started at boot (NEUROCLAW_ATLAS_AUTOSTART=0). Start it with: neuroclaw-atlas autostart on${NC}"
+    fi
     case ":$PATH:" in
         *":$ATLAS_BIN_DIR:"*) ;;
         *) echo -e "    ${YELLOW}Add $ATLAS_BIN_DIR to your PATH to use \`neuroclaw-atlas\`.${NC}" ;;

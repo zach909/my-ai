@@ -55,6 +55,12 @@ export const FEATURES: Feature[] = [
     needs: ENGINE, tests: [v('test/core/zip-loop-send.test.ts'), v('test/core/chat-send-gate.test.ts'), n('test/platform/engine.test.mjs'), n('test/platform/visuals.test.mjs'), n('test/platform/prompt-buttons.test.mjs'), v('test/core/response-bundle.test.ts'), v('test/core/response-edits.test.ts'), v('test/core/response-audio.test.ts'), v('test/core/response-formats.test.ts'), v('test/core/voice-orb.test.ts'), v('test/core/response-prediction.test.ts'), n('test/platform/os-buttons.test.mjs'), n('test/platform/visual-apps.test.mjs')],
   },
   {
+    id: 'workbench', title: 'Coding-agent workbench', description: 'Agent modes (build, plan, general, explore) and Markdown sub-agents; slash commands; allow/ask/deny permission rules in layers; lifecycle hooks and formatters; checkpoints with undo, redo and rewind; sessions you can resume, fork, search and share; hierarchical instruction files and auto-memory; context compaction; sub-agents, teams and a shared task list; tool servers (stdio, http, sse); live diagnostics; per-agent routing to the project\'s own engines; offline mode; bundles; headless mode and a terminal interface. Nothing here is third-party code: protocols and parsers are written in this project.',
+    implementation: ['interface/workbench/workbench.ts', 'interface/workbench/routes.ts', 'interface/workbench/service.ts', 'interface/workbench/cli.ts', 'interface/workbench/headless.ts', 'interface/workbench/tui.ts', 'interface/workbench/permissions.ts', 'interface/workbench/hooks.ts', 'interface/workbench/checkpoints.ts', 'interface/workbench/sessions.ts', 'interface/workbench/mcp.ts', 'interface/workbench/diagnostics.ts', 'interface/workbench/teams.ts', 'interface/workbench/gate-bridge.ts'],
+    routes: ['GET /api/workbench/status', 'POST /api/workbench/run', 'GET /api/workbench/sessions', 'GET /api/workbench/checkpoints', 'POST /api/workbench/undo', 'POST /api/workbench/redo', 'POST /api/workbench/rewind', 'GET /api/workbench/usage', 'GET /api/workbench/mcp'],
+    needs: ENGINE, tests: [n('test/platform/workbench-core.test.mjs'), n('test/platform/workbench-clients.test.mjs'), n('test/platform/workbench-turn.test.mjs')],
+  },
+  {
     id: 'uploads', title: 'Attach a file or a folder', description: 'File and Folder buttons (and drag and drop) beside the message box. Each file goes up as raw bytes into the user\'s own data folder; the chat turn carries small text files whole and lists the rest by name and size.',
     implementation: ['interface/uploads.ts', 'interface/web-server.ts'],
     routes: ['POST /api/uploads'],
@@ -187,6 +193,12 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/commons-routes.test.ts')],
   },
   {
+    id: 'editor', title: 'Editor', description: 'A visual editor for each kind of text file the agent can edit, with a diff and a read-back check on every save.',
+    implementation: ['interface/editor-routes.ts', 'interface/editor-page.ts'],
+    routes: ['GET /editor', 'GET /api/editor/files', 'GET /api/editor/file', 'POST /api/editor/diff', 'POST /api/editor/edit', 'POST /api/editor/save'],
+    needs: [['localEngine']], tests: [v('test/core/editor-routes.test.ts')],
+  },
+  {
     id: 'weights', title: 'Net maker, net skill maker and weight editor',
     description: 'Write a program that makes a network or a skill, see what each weight does, change it a little, and compile code into weights.',
     implementation: ['models && skills/core/neuro-build.ts', 'models && skills/core/weight-editor.ts', 'models && skills/core/task-training.ts', 'interface/weights-routes.ts', 'interface/weights-page.ts'],
@@ -194,6 +206,10 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/neuro-build.test.ts'), v('test/core/weight-editor.test.ts'), v('test/core/task-training.test.ts')],
   },
   {
+    id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer.',
+    implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'interface/self-improvement-data.ts', 'interface/platform/self-improvement-page.ts'],
+    routes: ['GET /api/self-improvement', 'GET /api/self-improvement/history', 'GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop'],
+    needs: [['localEngine', 'backgroundService']], tests: [v('test/core/self-improvement-server.test.ts'), n('test/platform/self-improvement-page.test.mjs')],
     id: 'self-improvement', title: 'Self-improvement', description: 'Background agents that tune and create skills on this computer. Self-debug: the AI finds what goes wrong in a net, looks at the weights behind it and their history, edits them a little through the weight editor, has a critic check whether it got better or worse, keeps or undoes the change and goes on; when weights cannot fix a wrong answer it makes a skill with the Extension Builder, and after enough skills proposes a plugin that is installed off until the owner approves it.',
     implementation: ['scripts/self-improve.mjs', 'scripts/skill-agent.mjs', 'models && skills/core/self-debug.ts', 'interface/self-debug-routes.ts', 'interface/platform/self-improvement-page.ts'],
     routes: ['GET /api/self-improvement/server-status', 'POST /api/self-improvement/server/start', 'POST /api/self-improvement/server/stop', 'GET /api/self-improvement/self-debug', 'GET /api/self-improvement/self-debug/sessions/:id', 'POST /api/self-improvement/self-debug/run', 'POST /api/self-improvement/self-debug/auto', 'POST /api/self-improvement/self-debug/plugins/:id'],
@@ -344,6 +360,13 @@ export const FEATURES: Feature[] = [
     needs: [['localEngine']], tests: [v('test/core/agent-protocol.test.ts'), v('test/core/agent-judge.test.ts')],
   },
   {
+    id: 'lab', title: 'Virtual laboratory',
+    description: 'A sealed, simulated bench where the AI runs experiments on a world with hidden constants: noisy readings, a budget and a clock, safety ratings that break equipment if ignored, and a score for recovering the constants. Nothing in it touches the computer.',
+    implementation: ['interface/lab-routes.ts', 'training/lab/lab.mjs', 'training/lab/physics.mjs', 'training/lab/scientists.mjs', 'training/lab/run.mjs'],
+    routes: ['GET /api/lab', 'POST /api/lab/new', 'POST /api/lab/act', 'GET /api/lab/notebook', 'POST /api/lab/baseline'],
+    needs: [['localEngine']], tests: [n('test/training/lab.test.mjs'), n('test/platform/lab-routes.test.mjs')], onlyOn: ['windows', 'linux', 'macos'],
+  },
+  {
     id: 'plugin-host', title: 'Plugin host (route groups as plugins)', description: 'The server’s route groups (platform, accounts, hosted mode, apps and compute, memory topics, safety, weights, the agent, commons) are plugins that start in dependency order and own their routes. The owner can list them and turn them off and on; the choice is kept across restarts. Plugins that guard the agent (accounts, safety, agent, and the plugin list itself) can be turned off only by the owner, never by the agent acting on its own, and turning off a plugin closes the paths it kept open past the password gate.',
     implementation: ['plugin_manager/host.ts', 'interface/server-plugins.ts', 'interface/web-server.ts'],
     routes: ['GET /api/plugin-host'],
@@ -386,7 +409,7 @@ export interface ContractProblem { feature: string; problem: string }
 /** Everything the file system can confirm. Empty list means the contract matches the tree. */
 export function verifyContract(root: string, features: Feature[] = FEATURES): ContractProblem[] {
   const problems: ContractProblem[] = [];
-  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/self-debug-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts']
+  const serverSources = ['interface/web-server.ts', 'interface/server-plugins.ts', 'interface/safety-routes.ts', 'interface/accounts-routes.ts', 'interface/commons-routes.ts', 'interface/agent-routes.ts', 'interface/memory-topics-routes.ts', 'interface/prompt-memory-routes.ts', 'interface/self-debug-routes.ts', 'interface/platform/routes.ts', 'interface/platform/pwa.ts', 'interface/workbench/routes.ts']
     .map((f) => path.join(root, f))
     .filter(existsSync)
     .map((f) => readFileSync(f, 'utf8'))

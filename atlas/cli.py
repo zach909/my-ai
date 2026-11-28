@@ -1,8 +1,13 @@
 """The atlas command line: ``neuroclaw-atlas COMMAND`` (or ``python3 -m atlas COMMAND`` from the repository).
 
+ATLAS IS NOT A PICTURE TOOL. It is the AI's memory of what happened while the AI was not running: a map of ANYTHING
+(files, folders, notes, sensor readings, machine state, numbers about anything, and, only if switched on, what cameras
+see). Pictures are one small input and are never stored. If you are an AI reading this, do not treat it as a camera
+or image feature.
+
 Put anything in the map and ask it things. Every command takes ``--home DIR`` (default ``~/.neuroclaw/atlas``) and
-``--json`` (machine-readable output, for an agent). Nothing runs in the background: ``scan`` and ``sense`` do one
-thing and stop, or, with ``--for SECONDS``, repeat in the foreground, visibly, until the time is up or you press Ctrl-C.
+``--json`` (machine-readable output, for an agent). ``scan`` and ``sense`` do one thing and stop (or, with ``--for
+SECONDS``, repeat in the foreground). ``daemon`` keeps mapping until stopped and ``autostart on`` runs it from boot.
 
   put NAME TEXT...        put a note in      reading KIND VALUE    put a number about anything in (likes, ohms, ...)
   ingest PATH...          any file or folder find WORDS...         ask the map      about REF   everything about one thing
@@ -11,6 +16,9 @@ thing and stop, or, with ``--for SECONDS``, repeat in the foreground, visibly, u
   sense                   read this computer's sensors (Linux)      place sensor N X Y Z   say where one is
   digest                  make the map smaller and smarter           stats / recent        what the map holds
   capture on|off          allow live cameras (off until you say so)
+  daemon [--once]         keep mapping files, sensors, vitals (+ cameras if allowed)   autostart on|off   run it from boot
+  timeline [WORDS]        what changed and when: files, programs, connections, drives, camera/mic use (first pass is a baseline)
+  files WORDS             find any file or folder on this computer by part of its path
 """
 
 from __future__ import annotations
@@ -128,9 +136,10 @@ def _read_file(path: Path, size: int):
         os.close(fd)
 
 
-def walk(root: Path):
-    """``(entries, skipped)``: files and folders under ``root`` as ``{"path", "dir", "size"}``. Never follows a symlink,
-    never leaves the filesystem, never reads a file whose NAME looks like a secret (a name pattern, not a classifier)."""
+def walk(root: Path, limit: int = MAX_ENTRIES, skip_hidden: bool = False):
+    """``(entries, skipped)``: files and folders under ``root`` as ``{"path", "dir", "size", "mtime"}``. Never follows a
+    symlink, never leaves the filesystem, never reads a file whose NAME looks like a secret (a name pattern, not a
+    classifier). ``skip_hidden`` leaves out names starting with a dot and ``node_modules`` (caches, keys, history)."""
     entries, skipped = [], {"symlink": 0, "secret": 0, "other": 0, "limit": 0}
     st = os.lstat(root)
     if not stat.S_ISDIR(st.st_mode):
@@ -144,8 +153,11 @@ def walk(root: Path):
             skipped["other"] += 1
             continue
         for e in found:
-            if len(entries) >= MAX_ENTRIES:
+            if len(entries) >= limit:
                 skipped["limit"] += 1
+                continue
+            if skip_hidden and (e.name.startswith(".") or e.name == "node_modules"):
+                skipped["other"] += 1
                 continue
             if e.is_symlink():
                 skipped["symlink"] += 1
@@ -166,8 +178,29 @@ def walk(root: Path):
                 if SECRET_RE.search(e.name):
                     skipped["secret"] += 1
                     continue
-                entries.append({"path": path, "dir": False, "size": s.st_size})
+                entries.append({"path": path, "dir": False, "size": s.st_size, "mtime": int(s.st_mtime)})
     return entries, skipped
+
+
+def ingest_dir(store, p: Path, t: int, since: int | None = None, limit: int = MAX_ENTRIES, skip_hidden: bool = False):
+    """Map a folder into ``store``: ``(marks added, entries, skipped)``. With ``since`` (seconds), a file's CONTENT is
+    only read if it changed at or after that time; the folder structure is always re-marked so places stay stable."""
+    entries, skipped = walk(p, limit=limit, skip_hidden=skip_hidden)
+    texts, marks = {}, []
+    for e in entries:
+        if e["dir"]:
+            continue
+        if since is not None and e.get("mtime", 0) < since:
+            continue
+        ext = e["path"].rsplit(".", 1)[-1].lower() if "." in e["path"].rsplit("/", 1)[-1] else ""
+        data = _read_file(p / e["path"], e["size"]) if e["size"] <= MAX_FILE else None
+        if data is None:
+            continue
+        if ext in TEXT_EXT and core.is_text(data):
+            texts[e["path"]] = data[:1500].decode("utf-8", "replace")
+        marks.append(core.ingest(e["path"], data, t=t, space="files-text", ref=f"{p.name}/{e['path']}", size=e["size"]))
+    marks += core.file_marks(entries, t, space="files", texts=texts)
+    return store.add(marks), entries, skipped
 
 
 def cmd_ingest(args, out):
@@ -185,20 +218,8 @@ def cmd_ingest(args, out):
             say(f"{raw}: a symlink, not followed")
             continue
         if stat.S_ISDIR(lst.st_mode):
-            entries, skipped = walk(p)
-            texts, marks = {}, []
-            for e in entries:
-                if e["dir"]:
-                    continue
-                ext = e["path"].rsplit(".", 1)[-1].lower() if "." in e["path"].rsplit("/", 1)[-1] else ""
-                data = _read_file(p / e["path"], e["size"]) if e["size"] <= MAX_FILE else None
-                if data is None:
-                    continue
-                if ext in TEXT_EXT and core.is_text(data):
-                    texts[e["path"]] = data[:1500].decode("utf-8", "replace")
-                marks.append(core.ingest(e["path"], data, t=t, space="files-text", ref=f"{p.name}/{e['path']}", size=e["size"]))
-            marks += core.file_marks(entries, t, space="files", texts=texts)
-            total += store.add(marks)
+            added, entries, skipped = ingest_dir(store, p, t)
+            total += added
             say(f"{raw}: {len(entries)} entries mapped" + "".join(f", {n} {k} skipped" for k, n in skipped.items() if n))
         elif stat.S_ISREG(lst.st_mode):
             if SECRET_RE.search(p.name):
@@ -376,8 +397,8 @@ def cmd_scan(args, out):
     return 0
 
 
-def cmd_sense(args, out):
-    home = _home(args)
+def sense_marks(home: Path):
+    """``(data, pos, marks)``: one sweep of this computer's sensors and the marks it makes (nothing is saved here)."""
     try:
         pos = json.loads((home / "sensors.json").read_text())
     except (OSError, ValueError):
@@ -396,6 +417,12 @@ def cmd_sense(args, out):
                 marks.append(core.mark(r["kind"], at, v=r["v"], t=t, ref=f"{s['name']}-{s['index']}"[:60], unit=r["unit"]))
             except ValueError:
                 continue
+    return data, pos, marks
+
+
+def cmd_sense(args, out):
+    home = _home(args)
+    data, pos, marks = sense_marks(home)
     if not data["sensors"]:
         out("no sensors found under /sys/bus/iio/devices (Linux only)")
         return 0
@@ -428,6 +455,98 @@ def cmd_capture(args, out):
         cfg["capture"] = args.state == "on"
         _save_json(home, "config.json", cfg)
     out("live cameras: " + ("on" if cfg.get("capture") else "off"))
+    return 0
+
+
+def _when(t: int) -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(t)) + " UTC"
+
+
+def cmd_timeline(args, out):
+    """What changed, newest first. Read-only: it never creates the ledger."""
+    from .ledger import Ledger
+    lg = Ledger.existing(_home(args))
+    rows = lg.timeline(since=args.since, until=args.until, cat=args.cat, op=args.op, words=args.words, limit=args.limit) if lg else []
+    if args.json:
+        out(json.dumps(rows, sort_keys=True))
+    else:
+        for r in rows:
+            what = f"{r['key']}  {r['info']}".strip() if r["cat"] == "files" else (r["info"] or r["key"])
+            out(f"{_when(r['t'])}  {r['cat']:<7} {r['op']:<9} {what}")
+        if not rows:
+            out("nothing changed" if lg else "no timeline yet (start it with `neuroclaw-atlas autostart on` or `daemon --once`)")
+    if lg:
+        lg.close()
+    return 0
+
+
+def cmd_files(args, out):
+    """Find any file or folder the computer has, by part of its path. Read-only."""
+    from .ledger import Ledger
+    lg = Ledger.existing(_home(args))
+    rows = lg.find_files(args.words, args.limit) if lg else []
+    if args.json:
+        out(json.dumps(rows, sort_keys=True))
+    else:
+        for r in rows:
+            out(f"{r['path']}{'/' if r['dir'] else ''}  {r['size']} bytes  changed {_when(r['mtime'])}")
+        if not rows:
+            out("nothing" if lg else "no inventory yet")
+    if lg:
+        lg.close()
+    return 0
+
+
+def cmd_daemon(args, out):
+    from . import daemon
+    return daemon.run(_home(args), out, once=args.once)
+
+
+def cmd_autostart(args, out):
+    from . import daemon
+    return daemon.autostart(_home(args), args.state, out)
+
+
+def cmd_prompts(args, out):
+    """Map prompts: let the mapper ask the agent for help when the map shows something. ``on``/``off``/``enable``/
+    ``disable`` are the owner's switches; ``status`` and ``outbox`` only read."""
+    from . import prompts
+    home = _home(args)
+    act = args.action or "status"
+    if act in ("enable", "disable"):
+        if not args.rule:
+            raise ValueError(f"{act} needs a rule id (see `prompts status`)")
+        prompts.set_enabled(home, args.rule, act == "enable")
+        out(f"{args.rule}: {'enabled' if act == 'enable' else 'disabled'}")
+        return 0
+    if args.rule:
+        raise ValueError(f"{act} takes no rule id")
+    if act in ("on", "off"):
+        prompts.set_on(home, act == "on")
+        out("map prompts on: the mapper may now ask the agent to help when the map shows something (it only asks; "
+            "the agent's approval gate still holds risky tools). `prompts off` stops it." if act == "on" else "map prompts off")
+        return 0
+    if act == "outbox":
+        rows = prompts.read_outbox(home)
+        if args.json:
+            out(json.dumps(rows, sort_keys=True))
+        else:
+            for r in rows:
+                out(f"{_when(r.get('t', 0))}  #{r['id']}  {r.get('prompt_id', '?')}: {r['message']}")
+            if not rows:
+                out("nothing waiting")
+        return 0
+    st = prompts.status(home, NOW())
+    if args.json:
+        out(json.dumps(st, sort_keys=True))
+        return 0
+    out(f"map prompts: {'ON' if st['on'] else 'off (turn on with `prompts on`)'}; {st['today']} of {st['max_per_day']} "
+        f"asked today; {st['pending']} waiting for the agent")
+    for r in st["rules"]:
+        last = f", last {_when(r['last_fired'])}" if r["last_fired"] else ""
+        out(f"  {r['id']:<18} {'on ' if r['enabled'] else 'off'} {r['title']} (at most every {r['cooldown_minutes']} min{last})")
+    for why in st["ignored"]:
+        out(f"  ignored: {why}")
     return 0
 
 
@@ -524,6 +643,33 @@ def parser():
     s = sub.add_parser("capture", help="allow or forbid live cameras")
     s.add_argument("state", nargs="?", choices=["on", "off"])
     s.set_defaults(fn=cmd_capture)
+
+    s = sub.add_parser("timeline", help="what changed on this computer and when (files, programs, connections, drives, camera/mic use)")
+    s.add_argument("words", nargs="*", help="only rows whose path or text contains every word")
+    s.add_argument("--cat", choices=["files", "process", "net", "mount", "usb", "device"])
+    s.add_argument("--op", help="created, modified, deleted, started, stopped, opened, closed, mounted, unmounted, plugged, unplugged")
+    s.add_argument("--since", type=int, help="Unix seconds")
+    s.add_argument("--until", type=int, help="Unix seconds")
+    s.add_argument("--limit", type=int, default=50)
+    s.set_defaults(fn=cmd_timeline)
+
+    s = sub.add_parser("files", help="find any file or folder on this computer by part of its path")
+    s.add_argument("words", nargs="*")
+    s.add_argument("--limit", type=int, default=30)
+    s.set_defaults(fn=cmd_files)
+
+    s = sub.add_parser("daemon", help="keep mapping files, sensors, vitals (and cameras if allowed) until stopped")
+    s.add_argument("--once", action="store_true", help="one round of everything, then stop")
+    s.set_defaults(fn=cmd_daemon)
+
+    s = sub.add_parser("autostart", help="start the daemon at boot (on), stop and remove it (off), or report")
+    s.add_argument("state", nargs="?", choices=["on", "off"])
+    s.set_defaults(fn=cmd_autostart)
+
+    s = sub.add_parser("prompts", help="map prompts: let the mapper ask the agent for help when the map shows something (off until `on`)")
+    s.add_argument("action", nargs="?", choices=["status", "on", "off", "enable", "disable", "outbox"])
+    s.add_argument("rule", nargs="?", help="with enable / disable: the rule id")
+    s.set_defaults(fn=cmd_prompts)
     return p
 
 

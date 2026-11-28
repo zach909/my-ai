@@ -59,15 +59,18 @@ import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
 import { builderPage } from './platform/builder-page.js';
 import { selfImprovementPage } from './platform/self-improvement-page.js';
+import { isSelfImprovementTab, selfImprovementTab, type Ledgers } from './self-improvement-data.js';
 import { appVersion } from './platform/version.js';
 import { startScreenDonor } from '../models && skills/core/data-donor.js';
 import { SHARING_PAGE } from './sharing-page.js';
 import { HIVE_PAGE } from './hive-page.js';
 import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
+import { EDITOR_PAGE } from './editor-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
 import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
+import { startMapPrompts } from '../models && skills/core/map-prompts.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { PromptMemory } from '../models && skills/core/prompt-memory.js';
 import { isAccountsPublicRoute } from './accounts-routes.js';
@@ -1708,6 +1711,7 @@ export class WebServer {
   private stopBackgroundHives: (() => void) | null = null;
   private stopExperts: (() => void) | null = null;
   private stopScheduler: (() => void) | null = null;
+  private stopMapPrompts: (() => void) | null = null;
   private decoyTimer: ReturnType<typeof setInterval> | null = null;
   private healTimer: ReturnType<typeof setInterval> | null = null;
   private port = 0;
@@ -2039,6 +2043,16 @@ export class WebServer {
         }),
       });
     }
+    // Map prompts (map-prompts.ts): the always-on mapper (atlas/) asks the agent to help when it notices something on
+    // this computer, e.g. a nearly flat battery. It is off until the owner runs `neuroclaw-atlas prompts on`. A request
+    // goes to the agent by its normal path, so risky tools still ask first. The map is the owner's computer, so only
+    // the owner's pass delivers. NEUROCLAW_MAP_PROMPTS=0 turns this off.
+    if (process.env.NEUROCLAW_MAP_PROMPTS !== '0' && !process.env.VITEST) {
+      this.stopMapPrompts = startMapPrompts({
+        each: run => this.eachPerson(async () => { if (isOwnerOrAdmin()) await run(); }),
+        deps: async () => ({ act: m => withTimeout(this.runner.generate(m)) }),
+      });
+    }
     // Same reasoning, same placement: loading every saved extension is
     // real work (parsing N files, remembering M neurons) that only makes
     // sense to pay once per actual live server process, not once per
@@ -2359,6 +2373,8 @@ export class WebServer {
     this.stopExperts = null;
     this.stopScheduler?.();
     this.stopScheduler = null;
+    this.stopMapPrompts?.();
+    this.stopMapPrompts = null;
     if (this.routePluginHost) {
       const started = this.routePluginHost;
       this.routePluginHost = null;
@@ -2419,6 +2435,25 @@ export class WebServer {
    * the right thing for a 500 and the wrong thing for a body it will never
    * fix, and monitoring counts it against this server's error rate.
    */
+  /** The three local ledgers behind the Self-improvement page. A missing or unreadable one is empty, not an error. */
+  private async readSelfImprovementLedgers(): Promise<Ledgers> {
+    const readJson = (relPath: string, fallback: unknown) => {
+      try {
+        const full = path.join(process.cwd(), relPath);
+        if (!existsSync(full)) return fallback;
+        return JSON.parse(readFileSync(full, 'utf8'));
+      } catch {
+        return fallback;
+      }
+    };
+    const { readRecentSkillMeshAttempts } = await import('../src/lib/skill-mesh-metrics.js');
+    return {
+      scoreboard: readJson('extension-builder/self-improvement-scoreboard.json', { targets: {} }) as Ledgers['scoreboard'],
+      drills: readJson('extension-builder/skill-quality-history.json', { skills: {} }) as Ledgers['drills'],
+      attempts: readRecentSkillMeshAttempts(),
+    };
+  }
+
   private sendError(res: http.ServerResponse, err: unknown): void {
     const msg = err instanceof Error ? err.message : String(err);
     const status = statusForError(err);
@@ -3324,6 +3359,12 @@ export class WebServer {
     // Points, the leaderboard, projects and the hive: one page, same gate.
     if (pathname === '/commons' && method === 'GET') {
       this.sendHtml(res, COMMONS_PAGE);
+      return;
+    }
+
+    // The editor for every text file the agent can edit: same gate.
+    if (pathname === '/editor' && method === 'GET') {
+      this.sendHtml(res, EDITOR_PAGE);
       return;
     }
 
@@ -4692,27 +4733,25 @@ export class WebServer {
     // install, or the relevant agent disabled) degrades to an
     // empty-but-valid response, not an error.
     if (pathname === '/api/self-improvement/history' && method === 'GET') {
-      const readJson = (relPath: string, fallback: unknown) => {
-        try {
-          const full = path.join(process.cwd(), relPath);
-          if (!existsSync(full)) return fallback;
-          return JSON.parse(readFileSync(full, 'utf8'));
-        } catch {
-          return fallback;
-        }
-      };
-      const scoreboard = readJson('extension-builder/self-improvement-scoreboard.json', { targets: {} }) as {
-        targets?: Record<string, { history?: unknown[] }>;
-      };
-      const drillHistory = readJson('extension-builder/skill-quality-history.json', { skills: {} }) as {
-        skills?: Record<string, { history?: unknown[] }>;
-      };
-      const { readRecentSkillMeshAttempts } = await import('../src/lib/skill-mesh-metrics.js');
+      const ledgers = await this.readSelfImprovementLedgers();
       this.sendJson(res, {
-        selfImprovement: scoreboard.targets ?? {},
-        skillDrills: drillHistory.skills ?? {},
-        skillMeshAttempts: readRecentSkillMeshAttempts(),
+        selfImprovement: ledgers.scoreboard.targets ?? {},
+        skillDrills: ledgers.drills.skills ?? {},
+        skillMeshAttempts: ledgers.attempts,
       });
+      return;
+    }
+
+    // GET /api/self-improvement?tab=overview|skills|reasoning|history -- what the Self-improvement page
+    // (interface/platform/self-improvement-page.ts) shows, worked out from the same three ledgers
+    // (interface/self-improvement-data.ts). Nothing is made up: no ledger yet gives zeros and empty lists.
+    if (pathname === '/api/self-improvement' && method === 'GET') {
+      const tab = parsedUrl.searchParams.get('tab') ?? 'overview';
+      if (!isSelfImprovementTab(tab)) {
+        this.sendJson(res, { error: 'tab must be overview, skills, reasoning or history' }, 400);
+        return;
+      }
+      this.sendJson(res, selfImprovementTab(tab, await this.readSelfImprovementLedgers()));
       return;
     }
 

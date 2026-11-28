@@ -45,6 +45,7 @@ and the permissions each OS prompts for.
 | Feature | Windows | Linux | macOS | ChromeOS / Chromebook | Android | iOS |
 | --- | --- | --- | --- | --- | --- | --- |
 | Chat | yes | yes | yes | yes | yes | yes |
+| Coding-agent workbench | yes | yes | yes | yes | yes | yes |
 | Attach a file or a folder | yes | yes | yes | yes | yes | yes |
 | Auto route (effort, where to answer, how much network) | yes | yes | yes | yes | yes | yes |
 | Coding jobs (write, explain, debug, technical) | yes | yes | yes | yes | yes | yes |
@@ -93,6 +94,7 @@ and the permissions each OS prompts for.
 | Mind reader (reads the network’s firing) | yes | yes | yes | no | partly | partly |
 | Security model (the main model asks before it runs something) | yes | yes | yes | no | partly | partly |
 | Alignment protocol (kill switch) | yes | yes | yes | no | partly | partly |
+| Virtual laboratory | yes | yes | yes | no | no | no |
 | Plugin host (route groups as plugins) | yes | yes | yes | yes | yes | yes |
 <!-- parity-matrix:end -->
 
