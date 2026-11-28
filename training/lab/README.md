@@ -17,6 +17,7 @@ npm run train:lab                                   # every scripted agent on th
 npm run train:lab -- --agent scientist --detail --notebook
 npm run train:lab -- --stdio --seed 5               # let any process work in the lab, one JSON line at a time
 node --test test/training/lab.test.mjs              # 26 checks, about 2 seconds
+node --test test/platform/lab-routes.test.mjs       # 7 checks on the HTTP routes
 ```
 
 Options: `--seed N`, `--agent scientist|reckless|guesser|all`, `--credits N`, `--hours N` (bench time),
@@ -92,6 +93,22 @@ These are the baselines a trained model has to beat or match.
 - **Another process (the safe way):** `npm run train:lab -- --stdio`. The first line is the datasheet as JSON;
   after that each JSON line in gets one JSON line out. The session ends at `{"tool":"submit"}`. Nothing
   hidden crosses the pipe.
+
+## Over HTTP (desktop only)
+
+The desktop engine serves the lab as a route plugin (`interface/lab-routes.ts`, plugin id `lab-routes`).
+It is listed in the feature contract as **desktop only** (Windows, Linux, macOS): not the phone apps and
+not the Chrome extension. Owner routes behind the server's normal gate; sessions are in memory, at most four.
+
+| Route | What it does |
+|---|---|
+| `GET /api/lab` | The datasheet, the tools, the scripted agents, the open sessions |
+| `POST /api/lab/new` | `{seed?, experiments?, credits?, hours?}` starts a session and returns its datasheet |
+| `POST /api/lab/act` | `{session, action}` runs one tool call; a refused action is a normal result, not an HTTP error |
+| `GET /api/lab/notebook?session=ID` | The notebook, one line per action |
+| `POST /api/lab/baseline` | `{agent, seed?}` runs a scripted agent in a fresh lab and returns its report |
+
+`node --test test/platform/lab-routes.test.mjs` runs the real handler against a fake request context.
 
 ## Adding a bench
 
