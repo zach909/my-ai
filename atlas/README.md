@@ -97,9 +97,70 @@ itself:** `capture on` stays your decision. There is no microphone code in Atlas
 light, gas). Say where each sits (`neuroclaw-atlas place sensor 0 0 0 0`, millimetres) and, with three or more,
 `digest` compares them and works out where a smell or a change comes from.
 
+## Map prompts: the mapper asks the agent for help by itself
+
+The daemon already sees a low battery, a drive being plugged in, a program opening the camera, a folder filling with
+files. A *map prompt* is a standing rule: **when the map shows this, ask the agent to do that**, so nobody has to notice
+first. When a rule matches, the daemon queues one request (`<atlas home>/prompts/outbox.jsonl`); the NeuroClaw backend
+(`models && skills/core/map-prompts.ts`) hands it to the agent by the same path as a typed message.
+
+```bash
+neuroclaw-atlas prompts            # is it on, how many were asked today, every rule and when it last fired
+neuroclaw-atlas prompts on         # the owner's switch. OFF until you run this
+neuroclaw-atlas prompts disable memory-high     # one rule off (enable turns it back on)
+neuroclaw-atlas prompts outbox     # what is waiting for the agent
+```
+
+| Rule | Fires when | At most every |
+|---|---|---|
+| `battery-low` | battery 15% or less and the charger is not connected | 3 h |
+| `memory-high` | memory 92% used or more | 2 h |
+| `disk-low` | the disk the map lives on has 5% free or less | 12 h |
+| `drive-plugged` | a USB device was plugged in | 10 min |
+| `camera-mic-opened` | a program opened the camera, microphone or sound card | 30 min |
+| `files-burst` | 25 or more new files appeared in one folder (between two whole-disk passes) | 6 h |
+
+Add your own under `map_prompts.custom` in `config.json`. A rule names its conditions (every one must hold), the
+instruction, and a cooldown in minutes (5 or more):
+
+```json
+{"map_prompts": {"max_per_day": 6, "custom": [
+  {"id": "invoices", "title": "An invoice appeared",
+   "when": {"event": {"cat": "files", "op": "created", "contains": "invoice"}},
+   "prompt": "A new invoice file appeared. Tell me what it is and offer to file it.", "cooldown_minutes": 30}]}}
+```
+
+Conditions: `battery_below`, `memory_above`, `disk_free_below` (whole percent, inclusive), `unplugged` (true/false),
+`event` (`cat`, `op`, optional `contains`: a timeline change, see `timeline`), `burst` (`cat`, `op`, `count`: that many
+of one change under one folder). A bad rule is ignored and `prompts` says why.
+
+**What keeps it safe.** A prompt that launches work on its own is a dangerous capability, so:
+
+* **Off until the owner turns it on.** The agent never turns it on, and `tool.json` has no tool that does (it has a
+  read-only `atlas_prompts`, so the agent can see why a message was sent).
+* **It only asks.** The request goes to the agent's normal path, so its approval gate still holds every risky tool
+  (terminal, email, files) until the owner decides, whether or not anyone is there. Every built-in instruction says to
+  ask before closing, moving or deleting anything.
+* **Bounded.** A cooldown per rule (never under 5 minutes), a daily cap (default 6, at most 24), an outbox of the newest
+  50, 3 delivered per minute, and a request older than 6 hours is dropped, not run.
+* **What the computer reported is data.** File names, device labels and program names can be written by anyone. They
+  are cleaned and put in the request as a quoted JSON list after a sentence saying it is data, never spliced into the
+  instruction.
+* **Only changes fire it.** Turning it on starts from now and raises nothing for what is already there; events older
+  than a day are ignored.
+* **At most once.** A request is marked delivered before it runs, so one that crashes the agent is never repeated.
+  Outcomes (not message text) are kept in `~/.neuroclaw/map-prompts.json`.
+* `NEUROCLAW_MAP_PROMPTS=0` stops the backend delivering, whatever the mapper queues.
+
+**Limits, honestly.** The mapper does not understand anything: it checks conditions and sends the instruction written
+for them, and what the agent does with it is only as good as the agent. It runs where the daemon runs (Linux
+`/proc` and `/sys`). Requests wait only while the backend is off and are dropped after 6 hours. There is no page for
+the history yet (the file above, and Settings, where the approval queue already shows what is held). Delivery goes to
+the owner only: the map is the owner's computer.
+
 ## For an agent
 
-`tool.json` describes ten tools (six read-only, four that change the map) as argument templates over this command line,
+`tool.json` describes thirteen tools (nine read-only, four that change the map) as argument templates over this command line,
 all of which print JSON with `--json`. `install.sh` copies it to `config/tools/atlas.json`. **The NeuroClaw runtime that
 would load it is not in this repository** (the TypeScript source is missing from it), so what is shipped and tested here is
 the description and the command line it points at, not an agent actually calling them.

@@ -234,6 +234,16 @@ class Ledger:
         return [{"t": r[0], "seen": r[1], "cat": r[2], "op": r[3], "key": r[4], "info": r[5]}
                 for r in self.db.execute(q, a).fetchall()]
 
+    def last_event_id(self) -> int:
+        """The newest timeline row's number, or 0 if there is none (map prompts follow the timeline by this number)."""
+        return self.db.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+
+    def events_after(self, event_id: int, limit: int = 500) -> list:
+        """Timeline rows newer than ``event_id``, oldest first, with their numbers. Baseline markers are left out."""
+        rows = self.db.execute("SELECT id, t, seen, cat, op, key, info FROM events WHERE id>? AND op!='baseline' "
+                               "ORDER BY id LIMIT ?", (int(event_id), max(1, min(int(limit), 5000)))).fetchall()
+        return [{"id": r[0], "t": r[1], "seen": r[2], "cat": r[3], "op": r[4], "key": r[5], "info": r[6]} for r in rows]
+
     def find_files(self, words, limit=30) -> list:
         q, a = "SELECT path, size, mtime, isdir FROM files WHERE 1", []
         for w in words:
