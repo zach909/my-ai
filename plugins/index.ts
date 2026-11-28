@@ -35,6 +35,7 @@ import { GithubPublishPlugin } from "./github-publish.js";
 import { ComputerAccessPlugin } from "./computer-access.js";
 import { HivePlugin } from "./hive.js";
 import { SchedulePlugin } from "./schedule.js";
+import { EegPlugin } from "./eeg.js";
 import { ScriptsPlugin } from "./scripts.js";
 import { LinuxPermissionToolsPlugin } from "./linux-permission-plugin.js";
 import { OsCommandsPlugin } from "./os-commands.js";
@@ -75,6 +76,7 @@ export { GithubPublishPlugin } from "./github-publish.js";
 export { ComputerAccessPlugin } from "./computer-access.js";
 export { HivePlugin } from "./hive.js";
 export { SchedulePlugin } from "./schedule.js";
+export { EegPlugin } from "./eeg.js";
 export { ScriptsPlugin } from "./scripts.js";
 export { LinuxPermissionToolsPlugin } from "./linux-permission-plugin.js";
 export { OsCommandsPlugin } from "./os-commands.js";
@@ -131,6 +133,7 @@ export function createPluginInstance(
   if (lower === "computer access" || lower === "computer-access") return new ComputerAccessPlugin(definition);
   if (lower === "hive") return new HivePlugin(definition);
   if (lower === "schedule") return new SchedulePlugin(definition);
+  if (lower === "eeg") return new EegPlugin(definition);
   if (lower === "scripts") return new ScriptsPlugin(definition);
   if (lower === "linux permission tools" || lower === "linux-permission-tools") return new LinuxPermissionToolsPlugin(definition);
   if (lower === "os commands" || lower === "os-commands") return new OsCommandsPlugin(definition);
@@ -201,6 +204,8 @@ const pluginExtensions: Record<string, PluginDefinition> = {
   // (models && skills/core/scheduler.ts). It only records the schedule; the
   // action runs later by the normal path, so risky tools still ask first.
   schedule: { id: "schedule", name: "Schedule", type: "api-connection", capabilities: ["schedule", "timer"] },
+  // Decodes recorded or simulated EEG (band power, focus/relaxation/drowsiness, blinks, clenches) from the eeg drop folder. Reads nothing else.
+  eeg: { id: "eeg", name: "EEG", type: "api-connection", capabilities: ["eeg", "brain-signals"] },
   // A short script that runs several tools in one go (models && skills/core/script-runner.ts). It runs in a
   // locked-down child process and every tool call it makes goes through the same approval gate as chat.
   scripts: { id: "scripts", name: "Scripts", type: "api-connection", capabilities: ["scripts", "script"] },
