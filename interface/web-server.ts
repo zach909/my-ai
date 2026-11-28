@@ -69,6 +69,7 @@ import { EDITOR_PAGE } from './editor-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
 import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
+import { startMapPrompts } from '../models && skills/core/map-prompts.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { PromptMemory } from '../models && skills/core/prompt-memory.js';
 import { isAccountsPublicRoute } from './accounts-routes.js';
@@ -1709,6 +1710,7 @@ export class WebServer {
   private stopBackgroundHives: (() => void) | null = null;
   private stopExperts: (() => void) | null = null;
   private stopScheduler: (() => void) | null = null;
+  private stopMapPrompts: (() => void) | null = null;
   private decoyTimer: ReturnType<typeof setInterval> | null = null;
   private healTimer: ReturnType<typeof setInterval> | null = null;
   private port = 0;
@@ -2040,6 +2042,16 @@ export class WebServer {
         }),
       });
     }
+    // Map prompts (map-prompts.ts): the always-on mapper (atlas/) asks the agent to help when it notices something on
+    // this computer, e.g. a nearly flat battery. It is off until the owner runs `neuroclaw-atlas prompts on`. A request
+    // goes to the agent by its normal path, so risky tools still ask first. The map is the owner's computer, so only
+    // the owner's pass delivers. NEUROCLAW_MAP_PROMPTS=0 turns this off.
+    if (process.env.NEUROCLAW_MAP_PROMPTS !== '0' && !process.env.VITEST) {
+      this.stopMapPrompts = startMapPrompts({
+        each: run => this.eachPerson(async () => { if (isOwnerOrAdmin()) await run(); }),
+        deps: async () => ({ act: m => withTimeout(this.runner.generate(m)) }),
+      });
+    }
     // Same reasoning, same placement: loading every saved extension is
     // real work (parsing N files, remembering M neurons) that only makes
     // sense to pay once per actual live server process, not once per
@@ -2360,6 +2372,8 @@ export class WebServer {
     this.stopExperts = null;
     this.stopScheduler?.();
     this.stopScheduler = null;
+    this.stopMapPrompts?.();
+    this.stopMapPrompts = null;
     if (this.routePluginHost) {
       const started = this.routePluginHost;
       this.routePluginHost = null;
