@@ -747,7 +747,17 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
   $('ac-save').addEventListener('click', function () {
     act(api('POST', '/api/safety/auto-continue', { enabled: $('ac-on').checked, maxSteps: Number($('ac-max').value) })).then(function () { say('Saved.'); });
   });
-  setInterval(function () { api('GET', '/api/safety').then(renderSafety).catch(function () {}); }, 10000);
+  // Poll only while this tab is visible, and catch up the moment it returns. A
+  // hidden tab polling every few seconds keeps a phone's radio and CPU awake
+  // for a page nobody is looking at.
+  function poll(fn, ms) {
+    var id = null;
+    function on() { if (id === null) id = setInterval(fn, ms); }
+    function off() { if (id !== null) { clearInterval(id); id = null; } }
+    document.addEventListener('visibilitychange', function () { if (document.hidden) off(); else { fn(); on(); } });
+    if (!document.hidden) on();
+  }
+  poll(function () { api('GET', '/api/safety').then(renderSafety).catch(function () {}); }, 10000);
   $('jd-on').addEventListener('change', function () { act(api('POST', '/api/safety/judge', { enabled: $('jd-on').checked })); });
   $('jd-high').addEventListener('change', function () {
     if ($('jd-high').checked && !confirm('Let the judge agent decide the terminal, files, email and calls too, without asking you?')) { $('jd-high').checked = false; return; }
@@ -765,7 +775,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
     act(api('POST', '/api/agent/delete', { phrase: $('ag-phrase').value })).then(function () { $('ag-phrase').value = ''; loadAgent(); }, loadAgent);
   });
   $('ag-create').addEventListener('click', function () { act(api('POST', '/api/agent/create', {})).then(function () { say('A new agent is here, sandboxed.'); loadAgent(); }, loadAgent); });
-  setInterval(loadAgent, 5000);
+  poll(loadAgent, 5000);
   loadAgent();
 
   function renderHealthStatus(status) {
@@ -774,7 +784,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
     var healthy = names.filter(function (n) { return status[n]; }).length;
     $('heal-line').textContent = names.length ? (healthy + ' of ' + names.length + ' component(s) healthy.') : 'Nothing registered yet.';
     var box = $('heal-components');
-    box.innerHTML = '';
+    box.textContent = '';
     names.forEach(function (n) {
       var p = document.createElement('p');
       p.className = 'nc-dim';
@@ -788,7 +798,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
       (r.repaired ? ', ' + r.repaired + ' repaired' : '') + (r.restored ? ', ' + r.restored + ' restored' : '') +
       (r.unrecoverable && r.unrecoverable.length ? ', ' + r.unrecoverable.length + ' unrecoverable: ' + r.unrecoverable.join(', ') : '.');
     var box = $('heal-components');
-    box.innerHTML = '';
+    box.textContent = '';
     (r.results || []).forEach(function (c) {
       var p = document.createElement('p');
       p.className = 'nc-dim';
@@ -801,7 +811,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
   $('heal-log').closest('details').addEventListener('toggle', function (e) {
     if (e.target.open) api('GET', '/api/health/log').then(function (r) { $('heal-log').textContent = (r.log || []).slice(-50).join('\\n') || 'Nothing logged yet.'; }).catch(function () {});
   });
-  setInterval(loadHealth, 30000);
+  poll(loadHealth, 30000);
   loadHealth();
   $('x-add').addEventListener('click', function () {
     act(api('POST', '/api/commons/experts', {
@@ -809,7 +819,7 @@ export const COMMONS_PAGE = `<!DOCTYPE html>
       teamSize: Number($('x-team').value), intervalMin: Number($('x-every').value), mayAct: $('x-act').checked
     })).then(function () { $('x-name').value = ''; $('x-spec').value = ''; $('x-mission').value = ''; say('Created. It is starting now.'); });
   });
-  setInterval(function () { api('GET', '/api/commons/experts').then(renderExperts).catch(function () {}); }, 15000);
+  poll(function () { api('GET', '/api/commons/experts').then(renderExperts).catch(function () {}); }, 15000);
   $('f-go').addEventListener('click', function () {
     say('The agent is filing things. This can take a while...');
     act(api('POST', '/api/commons/folders/organize', {})).then(function (r) {

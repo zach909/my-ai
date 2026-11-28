@@ -13,3 +13,34 @@ store/
 native/target/
 # NeuroClaw's server bundled for the phone (node scripts/release/build-mobile-server.mjs); regenerated, not source.
 mobile/server/bundle/
+
+# Runtime/test output the engine writes into a checkout; never source.
+# A clone of this repo inside itself (the integrity test requires this line).
+.my-ai/
+# plugins/self_replicate.ts writes clone state here.
+clones/
+# Per-install usage counters (models && skills/core/store-usage.ts).
+extension-builder/installed/.usage.json
+# Python bytecode (asi_core and the model manager run under python3).
+__pycache__/
+
+# Knowledge pipeline: downloaded and derived data (rebuild with `node training/knowledge/cli.mjs run`).
+training_data/knowledge/raw/
+training_data/knowledge/processed/
+training_data/knowledge/checkpoints/
+training_data/knowledge/compositions/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Gradle caches and build output (the standalone Android app is built, never committed).
+.gradle/
+mobile/android-standalone/**/build/
+mobile/android-standalone/local.properties
+
+# Rating framework output (training/rating): ledgers rebuild on each run; never committed.
+training/rating/out/
+
+# Physics walking sim: trained checkpoints are rebuilt with `npm run train:walk`.
+training/physics/out/

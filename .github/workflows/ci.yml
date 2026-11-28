@@ -427,6 +427,8 @@ jobs:
           signed=""
           if [ "${{ needs.macos.outputs.signing }}" = "developer-id" ]; then signed="macos-dmg,macos-app-zip"; fi
           node scripts/release/manifest.mjs release-artifacts --commit "${{ github.sha }}" --channel "$CHANNEL" --signed "$signed"
+      - name: Fixed-name copies for the download buttons (neuroclaw-linux-x64.deb and so on)
+        run: node scripts/release/latest-aliases.mjs release-artifacts
       - name: Create the draft release
         run: |
           v="$(node -p "require('./package.json').version")"

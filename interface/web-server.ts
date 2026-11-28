@@ -49,6 +49,11 @@ import { VISUAL_CLIENT_JS, VISUAL_CSS, parseVisualEvent, plainText, visualAppPag
 import { OS_REQUEST_MAX, OS_TOOLS, VisualAppError, VisualAppStore, isUnavailable } from '../models && skills/core/visual-apps.js';
 import { configFile } from './platform/app-paths.js';
 import { createServerHost, type ServerRouteContext } from './server-plugins.js';
+import { contentEtag, sendBody } from './http-compress.js';
+
+/** ETags of the two fixed ambient assets, computed on first request. */
+let ambientCssEtag: string | undefined;
+let ambientJsEtag: string | undefined;
 import type { PluginHost } from '../plugin_manager/host.js';
 import { SETTINGS_PAGE } from './platform/settings-page.js';
 import { storePage } from './platform/store-page.js';
@@ -61,9 +66,11 @@ import { SHARING_PAGE } from './sharing-page.js';
 import { HIVE_PAGE } from './hive-page.js';
 import { hiveAgentsOverview } from '../models && skills/core/project-hive.js';
 import { COMMONS_PAGE } from './commons-page.js';
+import { EDITOR_PAGE } from './editor-page.js';
 import { WEIGHTS_PAGE } from './weights-page.js';
 import { withTimeout, runFolderSweep, expertDepsFor, schedulerDepsFor } from './commons-routes.js';
 import { startScheduler } from '../models && skills/core/scheduler.js';
+import { startMapPrompts } from '../models && skills/core/map-prompts.js';
 import { MemoryFolders } from '../models && skills/core/memory-folders.js';
 import { PromptMemory } from '../models && skills/core/prompt-memory.js';
 import { isAccountsPublicRoute } from './accounts-routes.js';
@@ -620,6 +627,24 @@ const HTML_TEMPLATE = `<!DOCTYPE html>
     transform: translateY(0) scale(0.95);
   }
 
+  /* Compact: one button hides the dials and routing boxes so the input bar is a single slim row. */
+  #compact-btn {
+    background: rgba(255, 238, 230, 0.07);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 10px 16px;
+    min-height: 44px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    backdrop-filter: blur(12px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #compact-btn:hover { background: rgba(227,169,157, 0.28); transform: translateY(-2px) scale(1.03); }
+  #compact-btn:active { transform: translateY(0) scale(0.95); }
+  #input-area.compact #neurons-wrap, #input-area.compact #questions-wrap, #input-area.compact #route-wrap { display: none; }
   #neurons-wrap, #questions-wrap { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; font-size: 12px; }
   #neurons, #questions { width: 96px; accent-color: #ff9a84; }
   #neurons-out, #questions-out { min-width: 2.2em; opacity: 0.8; }
@@ -775,6 +800,7 @@ ${UPLOAD_CSS}
 <div id="input-area">
   <label for="input" class="sr-only">Message</label>
   <input type="text" id="input" placeholder="Type a message..." autofocus>
+  <button type="button" id="compact-btn" aria-controls="neurons-wrap questions-wrap route-wrap" aria-expanded="true">Hide options</button>
   <label id="neurons-wrap" for="neurons" title="Neurons: how confident it acts. Low asks more questions. High assumes. Very high does it both ways.">
     <span class="nc-dim">Neurons</span>
     <input type="range" id="neurons" min="0" max="100" step="5" value="50" aria-label="Neurons, how confident the AI acts, 0 to 100" aria-valuetext="50, balanced">
@@ -1323,6 +1349,24 @@ ${UPLOAD_CSS}
     onEvent: (name, data) => sendMessage('▸ ' + name + (data === null ? '' : ' ' + JSON.stringify(data)), {name, data})
   });
   ncUploads.install({ area: document.getElementById('input-area'), before: sendBtn });
+  // Hide or show the dials and routing boxes. The choice stays in this browser.
+  (function () {
+    const area = document.getElementById('input-area');
+    const btn = document.getElementById('compact-btn');
+    function apply(compact) {
+      area.classList.toggle('compact', compact);
+      btn.textContent = compact ? 'Show options' : 'Hide options';
+      btn.setAttribute('aria-expanded', String(!compact));
+    }
+    let saved = false;
+    try { saved = localStorage.getItem('nc_compact') === '1'; } catch {}
+    apply(saved);
+    btn.addEventListener('click', () => {
+      const next = !area.classList.contains('compact');
+      apply(next);
+      try { localStorage.setItem('nc_compact', next ? '1' : '0'); } catch {}
+    });
+  })();
   const clearChat = () => {
     if (confirm('Clear chat history?')) {
       chat.innerHTML = '';
@@ -1667,6 +1711,7 @@ export class WebServer {
   private stopBackgroundHives: (() => void) | null = null;
   private stopExperts: (() => void) | null = null;
   private stopScheduler: (() => void) | null = null;
+  private stopMapPrompts: (() => void) | null = null;
   private decoyTimer: ReturnType<typeof setInterval> | null = null;
   private healTimer: ReturnType<typeof setInterval> | null = null;
   private port = 0;
@@ -1998,6 +2043,16 @@ export class WebServer {
         }),
       });
     }
+    // Map prompts (map-prompts.ts): the always-on mapper (atlas/) asks the agent to help when it notices something on
+    // this computer, e.g. a nearly flat battery. It is off until the owner runs `neuroclaw-atlas prompts on`. A request
+    // goes to the agent by its normal path, so risky tools still ask first. The map is the owner's computer, so only
+    // the owner's pass delivers. NEUROCLAW_MAP_PROMPTS=0 turns this off.
+    if (process.env.NEUROCLAW_MAP_PROMPTS !== '0' && !process.env.VITEST) {
+      this.stopMapPrompts = startMapPrompts({
+        each: run => this.eachPerson(async () => { if (isOwnerOrAdmin()) await run(); }),
+        deps: async () => ({ act: m => withTimeout(this.runner.generate(m)) }),
+      });
+    }
     // Same reasoning, same placement: loading every saved extension is
     // real work (parsing N files, remembering M neurons) that only makes
     // sense to pay once per actual live server process, not once per
@@ -2318,6 +2373,8 @@ export class WebServer {
     this.stopExperts = null;
     this.stopScheduler?.();
     this.stopScheduler = null;
+    this.stopMapPrompts?.();
+    this.stopMapPrompts = null;
     if (this.routePluginHost) {
       const started = this.routePluginHost;
       this.routePluginHost = null;
@@ -2359,14 +2416,13 @@ export class WebServer {
 
   private sendJson(res: http.ServerResponse, data: unknown, statusCode = 200): void {
     this.setSecurityHeaders(res);
-    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(data));
+    // gzip and a content-hash ETag (a 304 with no body when nothing changed): see http-compress.ts.
+    sendBody(res, statusCode, 'application/json', JSON.stringify(data), { etag: true });
   }
 
   private sendHtml(res: http.ServerResponse, html: string): void {
     this.setSecurityHeaders(res);
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(injectAmbient(html));
+    sendBody(res, 200, 'text/html; charset=utf-8', injectAmbient(html), { etag: true });
   }
 
   /**
@@ -3306,6 +3362,12 @@ export class WebServer {
       return;
     }
 
+    // The editor for every text file the agent can edit: same gate.
+    if (pathname === '/editor' && method === 'GET') {
+      this.sendHtml(res, EDITOR_PAGE);
+      return;
+    }
+
     // The net maker, net skill maker, weight editor and compiler: one page, same gate.
     if (pathname === '/weights' && method === 'GET') {
       this.sendHtml(res, WEIGHTS_PAGE);
@@ -3322,11 +3384,12 @@ export class WebServer {
     if (isAmbientRoute(pathname, method)) {
       this.setSecurityHeaders(res);
       const css = pathname === '/ambient.css';
-      res.writeHead(200, {
-        'Content-Type': css ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
-        'Cache-Control': 'no-cache',
+      // Fixed content: one ETag per asset for the life of the process, and its gzipped copy kept (bounded).
+      sendBody(res, 200, css ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8', css ? AMBIENT_CSS : AMBIENT_JS, {
+        headers: { 'Cache-Control': 'no-cache' },
+        etag: css ? (ambientCssEtag ??= contentEtag(AMBIENT_CSS)) : (ambientJsEtag ??= contentEtag(AMBIENT_JS)),
+        cacheCompressed: true,
       });
-      res.end(method === 'HEAD' ? undefined : css ? AMBIENT_CSS : AMBIENT_JS);
       return;
     }
 
@@ -4594,6 +4657,22 @@ export class WebServer {
         // combinations of expertise" indistinguishable from a story about a
         // network that does not. Strongest pair first, with the neurons the
         // two hold in common.
+        // ?counts=1 is what the page behind every screen asks for, every 20 seconds per open page.
+        // It draws one tentacle per skill, sized by how many neurons the skill holds, plus one for
+        // each region that has appeared in a pair; it never read the id lists or the pair scores,
+        // which are the bulk of this answer and cost O(skills^2 x neurons) to compute. So it gets
+        // counts and names. Without the parameter the answer is exactly what it always was.
+        if (parsedUrl.searchParams.get('counts') === '1') {
+          const names = engine.skillNames();
+          this.sendJson(res, {
+            neuronCount: engine.getNeuronCount(),
+            dimensions: engine.getDimensions(),
+            skills: graftedSkills(engine).map(entry => ({ skill: entry.skill, count: engine.neuronsInGroup(entry.skill).length })),
+            // A region only showed up through affinity when it had a partner, so a lone one stays out.
+            names: names.length >= 2 ? names : [],
+          });
+          return;
+        }
         this.sendJson(res, {
           neuronCount: engine.getNeuronCount(),
           dimensions: engine.getDimensions(),

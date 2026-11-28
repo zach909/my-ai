@@ -17,7 +17,7 @@ import { compareVersions, parseSemver, type Channel } from './version.js';
 import { validateManifest, type ManifestArtifact, type ReleaseManifest } from './release-manifest.js';
 import type { PlatformId } from './adapters.js';
 
-export const DEFAULT_MANIFEST_URL = 'https://github.com/zach909/.my-ai/releases/latest/download/release-manifest.json';
+export const DEFAULT_MANIFEST_URL = 'https://github.com/zach909/my-ai/releases/latest/download/release-manifest.json';
 const MAX_MANIFEST_BYTES = 256 * 1024;
 const TIMEOUT_MS = 8000;
 

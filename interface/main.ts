@@ -183,9 +183,38 @@ function isEntryPoint(): boolean {
   }
 }
 
+/**
+ * The workbench commands: `run` (one prompt, one answer), `tui` (the terminal interface) and `wb` (sessions, checkpoints, tool servers,
+ * bundles, usage). The engine is only started for the two that need it; `wb` works on files and starts nothing.
+ */
+async function startWorkbench(mode: 'run' | 'tui' | 'wb', argv: string[]): Promise<number> {
+  const { Workbench } = await import('./workbench/workbench.js');
+  const { workbenchCli } = await import('./workbench/cli.js');
+  const { defaultWorkspace, engineExecutor, toolGateVerdict } = await import('./workbench/service.js');
+  const needsEngine = mode === 'run' || mode === 'tui';
+  let engine: { act(m: string): Promise<string>; text(m: string): Promise<string> } | null = null;
+  if (needsEngine) {
+    const { llm, pipeline, pluginRegistry, systemAccess } = await buildCore();
+    const runner = new NeuroclawRunner(llm, pipeline, pluginRegistry, systemAccess, systemAccess.getMultiDesktop());
+    engine = { act: (m) => runner.generate(m), text: (m) => runner.generateText(m) };
+  }
+  const approveRef: { fn: ((req: { tool: string; target?: string }, why: string) => Promise<boolean>) | null } = { fn: null };
+  const wb = new Workbench({
+    root: defaultWorkspace(), executor: engineExecutor(() => engine), gate: toolGateVerdict,
+    approve: async (req, why) => (approveRef.fn ? approveRef.fn(req, why) : false),
+  });
+  const io = { out: (s: string) => { process.stdout.write(s); }, err: (s: string) => { process.stderr.write(s); } };
+  try {
+    const args = mode === 'tui' ? ['tui'] : mode === 'run' ? ['run', ...argv] : ['wb', ...argv];
+    return await workbenchCli(args, wb, io, async () => (await import('./workbench/tui.js')).runTui(wb, { stdin: process.stdin, stdout: process.stdout }, { approveRef }));
+  } finally { wb.close(); }
+}
+
 if (isEntryPoint()) {
   const [mode, portArg] = process.argv.slice(2);
-  if (mode === 'embedded') {
+  if (mode === 'run' || mode === 'tui' || mode === 'wb') {
+    startWorkbench(mode, process.argv.slice(3)).then(code => process.exit(code), err => { console.error('The workbench failed:', err); process.exit(1); });
+  } else if (mode === 'embedded') {
     startEmbedded().catch(err => { console.error('Failed to start the engine:', err); process.exit(1); });
   } else if (mode === 'web') {
     const port = Number(portArg) || 7861;

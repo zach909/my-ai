@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" width="480" height="300" role="img" aria-labelledby="t-bits">
+<title id="t-bits">Raw bits flowing into the mesh with no tokenizer</title>
+<defs>
+<linearGradient id="bg-bits" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient>
+<radialGradient id="glow-bits"><stop offset="0" stop-color="#e3a99d" stop-opacity=".35"/><stop offset="1" stop-color="#e3a99d" stop-opacity="0"/></radialGradient>
+
+</defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.dim{fill:rgba(248,237,233,.62)}
+.line{fill:none;stroke:rgba(255,228,218,.2);stroke-width:1.5}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@keyframes run{from{transform:translateX(0)}to{transform:translateX(560px)}}@keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.bit{fill:#e3a99d;letter-spacing:2px;animation:run 6s linear infinite;opacity:.85;font-family:ui-monospace,Menlo,Consolas,monospace}
+.core{transform-origin:400px 130px;animation:beat 1.6s ease-in-out infinite}
+</style>
+<rect width="480" height="300" rx="32" fill="url(#bg-bits)"/>
+<rect x=".75" y=".75" width="478.5" height="298.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<text x="-260" y="70" font-size="17" class="bit" style="animation-duration:5.0s;animation-delay:-0s">1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1</text><text x="-260" y="94" font-size="17" class="bit" style="animation-duration:5.7s;animation-delay:-1.3s">0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0</text><text x="-260" y="118" font-size="17" class="bit" style="animation-duration:6.4s;animation-delay:-2.6s">0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</text><text x="-260" y="142" font-size="17" class="bit" style="animation-duration:7.1s;animation-delay:-3.9000000000000004s">1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1</text><text x="-260" y="166" font-size="17" class="bit" style="animation-duration:7.8s;animation-delay:-5.2s">0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0 0 1 0</text><text x="-260" y="190" font-size="17" class="bit" style="animation-duration:8.5s;animation-delay:-6.5s">0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</text><rect x="330" y="0" width="150" height="300" fill="#1b1216"/><g class="core"><circle cx="400" cy="130" r="64" fill="url(#glow-bits)"/><circle cx="400" cy="130" r="42" fill="#2a1519" stroke="#e3a99d" stroke-opacity=".6" stroke-width="2"/><g ><circle cx="420.8" cy="141.3" r="7.9" fill="#8fe3a8"/><circle cx="406.5" cy="154.0" r="7.9" fill="#8fe3a8"/><circle cx="387.2" cy="151.1" r="7.9" fill="#8fe3a8"/><circle cx="377.6" cy="134.8" r="7.9" fill="#8fe3a8"/><circle cx="384.8" cy="117.4" r="7.9" fill="#8fe3a8"/><circle cx="403.5" cy="112.0" r="7.9" fill="#8fe3a8"/><circle cx="419.5" cy="122.7" r="7.9" fill="#8fe3a8"/><circle cx="400" cy="132.88" r="22" fill="#8fe3a8"/>
+<circle cx="386.4" cy="121.0" r="3.7" fill="#f8f2e6"/><circle cx="386.4" cy="121.0" r="1.9" fill="#1a1013"/><circle cx="414.5" cy="124.1" r="3.1" fill="#f8f2e6"/><circle cx="414.5" cy="124.1" r="1.5" fill="#1a1013"/><circle cx="383.7" cy="134.6" r="2.4" fill="#f8f2e6"/><circle cx="383.7" cy="134.6" r="1.2" fill="#1a1013"/><circle cx="415.4" cy="138.2" r="2.6" fill="#f8f2e6"/><circle cx="415.4" cy="138.2" r="1.3" fill="#1a1013"/>
+<circle cx="400" cy="134.2" r="11" fill="#f2d56b"/>
+<circle cx="396.04" cy="132" r="1.21" fill="#33201a"/><circle cx="403.96" cy="132" r="1.21" fill="#33201a"/>
+<path d="M 394.28 135.52 Q 400 141.24 405.72 135.52" fill="none" stroke="#33201a" stroke-width="1.4" stroke-linecap="round"/></g></g>
+<text x="240" y="276" text-anchor="middle" font-size="15" class="dim">Text, audio and images go in as raw bits: no tokenizer</text>
+</svg>

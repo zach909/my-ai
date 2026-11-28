@@ -92,6 +92,8 @@ struct Optional {
     response_set_content_type: Option<unsafe extern "C" fn(P, *const c_char)>,
     response_set_http_headers: Option<unsafe extern "C" fn(P, P)>,
     set_background_color: Option<unsafe extern "C" fn(P, *const [f64; 4])>,
+    set_prgname: Option<unsafe extern "C" fn(*const c_char)>,
+    set_icon_name: Option<unsafe extern "C" fn(P, *const c_char)>,
 }
 
 struct State {
@@ -352,12 +354,18 @@ pub fn run(title: &str) {
             response_set_content_type: sym(&libs, "webkit_uri_scheme_response_set_content_type"),
             response_set_http_headers: sym(&libs, "webkit_uri_scheme_response_set_http_headers"),
             set_background_color: sym(&libs, "webkit_web_view_set_background_color"),
+            set_prgname: sym(&libs, "g_set_prgname"),
+            set_icon_name: sym(&libs, "gtk_window_set_icon_name"),
         };
+        // The window's application id and icon are the desktop entry's name (neuroclaw.desktop, Icon=neuroclaw), so the
+        // desktop's Settings, dock and task switcher tie this window to the installed app and show its details and icon.
+        if let Some(set_prgname) = opt.set_prgname { set_prgname(c("neuroclaw").as_ptr()); }
         if (api.gtk_init_check)(null_mut(), null_mut()) == 0 {
             die(4, "there is no display to open a window on");
         }
         let window = (api.gtk_window_new)(0);
         (api.gtk_window_set_title)(window, c(title).as_ptr());
+        if let Some(set_icon_name) = opt.set_icon_name { set_icon_name(window, c("neuroclaw").as_ptr()); }
         (api.gtk_window_set_default_size)(window, 1100, 800);
         let view = (api.webkit_web_view_new)();
         if let Some(set_bg) = opt.set_background_color {

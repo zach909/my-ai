@@ -11,6 +11,8 @@
 ### Background (Learning & Memory)
 - [[Quantization|Quantization]]
 - [[Elastic Value Budget|Elastic-Value-Budget]]
+- [[Wake-Sleep Islands|Wake-Sleep-Islands]] - Learning by growing new neurons
+- [[Grow, Prune, Quantize|Grow-Prune-Quantize]] - The lifecycle design note
 - [[Extensions|Extensions]]
 - [[RLM|RLM]]
 - [[Empathy Engine|Empathy-Engine]]
@@ -26,11 +28,13 @@
 ## Extension System
 - [[Builder|Builder]]
 - [[Plugins|Plugins]]
+- [[Knowledge-Training|Knowledge Training]]
 - [[Memory-Topics|Memory Topics]]
 - [[Prompt-Memory|Prompt Memory]]
 - [[Skills|Skills]]
 - [[Code-to-Net|Code-to-Net]]
 - [[Net Maker|Net-Maker]]
+- [[Map Maker|Map-Maker]]
 - [[Task Training|Task-Training]]
 - [[Net Search|Net-Search]]
 - [[Format Converter|Format-Converter]]
