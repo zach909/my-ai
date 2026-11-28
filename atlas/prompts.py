@@ -8,8 +8,8 @@ the owner had typed it. Nobody has to notice the problem first.
 
 What keeps this safe (a prompt that launches work on its own is a dangerous capability, so all of this is on purpose):
 
-* **Off until the owner turns it on.** ``neuroclaw-atlas prompts on``. Like the cameras, the agent never turns it on
-  itself and ``tool.json`` has no tool that does.
+* **On by default, and the owner's to stop.** ``neuroclaw-atlas prompts off`` stops it and stays off. The agent never
+  changes the switch itself and ``tool.json`` has no tool that does.
 * **It only asks.** A request is text for the agent. The agent's own approval gate (tool-safety) still holds every risky
   tool (terminal, email, files) until the owner decides, whether or not anyone is there.
 * **Bounded.** Each rule has a cooldown (at least five minutes), the whole mapper has a daily cap (default 6, at most
@@ -147,7 +147,7 @@ def valid_custom(d) -> tuple:
 
 
 def settings(home: Path) -> dict:
-    """The owner's choices from ``config.json`` -> ``map_prompts``, each clamped: ``on`` (default off), ``max_per_day``,
+    """The owner's choices from ``config.json`` -> ``map_prompts``, each clamped: ``on`` (default ON; only an explicit false turns it off), ``max_per_day``,
     ``disabled`` (rule ids), ``custom`` (extra rules). Returns the rules too, and which custom ones were ignored."""
     raw = cli._config(home).get("map_prompts")
     raw = raw if isinstance(raw, dict) else {}
@@ -166,7 +166,7 @@ def settings(home: Path) -> dict:
             rules.append(r)
     if len(custom) > CUSTOM_MAX:
         ignored.append(f"only the first {CUSTOM_MAX} custom rules are used")
-    return {"on": raw.get("on") is True, "max_per_day": per_day, "disabled": off, "rules": rules, "ignored": ignored}
+    return {"on": raw.get("on") is not False, "max_per_day": per_day, "disabled": off, "rules": rules, "ignored": ignored}
 
 
 def _save_setting(home: Path, **changes) -> None:
@@ -316,7 +316,7 @@ def build_message(rule: dict, quoted: list) -> str:
 
 def tick(home: Path, ledger, facts: dict, t: int) -> list:
     """One look. Writes a request to the outbox for every rule that matches and is allowed to fire; returns their ids.
-    Does nothing (and reads nothing) while the owner has map prompts off."""
+    Does nothing (and reads nothing) while the owner has map prompts turned off."""
     s = settings(home)
     if not s["on"]:
         return []

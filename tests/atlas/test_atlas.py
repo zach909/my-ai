@@ -878,12 +878,17 @@ class TestMapPrompts(Home):
     def plug(self, t, devices):
         self.lg.sync_live("usb", devices, t)
 
-    def test_it_is_off_until_the_owner_turns_it_on_and_then_does_nothing_by_itself_to_the_files(self):
-        self.assertEqual(self.tick(NOW, F(battery=3, unplugged=True)), [])
-        self.assertFalse((self.home / "prompts").exists(), "off: nothing is even created")
-        self.assertIn("off", self.ok("prompts"))
-        self.ok("prompts", "on")
+    def test_it_is_on_by_default_and_an_owner_who_turns_it_off_keeps_it_off(self):
+        self.assertIn("ON", self.ok("prompts"), "no setting at all: on")
         self.assertEqual(self.tick(NOW, F(battery=3, unplugged=True)), ["battery-low"])
+        self.ok("prompts", "off")
+        self.assertEqual(self.tick(NOW + 10**6, F(battery=3, unplugged=True)), [], "off: nothing asked, however bad")
+        self.assertIn("off", self.ok("prompts"))
+        self.ok("prompts", "disable", "memory-high")                 # other settings saved later do not switch it back on
+        self.assertFalse(prompts.settings(self.home)["on"])
+        self.assertEqual(self.tick(NOW + 2 * 10**6, F(battery=3, unplugged=True)), [])
+        self.ok("prompts", "on")
+        self.assertTrue(prompts.settings(self.home)["on"])
 
     def test_a_request_is_a_private_outbox_line_and_a_rule_waits_out_its_cooldown(self):
         self.on()
@@ -1091,13 +1096,14 @@ class TestMapPromptsInTheDaemon(Home):
         self.assertEqual(daemon.run(self.home, lines.append, once=True, power=self.fs.power, proc=self.fs.proc), 0)
         return lines
 
-    def test_a_flat_battery_is_noticed_in_the_ordinary_loop_and_the_agent_is_asked_once_it_is_on(self):
-        self.once()
-        self.assertEqual(prompts.read_outbox(self.home), [], "off by default: the loop maps but asks nobody")
-        self.ok("prompts", "on")
+    def test_a_flat_battery_is_noticed_in_the_ordinary_loop_with_nothing_set_up_and_off_stops_it(self):
         lines = self.once()
         self.assertTrue(any("map prompts: asked the agent about" in l and "battery-low" in l for l in lines), lines)
         self.assertIn("battery-low", [r["prompt_id"] for r in prompts.read_outbox(self.home)])
+        self.ok("prompts", "off")
+        shutil.rmtree(self.home / "prompts")
+        self.once()
+        self.assertEqual(prompts.read_outbox(self.home), [], "off: the loop maps but asks nobody")
 
     def test_a_fault_in_map_prompts_is_said_once_and_never_stops_the_mapping(self):
         self.ok("prompts", "on")

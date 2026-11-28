@@ -106,7 +106,7 @@ first. When a rule matches, the daemon queues one request (`<atlas home>/prompts
 
 ```bash
 neuroclaw-atlas prompts            # is it on, how many were asked today, every rule and when it last fired
-neuroclaw-atlas prompts on         # the owner's switch. OFF until you run this
+neuroclaw-atlas prompts off        # the owner's switch (it is ON by default)
 neuroclaw-atlas prompts disable memory-high     # one rule off (enable turns it back on)
 neuroclaw-atlas prompts outbox     # what is waiting for the agent
 ```
@@ -136,7 +136,7 @@ of one change under one folder). A bad rule is ignored and `prompts` says why.
 
 **What keeps it safe.** A prompt that launches work on its own is a dangerous capability, so:
 
-* **Off until the owner turns it on.** The agent never turns it on, and `tool.json` has no tool that does (it has a
+* **On by default, and the owner can stop it** (`prompts off`; it stays off). The agent never changes the switch, and `tool.json` has no tool that does (it has a
   read-only `atlas_prompts`, so the agent can see why a message was sent).
 * **It only asks.** The request goes to the agent's normal path, so its approval gate still holds every risky tool
   (terminal, email, files) until the owner decides, whether or not anyone is there. Every built-in instruction says to
@@ -146,7 +146,7 @@ of one change under one folder). A bad rule is ignored and `prompts` says why.
 * **What the computer reported is data.** File names, device labels and program names can be written by anyone. They
   are cleaned and put in the request as a quoted JSON list after a sentence saying it is data, never spliced into the
   instruction.
-* **Only changes fire it.** Turning it on starts from now and raises nothing for what is already there; events older
+* **Only changes fire it.** The first look starts from now and raises nothing for what is already there (turning it back on does the same); events older
   than a day are ignored.
 * **At most once.** A request is marked delivered before it runs, so one that crashes the agent is never repeated.
   Outcomes (not message text) are kept in `~/.neuroclaw/map-prompts.json`.
