@@ -38,6 +38,30 @@ Every self-improve.mjs candidate, for every target, has to clear this exam befor
 
 **Graphed** on `/app/self-improvement`: "Capability exam: pass rate & average score" — the cumulative pass rate and average score across every gated attempt, from every target.
 
+## Self-debug (`models && skills/core/self-debug.ts`, `interface/self-debug-routes.ts`)
+
+The AI finds what goes wrong in a net, looks at the weights behind it, edits them a little, checks whether that was better or worse, and keeps going. It lives on the **Self-debug** tab of `/app/self-improvement`.
+
+**The loop**
+
+1. **Problems.** It runs the net's own declared (input → response) cases, plus repeated mistakes that recorded the right answer (`MistakeTracker`'s new optional `expected`). An answer is *correct* when it is the nearest of the known answers (the same test `respond()` uses) and *confident* when it is also a clear match (cosine ≥ 0.5 by default).
+2. **See the weights.** `WeightEditor.view()` says which weights decide the output and what share of what the neuron hears each carries.
+3. **Big input and history.** A ledger counts, per weight, how often it was a big share (≥ 25%) and whether edits to it were kept or undone. Candidates are ranked by share × the direction the error wants × how much the history trusts that weight.
+4. **Edit.** Only through `WeightEditor.nudge()`: at most 0.1 per edit, refused for a frozen neuron, logged, undoable.
+5. **Talk to itself.** Two voices. The debugger says what it sees and proposes; the critic re-measures with its own run and answers keep or undo. This is a structured review computed from the numbers, **not a language model**.
+6. **Better or worse.** A round is kept only if the target improved, no case that was right turned wrong, and no other case got worse, judged both against the round's start and the run's start (so small harmless-looking steps cannot add up to a regression). Otherwise it is undone and checked weight by weight.
+7. **Continue, and escalate.** Nudges shrink after a miss. Measured on a small net, nudging alone moves a case by about 1e-5 per round; when it stalls the loop **retrains on all cases at once** with the same engine call the Extension Builder's Train uses (`BuiltNet.trainCases()`, respects frozen neurons), and the critic judges that the same way, restoring the whole network state if it is rejected. In the first measured run this took total error 0.516 → 0.329 and made two cases clear matches, with nothing broken.
+8. **Skills.** A *wrong* answer the weights cannot fix becomes a skill built with the Extension Builder (one neuron per script) and saved as `extension-builder/extensions/<name>.ext.json`, the format the server already loads at boot, so it takes effect on the next start. These files are gitignored: they can contain what someone typed. Two scripts that answer the same question differently are refused. The builder's training is reported truthfully per neuron (`trained`); it was measured **not** to converge for some sets of scripts, and a skill answers in chat by matching what was typed to a stored script either way, so convergence is reported, not required.
+9. **Plugins.** After three or more skills it proposes a plugin: source generated only from a fixed template, vetted (only the two SDK imports, no I/O, no network, no `eval`), and installed **inactive** through `ExtensionManager` with provenance `self-debug`. It does nothing until the owner presses Approve.
+
+**Safety.** It edits a net it is handed, never the live AI's own neurons. A net that is a live skill graft is only touched with `confirm: true`, and the background pass never touches one. The whole network state is captured first and restored if anything throws or the run ends with fewer right answers. One run at a time. Rounds, time, ledger (2000 weights) and saved runs (30) are all bounded.
+
+**Routes** (owner, behind the normal gate): `GET /api/self-improvement/self-debug`, `GET .../sessions/:id`, `POST .../run`, `POST .../auto`, `POST .../plugins/:id/approve|deny`. State is kept in `<data folder>/self-debug/state.json`.
+
+**Background pass.** Every 10 minutes (`NEUROCLAW_SELF_DEBUG_INTERVAL_MS`) it scores the nets that exist and debugs any with a weak or wrong answer. It costs a few reads when everything passes and nothing when no nets exist. Turn it off with `NEUROCLAW_SELF_DEBUG=0` or the switch on the tab.
+
+**What it does not do.** It does not fix a thrown exception (those are listed in a run's report as things no weight can fix), and it edits only the weights into the net's output neuron.
+
 ## The skill-creation agent (`scripts/skill-agent.mjs`)
 
 A separate autonomous agent from the self-improvement loop above — same engine, different job. Instead of tuning the hyperparameters of a fixed set of existing skill scripts, this one creates **new** skills from scratch, one research topic per cycle (45 minutes by default, `NEUROCLAW_SKILL_AGENT_INTERVAL_MS`):

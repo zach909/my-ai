@@ -120,8 +120,10 @@ export function trainAll({ tune = true } = {}) {
   }
   // 3. verifier thresholds (tuned on train claims, reported on dev) - needs the current science retriever
   const sci = currentRecord('retriever.science');
-  if (sci) {
-    const index = deserialize(loadArtifact('retriever.science')); let best = null;
+  const sciArtifact = sci ? loadArtifact('retriever.science') : null;
+  if (sci && !sciArtifact) out['verifier.claims'] = 'skipped: current retriever.science artifact is not on disk (checkpoints are git-ignored); run collect/extract/train from a clean registry or restore it';
+  if (sci && sciArtifact) {
+    const index = deserialize(sciArtifact); let best = null;
     for (const minScore of [4, 8, 12, 16, 20, 25]) { const a = benchVerify(index, { minScore, k: 5 }, 'train')['verify.acc']; if (!best || a > best.a) best = { a, minScore }; }
     const params = { minScore: best.minScore, k: 5 };
     out['verifier.claims'] = submit('verifier.claims', params, { params, metrics: { ...benchVerify(index, params, 'dev'), 'verify.train_acc': +best.a.toFixed(4) }, inputs: sci.inputs.filter((i) => i.source === 'scifact'), note: `NEI threshold chosen on train claims; retriever ${sci.version}` });

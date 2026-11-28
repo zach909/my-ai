@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" width="480" height="300" role="img" aria-labelledby="t-learn">
+<title id="t-learn">Self-improvement: a pattern seen three times becomes a permanent skill</title>
+<defs>
+<linearGradient id="bg-learn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient>
+<radialGradient id="glow-learn"><stop offset="0" stop-color="#e3a99d" stop-opacity=".35"/><stop offset="1" stop-color="#e3a99d" stop-opacity="0"/></radialGradient>
+
+</defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.dim{fill:rgba(248,237,233,.62)}
+.line{fill:none;stroke:rgba(255,228,218,.2);stroke-width:1.5}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@keyframes chip{0%,100%{opacity:0;transform:translateY(8px)}8%,60%{opacity:1;transform:translateY(0)}70%{opacity:0;transform:translate(60px,0)}}
+@keyframes skill{0%,62%{opacity:0;transform:scale(.3)}72%,92%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.3)}}
+@keyframes grow{0%,70%{stroke-dashoffset:140}85%,92%{stroke-dashoffset:0}100%{stroke-dashoffset:140;opacity:0}}
+@keyframes count{0%,12%{opacity:0}16%,60%{opacity:1}66%,100%{opacity:0}}
+.chipt{opacity:0;animation:chip 7s ease-in-out infinite}
+.chip{fill:rgba(227,169,157,.2);stroke:#e3a99d;stroke-width:1.5;animation:chip 7s ease-in-out infinite}
+.skill{transform-box:fill-box;transform-origin:center;fill:rgba(143,227,168,.22);stroke:#8fe3a8;stroke-width:2;animation:skill 7s ease-in-out infinite}
+.tent{fill:none;stroke:#8fe3a8;stroke-width:7;stroke-linecap:round;stroke-dasharray:140;animation:grow 7s ease-in-out infinite}
+.cnt{animation:count 7s ease-in-out infinite}
+</style>
+<rect width="480" height="300" rx="32" fill="url(#bg-learn)"/>
+<rect x=".75" y=".75" width="478.5" height="298.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<g><rect class="chip" x="52" y="96" width="56" height="34" rx="17" style="animation-delay:0s"/><text x="80" y="118" text-anchor="middle" font-size="13" class="chipt" style="animation-delay:0s">fix</text><rect class="chip" x="122" y="104" width="56" height="34" rx="17" style="animation-delay:0.9s"/><text x="150" y="126" text-anchor="middle" font-size="13" class="chipt" style="animation-delay:0.9s">fix</text><rect class="chip" x="192" y="96" width="56" height="34" rx="17" style="animation-delay:1.8s"/><text x="220" y="118" text-anchor="middle" font-size="13" class="chipt" style="animation-delay:1.8s">fix</text></g>
+<text class="cnt dim" x="130" y="176" text-anchor="middle" font-size="14">seen 3 times</text>
+<circle cx="360" cy="150" r="50" fill="#2a1519" stroke="#e3a99d" stroke-opacity=".6" stroke-width="2"/>
+<path class="tent" d="M360 150 C 380 110, 420 110, 420 70"/><rect class="skill" x="396" y="40" width="60" height="34" rx="17"/><text class="skill" x="426" y="62" text-anchor="middle" font-size="13" style="fill:#8fe3a8;animation-name:skill;stroke:none">skill</text>
+<text x="240" y="276" text-anchor="middle" font-size="15" class="dim">Self-improving: patterns that repeat become skills</text>
+</svg>

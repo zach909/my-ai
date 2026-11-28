@@ -189,6 +189,192 @@
             "checked": "2026-11-21",
             "against": "v2"
           }
+        },
+        {
+          "version": "v4",
+          "status": "rejected",
+          "created": "2026-11-25",
+          "params": {
+            "k1": 1.2,
+            "b": 0.5,
+            "stem": true,
+            "titleBoost": 2
+          },
+          "metrics": {
+            "scifact.n": 188,
+            "scifact.recall@10": 0.9272,
+            "scifact.mrr@10": 0.7954,
+            "scifact.ndcg@10": 0.8247,
+            "qasper.recall@3": 0.3372,
+            "qasper.mrr@5": 0.378,
+            "qasper.n": 339
+          },
+          "note": "grid search of 36 settings on SciFact train claims (train nDCG@10 0.8440); reported on dev",
+          "artifact": "training_data/knowledge/checkpoints/retriever.science/v4.json",
+          "artifactSha256": "7e9a304942d280d58b108b104442c9eb7e99c6bdf4ae073e7ebbfe8eefcdaaec",
+          "artifactBytes": 7580711,
+          "inputs": [
+            {
+              "source": "scifact",
+              "license": "CC BY-NC 2.0 per the dataset authors (UNVERIFIED here: the repo README states no licence, and the Hugging Face BEIR copy is labelled CC BY-SA 4.0). The stricter reading is applied.",
+              "nc": true,
+              "sa": false
+            },
+            {
+              "source": "qasper",
+              "license": "CC BY 4.0",
+              "nc": false,
+              "sa": false
+            },
+            {
+              "source": "arxiv",
+              "license": "Metadata CC0; each paper has its own licence (many arXiv-only, non-redistributable)",
+              "nc": false,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "da1346e6b716d2d7",
+            "node": "v22.23.5",
+            "commit": "8e498107",
+            "parent": "v2"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "scifact.ndcg@10 0.8247 -> 0.8247 (delta 0) is below the required +0.003"
+            ],
+            "checked": "2026-11-25",
+            "against": "v2"
+          }
+        },
+        {
+          "version": "v5",
+          "status": "rejected",
+          "created": "2026-11-25",
+          "params": {
+            "k1": 1.2,
+            "b": 0.5,
+            "stem": true,
+            "titleBoost": 2
+          },
+          "metrics": {
+            "scifact.n": 188,
+            "scifact.recall@10": 0.9272,
+            "scifact.mrr@10": 0.7954,
+            "scifact.ndcg@10": 0.8247,
+            "qasper.recall@3": 0.3372,
+            "qasper.mrr@5": 0.378,
+            "qasper.n": 339
+          },
+          "note": "grid search of 36 settings on SciFact train claims (train nDCG@10 0.8440); reported on dev",
+          "artifact": "training_data/knowledge/checkpoints/retriever.science/v5.json",
+          "artifactSha256": "7e9a304942d280d58b108b104442c9eb7e99c6bdf4ae073e7ebbfe8eefcdaaec",
+          "artifactBytes": 7580711,
+          "inputs": [
+            {
+              "source": "scifact",
+              "license": "CC BY-NC 2.0 per the dataset authors (UNVERIFIED here: the repo README states no licence, and the Hugging Face BEIR copy is labelled CC BY-SA 4.0). The stricter reading is applied.",
+              "nc": true,
+              "sa": false
+            },
+            {
+              "source": "qasper",
+              "license": "CC BY 4.0",
+              "nc": false,
+              "sa": false
+            },
+            {
+              "source": "arxiv",
+              "license": "Metadata CC0; each paper has its own licence (many arXiv-only, non-redistributable)",
+              "nc": false,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "11c53db92544ed9c",
+            "node": "v22.23.5",
+            "commit": "8e498107",
+            "parent": "v2"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "scifact.ndcg@10 0.8247 -> 0.8247 (delta 0) is below the required +0.003"
+            ],
+            "checked": "2026-11-25",
+            "against": "v2"
+          }
+        },
+        {
+          "version": "v6",
+          "status": "rejected",
+          "created": "2026-11-27",
+          "params": {
+            "k1": 1.2,
+            "b": 0.5,
+            "stem": true,
+            "titleBoost": 2
+          },
+          "metrics": {
+            "scifact.n": 188,
+            "scifact.recall@10": 0.9272,
+            "scifact.mrr@10": 0.7954,
+            "scifact.ndcg@10": 0.8247,
+            "qasper.recall@3": 0.3372,
+            "qasper.mrr@5": 0.378,
+            "qasper.n": 339
+          },
+          "note": "grid search of 36 settings on SciFact train claims (train nDCG@10 0.8440); reported on dev",
+          "artifact": "training_data/knowledge/checkpoints/retriever.science/v6.json",
+          "artifactSha256": "7e9a304942d280d58b108b104442c9eb7e99c6bdf4ae073e7ebbfe8eefcdaaec",
+          "artifactBytes": 7580711,
+          "inputs": [
+            {
+              "source": "scifact",
+              "license": "CC BY-NC 2.0 per the dataset authors (UNVERIFIED here: the repo README states no licence, and the Hugging Face BEIR copy is labelled CC BY-SA 4.0). The stricter reading is applied.",
+              "nc": true,
+              "sa": false
+            },
+            {
+              "source": "qasper",
+              "license": "CC BY 4.0",
+              "nc": false,
+              "sa": false
+            },
+            {
+              "source": "arxiv",
+              "license": "Metadata CC0; each paper has its own licence (many arXiv-only, non-redistributable)",
+              "nc": false,
+              "sa": false
+            }
+          ],
+          "restrictions": {
+            "nonCommercial": true,
+            "shareAlike": false
+          },
+          "provenance": {
+            "codeHash": "11c53db92544ed9c",
+            "node": "v22.23.5",
+            "commit": "5e922c1b",
+            "parent": "v2"
+          },
+          "gate": {
+            "pass": false,
+            "reasons": [
+              "scifact.ndcg@10 0.8247 -> 0.8247 (delta 0) is below the required +0.003"
+            ],
+            "checked": "2026-11-27",
+            "against": "v2"
+          }
         }
       ]
     },
@@ -531,6 +717,7 @@
           "version": "v3",
           "status": "rejected",
           "created": "2026-11-21",
+          "created": "2026-11-25",
           "params": {
             "mode": "knn",
             "k": 5,
@@ -562,6 +749,9 @@
             "codeHash": "f832fb0d1af35f4c",
             "node": "v22.23.5",
             "commit": "dcc424df",
+            "codeHash": "11c53db92544ed9c",
+            "node": "v22.23.5",
+            "commit": "8e498107",
             "parent": "v1"
           },
           "gate": {
@@ -570,6 +760,7 @@
               "audio.accuracy 0.7917 -> 0.7917 (delta 0) is below the required +0.01"
             ],
             "checked": "2026-11-21",
+            "checked": "2026-11-25",
             "against": "v1"
           }
         },
@@ -577,6 +768,7 @@
           "version": "v4",
           "status": "rejected",
           "created": "2026-11-21",
+          "created": "2026-11-27",
           "params": {
             "mode": "knn",
             "k": 5,
@@ -608,6 +800,9 @@
             "codeHash": "ea122d2f4aa9b673",
             "node": "v22.23.5",
             "commit": "50bef467",
+            "codeHash": "11c53db92544ed9c",
+            "node": "v22.23.5",
+            "commit": "5e922c1b",
             "parent": "v1"
           },
           "gate": {
@@ -747,6 +942,9 @@
             ],
             "checked": "2026-11-21",
             "against": null
+          }
+            "checked": "2026-11-27",
+            "against": "v1"
           }
         }
       ]

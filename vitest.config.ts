@@ -21,6 +21,8 @@ import { join } from 'node:path';
 // happen just from running the suite.
 export default defineConfig({
   test: {
+    // Builds dist/ once when it is missing (see test/global-setup.ts).
+    globalSetup: ['./test/global-setup.ts'],
     globals: true,
     environment: 'node',
     include: ['test/**/*.test.ts'],
