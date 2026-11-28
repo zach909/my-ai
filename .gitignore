@@ -40,3 +40,6 @@ mobile/android-standalone/local.properties
 
 # Rating framework output (training/rating): ledgers rebuild on each run; never committed.
 training/rating/out/
+
+# Physics walking sim: trained checkpoints are rebuilt with `npm run train:walk`.
+training/physics/out/
