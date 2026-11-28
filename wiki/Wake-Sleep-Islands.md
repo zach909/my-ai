@@ -80,7 +80,7 @@ Run on the final code (no third-party libraries; the checks are plain Kotlin).
 
 ## What is not built
 
-- No sleep button in the UI yet: chat command, auto-sleep and `sleepNow()` only. The Metrics screen shows islands, sleeps and experiences awaiting sleep.
+- Sleep is on the Metrics screen's **Sleep** tab: Sleep now, **Share dreams** and Import dreams (plus the chat command and auto-sleep). Share dreams lists the islands first, then saves a `neuroclaw-mesh-delta-v2` file (dreamed islands only, `"kind": "dreams"`) wherever the user picks. Another OneBrain imports it with the normal delta import, which only adds islands it lacks, so a fresh install does not start from scratch. The file carries the text each memory was built from, so it is readable by whoever receives it. Not compiled or run on a device (no Android SDK here).
 - The TypeScript desktop mesh (`NeuronMesh`, `ElasticCoreBlock`) is not part of this change; this is the Android OneBrain engine.
 - "Distillation" is the stored experience pulling its island's neurons toward it. There is no teacher model.
 - The app itself was not built or run on a device: the Android SDK was not available. The island mesh and the real `OneBrainEngine`/`OneBrainModel` were compiled and exercised on a plain JVM with a stand-in for the Android `Context` and `DeviceTools`; the Compose screens (`MetricsScreen`) were edited but not compiled.

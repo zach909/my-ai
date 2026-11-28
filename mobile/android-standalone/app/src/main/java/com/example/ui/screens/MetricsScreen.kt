@@ -54,6 +54,9 @@ fun MetricsScreen(
     onRestoreCheckpoint: (BrainCheckpoint) -> Unit,
     onImportWeightsUri: (android.net.Uri) -> Unit,
     onExportDelta: () -> Unit,
+    onSleepNow: () -> Unit,
+    dreamLabels: () -> List<String>,
+    onSaveDreamsUri: (android.net.Uri) -> Unit,
     onTeachYesNo: (String, String, Boolean) -> Unit,
     onAskYesNo: (String, String) -> Unit,
     modifier: Modifier = Modifier
@@ -69,6 +72,13 @@ fun MetricsScreen(
         if (uri != null) onImportWeightsUri(uri)
     }
 
+    // Sharing is two steps on purpose: show what is inside, then let the user pick where the file goes.
+    var pendingShare by remember { mutableStateOf<List<String>?>(null) }
+    val dreamSaver = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) onSaveDreamsUri(uri)
+    }
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter
@@ -93,7 +103,7 @@ fun MetricsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Telemetry", "Endurance", "Weights", "Drills & Yes/No").forEachIndexed { idx, label ->
+                    listOf("Telemetry", "Endurance", "Weights", "Drills & Yes/No", "Sleep").forEachIndexed { idx, label ->
                         CoralPillButton(
                             text = label,
                             primary = selectedTab == idx,
@@ -373,6 +383,98 @@ fun MetricsScreen(
                                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                                             color = if (edge.weight >= 0f) NeuroColors.ShoggothGreen else NeuroColors.ErrorPink
                                         )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                4 -> {
+                    item {
+                        val stats = state.meshStats
+                        GlassPanel(highlighted = true) {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Sleep & Dreams", style = MaterialTheme.typography.titleLarge, color = NeuroColors.CoralSoft)
+                                Text(
+                                    text = "Sleep turns waiting experiences into new islands and dreams over what it has learned. " +
+                                        "Share a dream so another OneBrain starts from it instead of from scratch; importing only adds islands it lacks.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeuroColors.InkDim
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    MetricTile("Sleeps", "${stats.sleeps}", Modifier.weight(1f))
+                                    MetricTile("Awaiting sleep", "${stats.pendingExperiences}", Modifier.weight(1f))
+                                    MetricTile("Islands", "${stats.learnedIslands}", Modifier.weight(1f))
+                                }
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CoralPillButton(
+                                        text = "Sleep now",
+                                        onClick = onSleepNow,
+                                        modifier = Modifier.testTag("sleep_now_button")
+                                    )
+                                    CoralPillButton(
+                                        text = "Share dreams",
+                                        primary = false,
+                                        onClick = { pendingShare = dreamLabels() },
+                                        modifier = Modifier.testTag("share_dreams_button")
+                                    )
+                                    CoralPillButton(
+                                        text = "Import dreams",
+                                        primary = false,
+                                        onClick = { weightsPicker.launch(arrayOf("application/json", "*/*")) },
+                                        modifier = Modifier.testTag("import_dreams_button")
+                                    )
+                                }
+                                if (stats.learnedIslands == 0 || stats.sleeps == 0) {
+                                    Text(
+                                        text = "Nothing to share yet: sleep once so what it learned has dreamed.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NeuroColors.InkDim
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Sharing is two steps on purpose: show what is inside, then let the user pick where the file goes.
+                    pendingShare?.let { labels ->
+                        item {
+                            GlassPanel {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    if (labels.isEmpty()) {
+                                        Text("No dreams to share yet. Sleep first.", style = MaterialTheme.typography.bodyMedium, color = NeuroColors.Ink)
+                                        CoralPillButton(text = "OK", primary = false, onClick = { pendingShare = null })
+                                    } else {
+                                        Text("Share ${labels.size} dream island(s)?", style = MaterialTheme.typography.titleMedium, color = NeuroColors.CoralSoft)
+                                        Text(
+                                            text = "The file holds the text each memory was built from, so anyone who gets it can read it.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = NeuroColors.InkDim
+                                        )
+                                        labels.take(12).forEach {
+                                            Text("- $it", style = MaterialTheme.typography.bodySmall, color = NeuroColors.Ink)
+                                        }
+                                        if (labels.size > 12) {
+                                            Text("- and ${labels.size - 12} more", style = MaterialTheme.typography.bodySmall, color = NeuroColors.InkDim)
+                                        }
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            CoralPillButton(
+                                                text = "Choose where to save",
+                                                onClick = { pendingShare = null; dreamSaver.launch("onebrain-dreams.json") },
+                                                modifier = Modifier.testTag("confirm_share_dreams_button")
+                                            )
+                                            CoralPillButton(text = "Cancel", primary = false, onClick = { pendingShare = null })
+                                        }
                                     }
                                 }
                             }

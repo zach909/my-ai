@@ -837,6 +837,34 @@ class NeuroViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(exportedDeltaPreview = delta) }
     }
 
+    /** Sleep on demand (the same thing the chat command "sleep" does), with the result shown as a status line. */
+    fun sleepNow() {
+        viewModelScope.launch {
+            val report = withContext(Dispatchers.Default) { engine.sleepNow() }
+            refreshMeshMetrics()
+            _uiState.update { it.copy(statusMessage = report.summary()) }
+        }
+    }
+
+    /** What a shared dream would contain, so the user can see it before anything is written out. */
+    fun dreamLabels(): List<String> = engine.dreamLabels()
+
+    /** Writes the shareable dream to a file the user picked (so they choose where it goes). */
+    fun saveDreamsToUri(uri: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val json = engine.exportDreamsJson()
+                    getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+                        ?: error("no output stream")
+                }.isSuccess
+            }
+            _uiState.update {
+                it.copy(statusMessage = if (ok) "Dreams saved. Import the file on another device to share what this one learned." else "Could not save the dreams file.")
+            }
+        }
+    }
+
     fun importMeshDeltaText(raw: String) {
         val res = engine.importMeshDeltaJson(raw)
         viewModelScope.launch { refreshMeshMetrics() }
