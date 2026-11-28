@@ -82,7 +82,10 @@ python3 -c "from asi_core import UnifiedBrain; brain = UnifiedBrain(); print(bra
 Put data in space so redundant data collapses and good data is kept: notes, files of any kind, numbers about anything
 (how many people liked a video, a smell, a temperature), depth from two cameras. `install.sh` installs it as
 `neuroclaw-atlas` with a private data folder; live cameras stay off until you run `neuroclaw-atlas capture on`, and nothing
-is started, scheduled or enabled at boot. See [`atlas/README.md`](atlas/README.md). Tests: `python3 -m unittest discover -s tests/atlas`.
+is started, scheduled or enabled at boot. **Map prompts** (`neuroclaw-atlas prompts on`, off until you run it) let the
+mapper ask the agent for help by itself when it notices something, such as a nearly flat battery or a program opening the
+camera; the agent's normal approval gate still holds every risky tool. See [`atlas/README.md`](atlas/README.md).
+Tests: `python3 -m unittest discover -s tests/atlas`, `node --test test/platform/map-prompts.test.mjs`.
 ```
 ├── .bin/                    # Symlinks to the TypeScript compiler (tsc, tsserver) in node_modules
 ├── .claude/                 # Claude Code local permission settings

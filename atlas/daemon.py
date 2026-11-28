@@ -14,6 +14,9 @@ What it maps, each on its own timer (all standard library, all written into the 
   time; never contents), and what is running, connected, mounted, plugged in, or holding the camera or microphone. The
   first pass is a baseline; after that only CHANGES are recorded, each with a time, so ``timeline`` can say what
   happened and when. Whole-disk passes run every ``ledger_every`` seconds (default 6 hours), live probes every minute;
+* **map prompts** (``prompts.py``): only if the owner turned them on (``prompts on``). When the map shows something the
+  agent could help with (battery nearly flat, a drive plugged in, a program opening the camera ...), a request is
+  queued for the agent. It only asks: the agent's own approval gate still holds every risky tool;
 * **cameras**: only if ``capture`` is on in ``config.json`` AND ``cams`` names them, every ``look_every`` seconds.
   Pictures are never written to disk, only the marks made from them (that something of some size moved, where, when).
   It records that something moved, never what it was or who.
@@ -34,7 +37,7 @@ import time
 from pathlib import Path
 
 from . import atlas_core as core
-from . import cli, vision
+from . import cli, prompts, vision
 from . import ledger as led
 from .store import open_store
 
@@ -141,6 +144,7 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
            "ledger": now() + (0 if once else 120)}
     last_files = None
     cam_err = None
+    prompt_err = set()
 
     def handler(signum, frame):
         raise Stop()
@@ -159,7 +163,8 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
             _, _, marks = cli.sense_marks(home)
         except OSError:
             marks = []
-        marks += vitals(t, proc, power)
+        vit = vitals(t, proc, power)
+        marks += vit
         if marks:
             store.add(marks)
             out(f"sensors and vitals: {len(marks)} readings" + (" (on battery)" if battery else ""))
@@ -169,7 +174,30 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
                 c = ledger.sync_live(cat, r, t)
                 if c["appeared"] or c["gone"]:
                     out(f"timeline: {cat} +{c['appeared']} -{c['gone']}")
+        do_prompts(t, battery, vit)
         due["sense"] = t + s["sense_every"] * slow
+
+    def do_prompts(t, battery, vit):
+        """Map prompts (``prompts.py``): ask the agent to help when the map shows something. Does nothing unless the
+        owner turned it on. It is optional, so a fault in it is said once and never stops the mapping."""
+        try:
+            if not prompts.settings(home)["on"]:
+                return
+            fired = prompts.tick(home, ledger, prompts.facts_from(vit, battery, disk_free_pct()), t)
+            if fired:
+                out("map prompts: asked the agent about " + ", ".join(fired))
+            prompt_err.clear()
+        except Exception as e:                  # noqa: BLE001 - an always-on loop must outlive a bug in an optional part
+            if str(e) not in prompt_err:
+                out(f"map prompts: {e}")
+                prompt_err.add(str(e))
+
+    def disk_free_pct():
+        try:
+            u = shutil.disk_usage(home if home.exists() else Path.home())
+            return (100 * u.free) // u.total if u.total else None
+        except OSError:
+            return None
 
     def do_ledger(s, t, slow):
         roots = s["watch_roots"] or led.real_mounts(proc)
