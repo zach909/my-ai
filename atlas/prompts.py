@@ -254,11 +254,43 @@ def _append(home: Path, req: dict) -> None:
 
 # ---- deciding ---------------------------------------------------------------------------------------------------
 
-def facts_from(vit: list, on_battery: bool, disk_free_pct) -> dict:
-    """What the host looks like now, from the daemon's own vitals marks."""
+def top_processes(proc: Path = Path("/proc"), n: int = 3) -> list:
+    """The ``n`` programs holding the most memory right now, as ``"name uses N MB of memory"``. Read only what the user
+    can see (``/proc/<pid>/status``); a name is untrusted text and is cleaned when it is quoted."""
+    rows = []
+    try:
+        pids = [x for x in os.listdir(proc) if x.isdigit()]
+    except OSError:
+        return []
+    for pid in pids:
+        try:
+            name, kb = "?", 0
+            for line in (proc / pid / "status").read_text(errors="replace").splitlines():
+                if line.startswith("Name:"):
+                    name = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else "?"
+                elif line.startswith("VmRSS:"):
+                    kb = int(line.split()[1])
+            rows.append((kb, name))
+        except (OSError, ValueError, IndexError):
+            continue
+    rows.sort(reverse=True)
+    return [f"{name} uses {kb // 1024} MB of memory" for kb, name in rows[:n] if kb]
+
+
+def facts_from(vit: list, on_battery: bool, disk_free_pct, top=None) -> dict:
+    """What the host looks like now, from the daemon's own vitals marks. ``top`` is a function that lists the biggest
+    programs; it is only called when a rule that wants it matches, so a quiet minute never scans ``/proc`` for it."""
     by = {m["k"]: m["v"] for m in vit if isinstance(m, dict) and "k" in m}
     return {"battery": by.get("battery"), "unplugged": bool(on_battery), "memory": by.get("memory"),
-            "disk_free": disk_free_pct}
+            "disk_free": disk_free_pct, "top": top}
+
+
+def _top(facts: dict) -> list:
+    """The biggest programs, if the caller can list them (a fault there never stops a prompt)."""
+    try:
+        return list(facts["top"]()) if callable(facts.get("top")) else []
+    except (OSError, ValueError):
+        return []
 
 
 def _matches(when: dict, facts: dict, events: list):
@@ -269,6 +301,7 @@ def _matches(when: dict, facts: dict, events: list):
             if facts.get("battery") is None or facts["battery"] > v:
                 return None
             quoted.append(f"battery {facts['battery']}%")
+            quoted += _top(facts)
         elif k == "unplugged":
             if facts.get("unplugged") is not v:
                 return None
@@ -276,6 +309,7 @@ def _matches(when: dict, facts: dict, events: list):
             if facts.get("memory") is None or facts["memory"] < v:
                 return None
             quoted.append(f"memory {facts['memory']}% used")
+            quoted += _top(facts)
         elif k == "disk_free_below":
             if facts.get("disk_free") is None or facts["disk_free"] > v:
                 return None

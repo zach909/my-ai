@@ -113,8 +113,8 @@ neuroclaw-atlas prompts outbox     # what is waiting for the agent
 
 | Rule | Fires when | At most every |
 |---|---|---|
-| `battery-low` | battery 15% or less and the charger is not connected | 3 h |
-| `memory-high` | memory 92% used or more | 2 h |
+| `battery-low` | battery 15% or less and the charger is not connected (the request names the 3 biggest programs by memory) | 3 h |
+| `memory-high` | memory 92% used or more (the request names the 3 biggest programs) | 2 h |
 | `disk-low` | the disk the map lives on has 5% free or less | 12 h |
 | `drive-plugged` | a USB device was plugged in | 10 min |
 | `camera-mic-opened` | a program opened the camera, microphone or sound card | 30 min |

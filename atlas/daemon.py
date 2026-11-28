@@ -183,7 +183,7 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
         try:
             if not prompts.settings(home)["on"]:
                 return
-            fired = prompts.tick(home, ledger, prompts.facts_from(vit, battery, disk_free_pct()), t)
+            fired = prompts.tick(home, ledger, prompts.facts_from(vit, battery, disk_free_pct(), top=lambda: prompts.top_processes(proc)), t)
             if fired:
                 out("map prompts: asked the agent about " + ", ".join(fired))
             prompt_err.clear()
