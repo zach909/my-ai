@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" width="480" height="300" role="img" aria-labelledby="t-moe">
+<title id="t-moe">Mixture of experts: a router sends each request to the one expert that fits</title>
+<defs>
+<linearGradient id="bg-moe" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient>
+<radialGradient id="glow-moe"><stop offset="0" stop-color="#e3a99d" stop-opacity=".35"/><stop offset="1" stop-color="#e3a99d" stop-opacity="0"/></radialGradient>
+
+</defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.dim{fill:rgba(248,237,233,.62)}
+.line{fill:none;stroke:rgba(255,228,218,.2);stroke-width:1.5}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@keyframes lit{0%{fill:rgba(255,240,232,.07);stroke:rgba(255,228,218,.2)}5%,22%{fill:rgba(227,169,157,.3);stroke:#e3a99d}30%,100%{fill:rgba(255,240,232,.07);stroke:rgba(255,228,218,.2)}}
+@keyframes go{0%{opacity:0;transform:translate(0,0)}3%{opacity:1}10%{opacity:1;transform:translate(var(--mx),var(--my))}22%{opacity:1;transform:translate(var(--dx),var(--dy))}27%,100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
+@keyframes hum{0%,100%{opacity:.75}50%{opacity:1}}
+.exp{fill:rgba(255,240,232,.07);stroke:rgba(255,228,218,.2);stroke-width:1.5;animation:lit 4s ease-in-out infinite}
+.pkt{fill:#efd0c8;opacity:0;animation:go 4s ease-in-out infinite}
+.router{animation:hum 2s ease-in-out infinite}
+</style>
+<rect width="480" height="300" rx="32" fill="url(#bg-moe)"/>
+<rect x=".75" y=".75" width="478.5" height="298.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<circle cx="76" cy="148" r="22" fill="none" stroke="#e3a99d" stroke-width="2" stroke-opacity=".6"/><text x="76" y="182" text-anchor="middle" font-size="13" class="dim">request</text>
+<circle cx="76" cy="148" r="7" class="pkt" style="--mx:130px;--my:0px;--dx:264px;--dy:-86px;animation-delay:0s"/><circle cx="76" cy="148" r="7" class="pkt" style="--mx:130px;--my:0px;--dx:264px;--dy:-36px;animation-delay:1s"/><circle cx="76" cy="148" r="7" class="pkt" style="--mx:130px;--my:0px;--dx:264px;--dy:14px;animation-delay:2s"/><circle cx="76" cy="148" r="7" class="pkt" style="--mx:130px;--my:0px;--dx:264px;--dy:64px;animation-delay:3s"/><rect class="router" x="170" y="118" width="70" height="60" rx="30" fill="rgba(227,169,157,.16)" stroke="#e3a99d" stroke-opacity=".55" stroke-width="1.5"/><text x="205" y="153" text-anchor="middle" font-size="14" fill="#efd0c8" style="fill:#efd0c8">router</text>
+<path d="M98 148H170M240 148L340 60M240 148L340 110M240 148L340 160M240 148L340 210" class="line"/><g><rect x="340" y="44" width="100" height="36" rx="18" class="exp" style="animation-delay:0s"/><text x="390" y="67" text-anchor="middle" font-size="15">code</text></g>
+<g><rect x="340" y="94" width="100" height="36" rx="18" class="exp" style="animation-delay:1s"/><text x="390" y="117" text-anchor="middle" font-size="15">words</text></g>
+<g><rect x="340" y="144" width="100" height="36" rx="18" class="exp" style="animation-delay:2s"/><text x="390" y="167" text-anchor="middle" font-size="15">logic</text></g>
+<g><rect x="340" y="194" width="100" height="36" rx="18" class="exp" style="animation-delay:3s"/><text x="390" y="217" text-anchor="middle" font-size="15">memory</text></g>
+
+<text x="240" y="276" text-anchor="middle" font-size="15" class="dim">Mixture of experts: only the right specialist wakes up</text>
+</svg>

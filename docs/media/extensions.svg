@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" width="480" height="300" role="img" aria-labelledby="t-ext">
+<title id="t-ext">Extensions and skills plug into the mesh and become part of it</title>
+<defs>
+<linearGradient id="bg-ext" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1216"/><stop offset="1" stop-color="#110c0e"/></linearGradient>
+<radialGradient id="glow-ext"><stop offset="0" stop-color="#e3a99d" stop-opacity=".35"/><stop offset="1" stop-color="#e3a99d" stop-opacity="0"/></radialGradient>
+
+</defs>
+<style>
+text{font-family:ui-rounded,'SF Pro Rounded',system-ui,-apple-system,'Segoe UI',sans-serif;fill:#f8ede9}
+.dim{fill:rgba(248,237,233,.62)}
+.line{fill:none;stroke:rgba(255,228,218,.2);stroke-width:1.5}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+@keyframes plug{0%{opacity:0;transform:translate(0,0) scale(.8)}8%{opacity:1}40%{opacity:1;transform:translate(var(--fx),var(--fy)) scale(.5)}50%,100%{opacity:0;transform:translate(var(--fx),var(--fy)) scale(.2)}}
+@keyframes ping{0%,35%{r:56;opacity:0}45%{opacity:.7}70%,100%{r:86;opacity:0}}
+.blk{opacity:0;animation:plug 4.8s ease-in-out infinite}
+.ping{fill:none;stroke:#8fe3a8;stroke-width:2;animation:ping 4.8s ease-out infinite}
+</style>
+<rect width="480" height="300" rx="32" fill="url(#bg-ext)"/>
+<rect x=".75" y=".75" width="478.5" height="298.5" rx="31.5" fill="none" stroke="rgba(255,228,218,.2)"/>
+<circle cx="240" cy="130" r="86" fill="url(#glow-ext)"/><circle class="ping" cx="240" cy="130" r="56"/><circle cx="240" cy="130" r="56" fill="#2a1519" stroke="#e3a99d" stroke-opacity=".6" stroke-width="2"/><g ><circle cx="268.4" cy="144.7" r="10.8" fill="#8fe3a8"/><circle cx="248.8" cy="161.9" r="10.8" fill="#8fe3a8"/><circle cx="222.6" cy="158.0" r="10.8" fill="#8fe3a8"/><circle cx="209.5" cy="135.8" r="10.8" fill="#8fe3a8"/><circle cx="219.3" cy="112.1" r="10.8" fill="#8fe3a8"/><circle cx="244.7" cy="104.8" r="10.8" fill="#8fe3a8"/><circle cx="266.6" cy="119.3" r="10.8" fill="#8fe3a8"/><circle cx="240" cy="133.2" r="30" fill="#8fe3a8"/>
+<circle cx="221.4" cy="117.0" r="5.1" fill="#f8f2e6"/><circle cx="221.4" cy="117.0" r="2.6" fill="#1a1013"/><circle cx="259.8" cy="121.2" r="4.2" fill="#f8f2e6"/><circle cx="259.8" cy="121.2" r="2.1" fill="#1a1013"/><circle cx="217.8" cy="135.6" r="3.3" fill="#f8f2e6"/><circle cx="217.8" cy="135.6" r="1.6" fill="#1a1013"/><circle cx="261.0" cy="140.4" r="3.6" fill="#f8f2e6"/><circle cx="261.0" cy="140.4" r="1.8" fill="#1a1013"/>
+<circle cx="240" cy="135" r="15" fill="#f2d56b"/>
+<circle cx="234.6" cy="132" r="1.65" fill="#33201a"/><circle cx="245.4" cy="132" r="1.65" fill="#33201a"/>
+<path d="M 232.2 136.8 Q 240 144.6 247.8 136.8" fill="none" stroke="#33201a" stroke-width="1.5" stroke-linecap="round"/></g><g class="blk" style="--fx:180px;--fy:70px;animation-delay:0s"><rect x="24" y="43" width="72" height="34" rx="17" fill="rgba(143,227,168,.18)" stroke="#8fe3a8" stroke-width="1.8"/><text x="60" y="65" text-anchor="middle" font-size="14">code</text></g><g class="blk" style="--fx:180px;--fy:-70px;animation-delay:1.2s"><rect x="24" y="183" width="72" height="34" rx="17" fill="rgba(143,227,168,.18)" stroke="#8fe3a8" stroke-width="1.8"/><text x="60" y="205" text-anchor="middle" font-size="14">web</text></g><g class="blk" style="--fx:-180px;--fy:70px;animation-delay:2.4s"><rect x="384" y="43" width="72" height="34" rx="17" fill="rgba(143,227,168,.18)" stroke="#8fe3a8" stroke-width="1.8"/><text x="420" y="65" text-anchor="middle" font-size="14">files</text></g><g class="blk" style="--fx:-180px;--fy:-70px;animation-delay:3.5999999999999996s"><rect x="384" y="183" width="72" height="34" rx="17" fill="rgba(143,227,168,.18)" stroke="#8fe3a8" stroke-width="1.8"/><text x="420" y="205" text-anchor="middle" font-size="14">voice</text></g>
+<text x="240" y="276" text-anchor="middle" font-size="15" class="dim">Extensions: any skill plugs in without touching the core</text>
+</svg>
