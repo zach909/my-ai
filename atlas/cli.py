@@ -17,6 +17,8 @@ SECONDS``, repeat in the foreground). ``daemon`` keeps mapping until stopped and
   digest                  make the map smaller and smarter           stats / recent        what the map holds
   capture on|off          allow live cameras (off until you say so)
   daemon [--once]         keep mapping files, sensors, vitals (+ cameras if allowed)   autostart on|off   run it from boot
+  timeline [WORDS]        what changed and when: files, programs, connections, drives, camera/mic use (first pass is a baseline)
+  files WORDS             find any file or folder on this computer by part of its path
 """
 
 from __future__ import annotations
@@ -456,6 +458,45 @@ def cmd_capture(args, out):
     return 0
 
 
+def _when(t: int) -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(t)) + " UTC"
+
+
+def cmd_timeline(args, out):
+    """What changed, newest first. Read-only: it never creates the ledger."""
+    from .ledger import Ledger
+    lg = Ledger.existing(_home(args))
+    rows = lg.timeline(since=args.since, until=args.until, cat=args.cat, op=args.op, words=args.words, limit=args.limit) if lg else []
+    if args.json:
+        out(json.dumps(rows, sort_keys=True))
+    else:
+        for r in rows:
+            what = f"{r['key']}  {r['info']}".strip() if r["cat"] == "files" else (r["info"] or r["key"])
+            out(f"{_when(r['t'])}  {r['cat']:<7} {r['op']:<9} {what}")
+        if not rows:
+            out("nothing changed" if lg else "no timeline yet (start it with `neuroclaw-atlas autostart on` or `daemon --once`)")
+    if lg:
+        lg.close()
+    return 0
+
+
+def cmd_files(args, out):
+    """Find any file or folder the computer has, by part of its path. Read-only."""
+    from .ledger import Ledger
+    lg = Ledger.existing(_home(args))
+    rows = lg.find_files(args.words, args.limit) if lg else []
+    if args.json:
+        out(json.dumps(rows, sort_keys=True))
+    else:
+        for r in rows:
+            out(f"{r['path']}{'/' if r['dir'] else ''}  {r['size']} bytes  changed {_when(r['mtime'])}")
+        if not rows:
+            out("nothing" if lg else "no inventory yet")
+    if lg:
+        lg.close()
+    return 0
+
+
 def cmd_daemon(args, out):
     from . import daemon
     return daemon.run(_home(args), out, once=args.once)
@@ -559,6 +600,20 @@ def parser():
     s = sub.add_parser("capture", help="allow or forbid live cameras")
     s.add_argument("state", nargs="?", choices=["on", "off"])
     s.set_defaults(fn=cmd_capture)
+
+    s = sub.add_parser("timeline", help="what changed on this computer and when (files, programs, connections, drives, camera/mic use)")
+    s.add_argument("words", nargs="*", help="only rows whose path or text contains every word")
+    s.add_argument("--cat", choices=["files", "process", "net", "mount", "usb", "device"])
+    s.add_argument("--op", help="created, modified, deleted, started, stopped, opened, closed, mounted, unmounted, plugged, unplugged")
+    s.add_argument("--since", type=int, help="Unix seconds")
+    s.add_argument("--until", type=int, help="Unix seconds")
+    s.add_argument("--limit", type=int, default=50)
+    s.set_defaults(fn=cmd_timeline)
+
+    s = sub.add_parser("files", help="find any file or folder on this computer by part of its path")
+    s.add_argument("words", nargs="*")
+    s.add_argument("--limit", type=int, default=30)
+    s.set_defaults(fn=cmd_files)
 
     s = sub.add_parser("daemon", help="keep mapping files, sensors, vitals (and cameras if allowed) until stopped")
     s.add_argument("--once", action="store_true", help="one round of everything, then stop")

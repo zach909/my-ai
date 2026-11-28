@@ -10,6 +10,10 @@ What it maps, each on its own timer (all standard library, all written into the 
 * **vitals**: load, memory, battery and charger state, from ``/proc`` and ``/sys``, every ``sense_every`` seconds;
 * **files**: every folder in ``roots`` (default: the home folder), every ``files_every`` seconds. Only files that
   changed since the last pass are read again; hidden folders, symlinks and secret-looking names are skipped;
+* **the ledger** (``ledger.py``): an exact inventory of EVERY file and folder on every real disk (path, size, modified
+  time; never contents), and what is running, connected, mounted, plugged in, or holding the camera or microphone. The
+  first pass is a baseline; after that only CHANGES are recorded, each with a time, so ``timeline`` can say what
+  happened and when. Whole-disk passes run every ``ledger_every`` seconds (default 6 hours), live probes every minute;
 * **cameras**: only if ``capture`` is on in ``config.json`` AND ``cams`` names them, every ``look_every`` seconds.
   Pictures are never written to disk, only the marks made from them (that something of some size moved, where, when).
   It records that something moved, never what it was or who.
@@ -31,10 +35,13 @@ from pathlib import Path
 
 from . import atlas_core as core
 from . import cli, vision
+from . import ledger as led
 from .store import open_store
 
-DEFAULTS = {"sense_every": 60, "files_every": 3600, "look_every": 30, "digest_every": 21600}
-MINIMUM = {"sense_every": 10, "files_every": 300, "look_every": 5, "digest_every": 600}
+DEFAULTS = {"sense_every": 60, "files_every": 3600, "look_every": 30, "digest_every": 21600, "ledger_every": 21600,
+            "timeline_keep_days": 90, "ledger_max_files": 5_000_000}
+MINIMUM = {"sense_every": 10, "files_every": 300, "look_every": 5, "digest_every": 600, "ledger_every": 600,
+           "timeline_keep_days": 1, "ledger_max_files": 1000}
 ON_BATTERY_SLOWER = 4          # gaps are this many times longer on battery
 FILES_LIMIT = 20000            # entries per folder per pass
 UNIT = "neuroclaw-atlas.service"
@@ -50,6 +57,9 @@ def settings(home: Path) -> dict:
         s[k] = max(MINIMUM[k], v) if type(v) is int else d
     roots = cfg.get("roots")
     s["roots"] = [r for r in roots if isinstance(r, str)] if isinstance(roots, list) and roots else [str(Path.home())]
+    wr = cfg.get("watch_roots")
+    s["watch_roots"] = [r for r in wr if isinstance(r, str)] if isinstance(wr, list) and wr else None   # None: every real disk
+    s["ledger"] = cfg.get("ledger") is not False                       # on unless the owner turns it off
     s["capture"] = cfg.get("capture") is True
     s["cams"] = cfg.get("cams") if isinstance(cfg.get("cams"), str) else ""
     for k, d in (("xs", "0,60"), ("pose", "0,0,0,0")):
@@ -118,13 +128,17 @@ def _grab():
     return cli.GRAB or vision.grab_opencv
 
 
-def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=POWER, proc=Path("/proc")) -> int:
+def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=POWER, proc=Path("/proc"),
+        sysfs=Path("/sys")) -> int:
     """Map until stopped (SIGTERM or Ctrl-C), or one round of everything with ``once``. Returns 0."""
     now = now or cli.NOW
     sleep = sleep or cli.SLEEP
     store = open_store(home)
     bg = core.Background(keep=3)
-    due = {"sense": 0, "files": 0, "look": 0, "digest": now() + DEFAULTS["digest_every"]}
+    ledger = led.Ledger(home) if settings(home)["ledger"] else None
+    # The first whole-disk pass waits two minutes after start so boot and login stay quick (``--once`` does it now).
+    due = {"sense": 0, "files": 0, "look": 0, "digest": now() + DEFAULTS["digest_every"],
+           "ledger": now() + (0 if once else 120)}
     last_files = None
     cam_err = None
 
@@ -140,6 +154,34 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
             os.nice(10)
         except OSError:
             pass
+    def do_sense(s, t, battery, slow):
+        try:
+            _, _, marks = cli.sense_marks(home)
+        except OSError:
+            marks = []
+        marks += vitals(t, proc, power)
+        if marks:
+            store.add(marks)
+            out(f"sensors and vitals: {len(marks)} readings" + (" (on battery)" if battery else ""))
+        if ledger is not None:                  # what is running, connected, mounted, plugged in, holding camera or mic
+            for cat, probe in led.LIVE_PROBES.items():
+                r = probe(sysfs) if cat == "usb" else probe(proc)
+                c = ledger.sync_live(cat, r, t)
+                if c["appeared"] or c["gone"]:
+                    out(f"timeline: {cat} +{c['appeared']} -{c['gone']}")
+        due["sense"] = t + s["sense_every"] * slow
+
+    def do_ledger(s, t, slow):
+        roots = s["watch_roots"] or led.real_mounts(proc)
+        c = ledger.scan_files(roots, t, skip=[str(home)], max_files=s["ledger_max_files"],
+                              between=lambda: do_sense(settings(home), now(), power_state(power)[0], slow)
+                              if now() >= due["sense"] else None)
+        pruned = ledger.prune(t, s["timeline_keep_days"])
+        out(f"timeline: {c['seen']} files and folders checked, {c['created']} created, {c['modified']} modified, "
+            f"{c['deleted']} deleted" + (f", {c['incomplete']} places unreadable" if c["incomplete"] else "")
+            + (f"; {pruned} old rows pruned" if pruned else ""))
+        due["ledger"] = t + s["ledger_every"] * slow
+
     out("atlas daemon: mapping " + ("once" if once else "until stopped"))
     try:
         while True:
@@ -148,15 +190,7 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
             battery, _ = power_state(power)
             slow = ON_BATTERY_SLOWER if battery else 1
             if t >= due["sense"]:
-                try:
-                    _, _, marks = cli.sense_marks(home)
-                except OSError:
-                    marks = []
-                marks += vitals(t, proc, power)
-                if marks:
-                    store.add(marks)
-                    out(f"sensors and vitals: {len(marks)} readings" + (" (on battery)" if battery else ""))
-                due["sense"] = t + s["sense_every"] * slow
+                do_sense(s, t, battery, slow)
             if t >= due["files"]:
                 total = 0
                 for raw in s["roots"]:
@@ -171,6 +205,12 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
                 last_files = t
                 out(f"files: {total} marks added")
                 due["files"] = t + s["files_every"] * slow
+            if ledger is not None and t >= due["ledger"]:
+                try:
+                    do_ledger(s, t, slow)
+                except OSError as e:
+                    out(f"timeline: {e.strerror or e}")
+                    due["ledger"] = t + s["ledger_every"] * slow
             if t >= due["look"]:
                 due["look"] = t + s["look_every"] * slow
                 if s["capture"] and s["cams"]:
@@ -200,6 +240,9 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
             sleep(max(1, min(60, min(due.values()) - now())))
     except (Stop, KeyboardInterrupt):
         out("atlas daemon: stopped")
+    finally:
+        if ledger is not None:
+            ledger.close()
     return 0
 
 
@@ -220,7 +263,8 @@ def unit_text(home: Path, py: str, repo: Path) -> str:
         f"ExecStart={py} -m atlas daemon\n"
         "Restart=on-failure\nRestartSec=30\n"
         "Nice=10\nIOSchedulingClass=idle\nCPUWeight=20\nMemoryMax=256M\n"
-        "NoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\n"
+        "NoNewPrivileges=true\nProtectSystem=strict\n"          # no PrivateTmp: the map must see the real /tmp
+
         f"ReadWritePaths={home}\n"
         "\n[Install]\nWantedBy=default.target\n"
     )
