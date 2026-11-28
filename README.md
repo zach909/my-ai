@@ -9,15 +9,37 @@
 
 ## Download
 
-Click to download the newest release. Open it like any other app: no terminal, no browser.
+Click a button. Open it like any other app: no terminal, no browser.
 
-| | | |
-| --- | --- | --- |
-| **Linux** (Debian, Ubuntu, Chromebook Linux) | [**Download .deb**](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-linux-x64.deb) | [.tar.gz](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-linux-x64.tar.gz) |
-| **Windows** (installs for you only) | [**Download .exe**](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-windows-x64.exe) | [.zip](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-windows-x64.zip) |
-| **macOS** (Apple silicon) | [**Download .dmg**](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-macos-arm64.dmg) | [.zip](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-macos-arm64.zip) |
-| **Android** (sideload) | [**Download .apk**](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-android-any.apk) | |
-| **Chrome / Chromebook** (extension) | [**Download .zip**](https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-chrome-extension.zip) | |
+<table>
+<tr>
+<td><b>Linux</b><br><sub>Debian, Ubuntu, Chromebook Linux</sub></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-linux-x64.deb"><img src="docs/media/btn-linux-deb.svg" alt="Download .deb" width="224"></a></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-linux-x64.tar.gz"><img src="docs/media/btn-linux-tar.svg" alt="Download .tar.gz" width="224"></a></td>
+</tr>
+<tr>
+<td><b>Windows</b><br><sub>installs for you only</sub></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-windows-x64.exe"><img src="docs/media/btn-windows-exe.svg" alt="Download .exe" width="224"></a></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-windows-x64.zip"><img src="docs/media/btn-windows-zip.svg" alt="Download .zip" width="224"></a></td>
+</tr>
+<tr>
+<td><b>macOS</b><br><sub>Apple silicon</sub></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-macos-arm64.dmg"><img src="docs/media/btn-macos-dmg.svg" alt="Download .dmg" width="224"></a></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-macos-arm64.zip"><img src="docs/media/btn-macos-zip.svg" alt="Download .zip" width="224"></a></td>
+</tr>
+<tr>
+<td><b>Android</b><br><sub>sideload</sub></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-android-any.apk"><img src="docs/media/btn-android-apk.svg" alt="Download .apk" width="224"></a></td>
+<td></td>
+</tr>
+<tr>
+<td><b>Chrome / Chromebook</b><br><sub>extension</sub></td>
+<td><a href="https://github.com/zach909/my-ai/releases/latest/download/neuroclaw-chrome-extension.zip"><img src="docs/media/btn-chrome-zip.svg" alt="Download .zip" width="224"></a></td>
+<td></td>
+</tr>
+</table>
+
+<p>No installer yet? <a href="https://github.com/zach909/my-ai/archive/refs/heads/main.zip"><img src="docs/media/btn-source-zip.svg" alt="Source code .zip" width="224"></a> (the code, to run with <code>npm run app</code>)</p>
 
 iPhone and iPad: not available yet. All platforms and what each can do: [docs/PLATFORMS.md](docs/PLATFORMS.md).
 

@@ -201,6 +201,26 @@ files['docs/media/private.svg'] = card({
   });
 }
 
+// ---- download buttons: images, because GitHub cannot style a link in README.md ----
+const BUTTONS = [
+  ['linux-deb', 'Download .deb', true], ['linux-tar', 'Download .tar.gz', false],
+  ['windows-exe', 'Download .exe', true], ['windows-zip', 'Download .zip', false],
+  ['macos-dmg', 'Download .dmg', true], ['macos-zip', 'Download .zip', false],
+  ['android-apk', 'Download .apk', true], ['chrome-zip', 'Download .zip', true],
+  ['source-zip', 'Source code .zip', false],
+];
+for (const [id, label, primary] of BUTTONS) {
+  const w = 224, h = 52, fill = primary ? `url(#f-${id})` : C.bg1, ink = primary ? '#2a1519' : C.soft, edge = primary ? C.soft : C.coral;
+  files[`docs/media/btn-${id}.svg`] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${label}">
+<title>${label}</title>
+<defs><linearGradient id="f-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.soft}"/><stop offset="1" stop-color="${C.coral}"/></linearGradient></defs>
+<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${(h - 2) / 2}" fill="${fill}" stroke="${edge}" stroke-width="2"/>
+<path d="M32 17v14m-7-6l7 7l7-7M24 38h16" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,-5) scale(1)"/>
+<text x="${w / 2 + 18}" y="${h / 2 + 6}" text-anchor="middle" font-size="18" font-weight="700" style="fill:${ink};font-family:${FONT}">${label}</text>
+</svg>
+`;
+}
+
 // ---- the HTML README ----
 const DL = `${APP_URL}/releases/latest/download`;
 const downloads = [
