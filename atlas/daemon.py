@@ -14,7 +14,7 @@ What it maps, each on its own timer (all standard library, all written into the 
   time; never contents), and what is running, connected, mounted, plugged in, or holding the camera or microphone. The
   first pass is a baseline; after that only CHANGES are recorded, each with a time, so ``timeline`` can say what
   happened and when. Whole-disk passes run every ``ledger_every`` seconds (default 6 hours), live probes every minute;
-* **map prompts** (``prompts.py``): only if the owner turned them on (``prompts on``). When the map shows something the
+* **map prompts** (``prompts.py``): on unless the owner turned them off (``prompts off``). When the map shows something the
   agent could help with (battery nearly flat, a drive plugged in, a program opening the camera ...), a request is
   queued for the agent. It only asks: the agent's own approval gate still holds every risky tool;
 * **cameras**: only if ``capture`` is on in ``config.json`` AND ``cams`` names them, every ``look_every`` seconds.
@@ -179,11 +179,11 @@ def run(home: Path, out=print, once: bool = False, now=None, sleep=None, power=P
 
     def do_prompts(t, battery, vit):
         """Map prompts (``prompts.py``): ask the agent to help when the map shows something. Does nothing unless the
-        owner turned it on. It is optional, so a fault in it is said once and never stops the mapping."""
+        owner turned it off. It is optional, so a fault in it is said once and never stops the mapping."""
         try:
             if not prompts.settings(home)["on"]:
                 return
-            fired = prompts.tick(home, ledger, prompts.facts_from(vit, battery, disk_free_pct()), t)
+            fired = prompts.tick(home, ledger, prompts.facts_from(vit, battery, disk_free_pct(), top=lambda: prompts.top_processes(proc)), t)
             if fired:
                 out("map prompts: asked the agent about " + ", ".join(fired))
             prompt_err.clear()

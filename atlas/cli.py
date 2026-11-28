@@ -540,7 +540,7 @@ def cmd_prompts(args, out):
     if args.json:
         out(json.dumps(st, sort_keys=True))
         return 0
-    out(f"map prompts: {'ON' if st['on'] else 'off (turn on with `prompts on`)'}; {st['today']} of {st['max_per_day']} "
+    out(f"map prompts: {'ON (stop it with `prompts off`)' if st['on'] else 'off (turn on with `prompts on`)'}; {st['today']} of {st['max_per_day']} "
         f"asked today; {st['pending']} waiting for the agent")
     for r in st["rules"]:
         last = f", last {_when(r['last_fired'])}" if r["last_fired"] else ""
@@ -666,7 +666,7 @@ def parser():
     s.add_argument("state", nargs="?", choices=["on", "off"])
     s.set_defaults(fn=cmd_autostart)
 
-    s = sub.add_parser("prompts", help="map prompts: let the mapper ask the agent for help when the map shows something (off until `on`)")
+    s = sub.add_parser("prompts", help="map prompts: let the mapper ask the agent for help when the map shows something (on by default; `off` stops it)")
     s.add_argument("action", nargs="?", choices=["status", "on", "off", "enable", "disable", "outbox"])
     s.add_argument("rule", nargs="?", help="with enable / disable: the rule id")
     s.set_defaults(fn=cmd_prompts)
