@@ -9,6 +9,7 @@ The owner has said this many times and it must never need saying again.
 - **No tokenizer.** Text, audio, and images all enter the mesh as the raw bits they are through the Zip Loop. Do not add word or subword tokenizers, outside embeddings, or speech-to-text (no Whisper, Vosk, Wispr Flow or similar).
 - **Check before claiming.** Before saying something is or is not third-party, or is or is not in the repo, look at the files. Do not describe code from memory.
 - **This rule is enforced, not just written down.** `node scripts/check-no-third-party.mjs` (also `npm run check:third-party`) fails on any package outside `.third-party-allowlist.json`, any lockfile or manifest for another package manager, vendored folders, jars and archives, imports of anything that is not a Node/Python/platform built-in, bundled or minified code, other people's licence or copyright banners, `uses:` actions outside the allow-list, and `npm install <pkg>` / `pip install` / `npx <pkg>` / `git clone` / `git submodule` / `curl | sh` commands. It runs in the git pre-commit and pre-push hooks (`.githooks/`, set up by `npm install`), in CI (`.github/workflows/no-third-party.yml`), in the test suite (`test/core/no-third-party.test.ts`), and as Claude Code hooks (`.claude/settings.json`, `.claude/hooks/block-third-party.mjs`) that stop the assistant before it installs or pastes anything and before it finishes with third-party code left in the repo. Only the owner may edit the guard files or the allow-list (`CODEOWNERS`, and the hook refuses edits to them). If the check fails, remove the third-party code; do not widen the allow-list, add an exemption, or use `--no-verify`. The check cannot see a plain function pasted from a website with no banner, so that part stays on whoever writes the code.
+**Accepted baseline (owner's decision).** The third-party findings the check reports today are accepted as they are (the owner's own code). Do not remove or rewrite them, and do not plan other work around them or around Android. Nothing new may be added: a change must not raise the number of findings.
 - Already present and not to be added to: `typescript`, `@types/node` and `vitest` as build and test tools. Known leftovers still to be removed: `torch` imports in `model && skills manager/neurolang.py` and the `torch`, `numpy`, `sentencepiece` lines in that folder's `requirements.txt`.
 
 # VISUAL STYLE (standing rule from the owner: this is the look for everything)
@@ -72,6 +73,10 @@ reasoning. This is a standing rule, not a one-time answer to one request.
 - There is no tokenizer anywhere in this repo (`tokenizer.js` was deleted,
   not disabled) and it must stay that way: text is raw bits through
   the Zip Loop everywhere, always.
+
+# TARGET PLATFORM: LINUX, PARTICULARLY DEBIAN, AND KOS (standing rule from the owner; overrides the section below)
+
+This whole repository is meant for **Linux, particularly Debian**, and for **KOS** (kernal-os). **Do not focus on Android, iOS, Windows or macOS**: no new work, fixes, tests or optimization there. The code and docs for them below stay in the repo until the owner says to remove them; do not delete or extend them on your own, and ask if a task points at them. The section below describes what exists, not what to work on.
 
 # PLATFORMS AND RELEASES (one app, many builds; map in `docs/PLATFORMS.md`)
 

@@ -9,9 +9,21 @@ The owner has said this many times and it must never need saying again. The full
 - **No tokenizer.** Text, audio and images enter the mesh as raw bits through the Zip Loop. No tokenizers, outside embeddings or speech-to-text.
 - **Check before claiming.** Look at the files before saying something is or is not third-party or in the repo. Do not describe code from memory.
 - **The rule is enforced.** `node scripts/check-no-third-party.mjs` must pass before you commit or finish. Hooks in `.claude/settings.json` will block installs, clones and edits that add third-party code. If the check or a hook blocks you, remove the third-party code and tell the owner; never edit the guard files (`scripts/check-no-third-party.mjs`, `.third-party-allowlist.json`, `.githooks/`, `.claude/hooks/`, `.claude/settings.json`, the no-third-party workflow), widen the allow-list, use `--no-verify`, or find another route around the block.
+- **Accepted baseline (owner's decision).** The 533 findings `node scripts/check-no-third-party.mjs` reports today (for example `numpy` in `quantize/`, `cv2` in `atlas/vision.py`, `androidx` in `mobile/android-standalone/`) are the owner's own code and are accepted as they are. Do not remove, rewrite or "fix" them, and do not base other work on them or on the Android part. The rule still bites for anything NEW: compare against the baseline and make sure your change adds no finding (the count must not go up). Never edit the guard files or the allow-list to change this.
 - **Code that is the owner's, yours, or another AI's output is fine. Code written by someone else and published is not.** If you are unsure which a piece of code is, treat it as not allowed and ask.
 
 See `AGENTS.md` for the visual style rules and the dev environment notes.
+
+# TARGET PLATFORM: LINUX, PARTICULARLY DEBIAN, AND KOS (standing rule from the owner)
+
+This whole repository is meant for **Linux, particularly Debian**, and for **KOS** (kernal-os, the operating system it runs in). Written down so other AIs know.
+
+- **Do not focus on Android, iOS, Windows or macOS.** Do not spend work, tests, fixes, features or optimization passes on `mobile/`, `desktop-app/` or the Windows and macOS paths. New work targets Linux first and only.
+- **The existing non-Linux code stays until the owner says to remove it.** Do not delete it on your own and do not extend it. The owner chose "write it down", not "delete it".
+- **When a task or a check points at those parts** (for example third-party findings in `mobile/android-standalone/`), say so and ask; do not treat them as the priority.
+- Linux specifics are fine and expected: systemd user services, `/proc`, `/sys`, Debian packaging and paths.
+
+See `AGENTS.md` for the same rule next to the platform notes.
 
 # WHAT "OPTIMIZED" MEANS (standing rule from the owner)
 

@@ -4,8 +4,8 @@
  *
  *   atlas daemon  --(a request line in <atlas home>/prompts/outbox.jsonl)-->  this file  --(act)-->  the agent
  *
- * The rules that decide WHEN to ask live with the mapper (atlas/prompts.py), which is off until the owner runs
- * `neuroclaw-atlas prompts on`. This file only delivers what it queued.
+ * The rules that decide WHEN to ask live with the mapper (atlas/prompts.py), which is on unless the owner runs
+ * `neuroclaw-atlas prompts off`. This file only delivers what it queued.
  *
  * ── It is not a way round the safety rules ─────────────────────────────
  *
