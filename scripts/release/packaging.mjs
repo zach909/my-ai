@@ -40,8 +40,34 @@ export function desktopEntry({ exec }) {
     'Categories=Utility;Science;',
     'Keywords=AI;agent;chat;assistant;',
     'StartupNotification=false',
+    `StartupWMClass=${APP_ID}`,
     '',
   ].join('\n');
+}
+
+export const APP_URL = 'https://github.com/zach909/my-ai';
+export const APP_DESKTOP_ID = `${APP_ID}.desktop`;
+
+/** AppStream metadata: what GNOME Settings > Apps, GNOME Software and KDE Discover read to show the app's name, summary, link and icon. */
+export function metainfo({ version, date }) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>${APP_ID}</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>${APP_NAME}</name>
+  <summary>${APP_SUMMARY}</summary>
+  <description>
+    <p>${APP_NAME} runs one AI engine on this computer and opens it in its own window. It needs no account and no cloud, and it opens no network port.</p>
+  </description>
+  <launchable type="desktop-id">${APP_DESKTOP_ID}</launchable>
+  <url type="homepage">${APP_URL}</url>
+  <url type="bugtracker">${APP_URL}/issues</url>
+  <developer_name>zach909</developer_name>
+  <provides><binary>${APP_ID}</binary></provides>
+  <categories><category>Utility</category></categories>
+  <releases><release version="${version}" date="${date}"/></releases>
+</component>
+`;
 }
 
 export function writeFile(file, text, mode = 0o644) {

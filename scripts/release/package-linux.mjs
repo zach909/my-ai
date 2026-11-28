@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, readdirSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { APP_ID, APP_NAME, APP_SUMMARY, DEB_ARCH, artifactName, copyTree, desktopEntry, normalizeModes, writeFile } from './packaging.mjs';
+import { APP_ID, APP_NAME, APP_SUMMARY, APP_URL, DEB_ARCH, artifactName, copyTree, desktopEntry, metainfo, normalizeModes, writeFile } from './packaging.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ICON_SIZES = [48, 128, 256, 512];
@@ -61,12 +61,13 @@ export async function packageLinux({ stageDir, outDir }) {
     writeFile(path.join(root, 'usr', 'bin', APP_ID), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/desktop-launcher.mjs "$@"\n`, 0o755);
     writeFile(path.join(root, 'usr', 'bin', 'osai'), `#!/bin/sh\nexec /opt/${APP_ID}/runtime/node /opt/${APP_ID}/app/scripts/osai.mjs "$@"\n`, 0o755);
     writeFile(path.join(root, 'usr', 'share', 'applications', `${APP_ID}.desktop`), desktopEntry({ exec: APP_ID }));
+    writeFile(path.join(root, 'usr', 'share', 'metainfo', `${APP_ID}.metainfo.xml`), metainfo({ version: info.version, date: String(info.builtAt || new Date().toISOString()).slice(0, 10) }));
     for (const { size, png } of pngs) {
       const f = path.join(root, 'usr', 'share', 'icons', 'hicolor', `${size}x${size}`, 'apps', `${APP_ID}.png`);
       mkdirSync(path.dirname(f), { recursive: true });
       writeFile(f, png);
     }
-    writeFile(path.join(root, 'usr', 'share', 'doc', APP_ID, 'copyright'), `${APP_NAME}: source and licence at https://github.com/zach909/.my-ai\n`);
+    writeFile(path.join(root, 'usr', 'share', 'doc', APP_ID, 'copyright'), `${APP_NAME}: source and licence at ${APP_URL}\n`);
     const control = [
       `Package: ${APP_ID}`,
       `Version: ${info.version}`,
@@ -76,7 +77,7 @@ export async function packageLinux({ stageDir, outDir }) {
       `Installed-Size: ${dirSizeKb(root)}`,
       'Maintainer: zach909 <zach909@users.noreply.github.com>',
       'Depends: libgtk-3-0 | libgtk-3-0t64, libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37',
-      'Homepage: https://github.com/zach909/.my-ai',
+      `Homepage: ${APP_URL}`,
       `Description: ${APP_SUMMARY}`,
       ` Runs the NeuroClaw engine on this computer and opens it in its own window, like any`,
       ` other application: no browser and no network port. The window uses the system's`,

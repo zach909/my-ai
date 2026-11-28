@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { APP_ID, APP_NAME, APP_SUMMARY, artifactName, writeFile } from './packaging.mjs';
+import { APP_ID, APP_NAME, APP_SUMMARY, APP_URL, artifactName, writeFile } from './packaging.mjs';
 import { makeIco } from './icons.mjs';
 import { createZip } from './zip.mjs';
 
@@ -85,6 +85,11 @@ New-Item -Path $key -Force | Out-Null
 Set-ItemProperty $key DisplayName '${APP_NAME}'
 Set-ItemProperty $key DisplayVersion $ver
 Set-ItemProperty $key Publisher 'zach909'
+Set-ItemProperty $key URLInfoAbout '${APP_URL}'
+Set-ItemProperty $key HelpLink '${APP_URL}'
+Set-ItemProperty $key Comments '${APP_SUMMARY}'
+Set-ItemProperty $key InstallDate (Get-Date -Format 'yyyyMMdd')
+Set-ItemProperty $key EstimatedSize ([int]((Get-ChildItem $dest -Recurse -File | Measure-Object Length -Sum).Sum / 1KB)) -Type DWord
 Set-ItemProperty $key InstallLocation $dest
 Set-ItemProperty $key DisplayIcon (Join-Path $dest '${APP_NAME}.ico')
 Set-ItemProperty $key UninstallString ('powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $dest 'uninstall.ps1') + '"')
