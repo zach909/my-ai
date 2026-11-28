@@ -112,9 +112,12 @@ export function stageApp({ out, channel = 'dev', commit = null, runtime = true, 
     else if (statSync(src).isDirectory() && ['drill-generators', 'exam-generators'].includes(f)) copyDir(src, path.join(app, 'scripts', f));
   }
   copyFileSync(path.join(ROOT, 'scripts', 'release', 'app-home.mjs'), path.join(app, 'scripts', 'release', 'app-home.mjs'));
+  // The package's own installer (the .deb's postinst runs it; the tarball offers --user). Not the developer setup at scripts/install.sh.
+  copyFileSync(path.join(ROOT, 'scripts', 'release', 'payload-install.sh'), path.join(app, 'scripts', 'install.sh'));
+  chmodSync(path.join(app, 'scripts', 'install.sh'), 0o755);
 
   const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  writeFileSync(path.join(app, 'package.json'), JSON.stringify({ name: pkg.name, version, type: 'module', private: true }, null, 2) + '\n');
+  writeFileSync(path.join(app, 'package.json'), JSON.stringify({ name: pkg.name, version, type: 'module', private: true, scripts: { app: 'node scripts/desktop-launcher.mjs' } }, null, 2) + '\n');
   const info = { version, commit: sha, channel, platform: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux', arch: process.arch, builtAt: new Date(process.env.SOURCE_DATE_EPOCH ? Number(process.env.SOURCE_DATE_EPOCH) * 1000 : Date.now()).toISOString() };
   writeFileSync(path.join(app, 'build-info.json'), JSON.stringify(info, null, 2) + '\n');
 

@@ -507,6 +507,49 @@ def cmd_autostart(args, out):
     return daemon.autostart(_home(args), args.state, out)
 
 
+def cmd_prompts(args, out):
+    """Map prompts: let the mapper ask the agent for help when the map shows something. ``on``/``off``/``enable``/
+    ``disable`` are the owner's switches; ``status`` and ``outbox`` only read."""
+    from . import prompts
+    home = _home(args)
+    act = args.action or "status"
+    if act in ("enable", "disable"):
+        if not args.rule:
+            raise ValueError(f"{act} needs a rule id (see `prompts status`)")
+        prompts.set_enabled(home, args.rule, act == "enable")
+        out(f"{args.rule}: {'enabled' if act == 'enable' else 'disabled'}")
+        return 0
+    if args.rule:
+        raise ValueError(f"{act} takes no rule id")
+    if act in ("on", "off"):
+        prompts.set_on(home, act == "on")
+        out("map prompts on: the mapper may now ask the agent to help when the map shows something (it only asks; "
+            "the agent's approval gate still holds risky tools). `prompts off` stops it." if act == "on" else "map prompts off")
+        return 0
+    if act == "outbox":
+        rows = prompts.read_outbox(home)
+        if args.json:
+            out(json.dumps(rows, sort_keys=True))
+        else:
+            for r in rows:
+                out(f"{_when(r.get('t', 0))}  #{r['id']}  {r.get('prompt_id', '?')}: {r['message']}")
+            if not rows:
+                out("nothing waiting")
+        return 0
+    st = prompts.status(home, NOW())
+    if args.json:
+        out(json.dumps(st, sort_keys=True))
+        return 0
+    out(f"map prompts: {'ON' if st['on'] else 'off (turn on with `prompts on`)'}; {st['today']} of {st['max_per_day']} "
+        f"asked today; {st['pending']} waiting for the agent")
+    for r in st["rules"]:
+        last = f", last {_when(r['last_fired'])}" if r["last_fired"] else ""
+        out(f"  {r['id']:<18} {'on ' if r['enabled'] else 'off'} {r['title']} (at most every {r['cooldown_minutes']} min{last})")
+    for why in st["ignored"]:
+        out(f"  ignored: {why}")
+    return 0
+
+
 # ---- the parser -------------------------------------------------------------------------------------------------
 
 def parser():
@@ -622,6 +665,11 @@ def parser():
     s = sub.add_parser("autostart", help="start the daemon at boot (on), stop and remove it (off), or report")
     s.add_argument("state", nargs="?", choices=["on", "off"])
     s.set_defaults(fn=cmd_autostart)
+
+    s = sub.add_parser("prompts", help="map prompts: let the mapper ask the agent for help when the map shows something (off until `on`)")
+    s.add_argument("action", nargs="?", choices=["status", "on", "off", "enable", "disable", "outbox"])
+    s.add_argument("rule", nargs="?", help="with enable / disable: the rule id")
+    s.set_defaults(fn=cmd_prompts)
     return p
 
 

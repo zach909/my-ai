@@ -18,8 +18,11 @@ const need = (v, what) => { if (!v) { console.error('usage: ' + what); process.e
 async function evalAll() {
   const out = { date: today(), components: {}, suites: {} };
   const sci = currentRecord('retriever.science'), code = currentRecord('retriever.code'), ver = currentRecord('verifier.claims'), au = currentRecord('audio.recognizer');
-  if (sci) { const ix = deserialize(loadArtifact('retriever.science')); out.components['retriever.science'] = { version: sci.version, ...benchScifact(ix, 'dev'), ...benchQasper(sci.params, 'dev', 120), ...benchSourceVerification(ix) }; if (ver) out.components['verifier.claims'] = { version: ver.version, ...benchVerify(ix, ver.params, 'dev') }; }
-  if (code) out.components['retriever.code'] = { version: code.version, ...benchCode(deserialize(loadArtifact('retriever.code'))) };
+  // checkpoints/ is git-ignored, so a fresh checkout has registry entries but no artifact files. Say so instead of crashing.
+  const artifact = (name) => { const a = loadArtifact(name); if (!a) (out.missingArtifacts ??= []).push(name); return a; };
+  const sciArt = sci && artifact('retriever.science'), codeArt = code && artifact('retriever.code');
+  if (sciArt) { const ix = deserialize(sciArt); out.components['retriever.science'] = { version: sci.version, ...benchScifact(ix, 'dev'), ...benchQasper(sci.params, 'dev', 120), ...benchSourceVerification(ix) }; if (ver) out.components['verifier.claims'] = { version: ver.version, ...benchVerify(ix, ver.params, 'dev') }; }
+  if (codeArt) out.components['retriever.code'] = { version: code.version, ...benchCode(deserialize(codeArt)) };
   if (au) out.components['audio.recognizer'] = { version: au.version, ...au.metrics };
   for (const [n, f] of Object.entries({ safety: benchSafety, reasoning: benchReasoning, facts: benchFacts, dataQuality: benchDataQuality })) out.suites[n] = f();
   writeJson(path.join(dir('reports'), 'eval.json'), out); return out;
